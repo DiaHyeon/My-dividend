@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "my-dividend",
+    "name": "My dividend",
     "slug": "my-dividend",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,8 +16,24 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "POST_NOTIFICATIONS",
+        "VIBRATE",
+        "SCHEDULE_EXACT_ALARM"
+      ]
     },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#ffffff"
+        }
+      ],
+      "expo-font"
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     }
