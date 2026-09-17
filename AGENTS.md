@@ -1,3 +1,11 @@
-# Expo HAS CHANGED
+# My dividend
 
-Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
+Read BRIEF.md before doing anything. It is the single source of truth.
+
+## Rules
+- Stack is Expo + TypeScript (Expo SDK 57).
+- Read the exact versioned Expo docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
+- All monetary and share counts must be NUMERIC(15, 4) (never use FLOAT or REAL).
+- Every Supabase table must have Row Level Security (RLS) enabled.
+- Never commit secret keys or sensitive URLs into version control; keep them in .env.
+- Explain any file you create, in one sentence.
