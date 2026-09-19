@@ -1,6 +1,6 @@
 # My dividend
 
-Read BRIEF.md before doing anything. It is the single source of truth.
+Read BRIEF.md before doing anything. It is the single source of truth and contains all latest specifications, architecture, and features.
 
 ## Rules
 - Stack is Expo + TypeScript (Expo SDK 57).
@@ -9,3 +9,5 @@ Read BRIEF.md before doing anything. It is the single source of truth.
 - Every Supabase table must have Row Level Security (RLS) enabled.
 - Never commit secret keys or sensitive URLs into version control; keep them in .env.
 - Explain any file you create, in one sentence.
+- Always run Expo with `--tunnel` mode (`node ./node_modules/expo/bin/cli start --tunnel --go --web`) due to network AP isolation.
+
