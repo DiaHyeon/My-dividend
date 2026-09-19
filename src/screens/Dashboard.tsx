@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  SafeAreaView,
   ScrollView,
   View,
   Text,
@@ -14,6 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { AssetSummary, Transaction, DividendSchedule } from '../types/database';
 import { AddAssetModal } from '../components/AddAssetModal';
+import { EditAssetModal } from '../components/EditAssetModal';
+import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal';
 
 const MONTH_NAMES = [
   'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
@@ -30,6 +32,7 @@ interface MonthlyPayoutItem {
     shares: number;
     netAmount: number;
     xdDate: string;
+    isInterest: boolean;
   }[];
 }
 
@@ -54,6 +57,11 @@ export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  const [selectedAssetForEdit, setSelectedAssetForEdit] = useState<AssetSummary | null>(null);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [selectedCategoryForBreakdown, setSelectedCategoryForBreakdown] = useState<CategoryStats | null>(null);
+  const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
+  const [inflowFilter, setInflowFilter] = useState<'ALL' | 'DIVIDENDS' | 'INTEREST'>('ALL');
 
   const ensureAuthenticated = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -202,16 +210,21 @@ export const Dashboard: React.FC = () => {
     const parentAsset = assets.find((a) => a.id === schedule.asset_id);
     if (!parentAsset) return;
 
-    // Strict XD Cutoff: only count buy/sell transactions occurring strictly before xd_date
+    // Filter by Inflow Mode
+    const isCashAsset = parentAsset.asset_type === 'CASH';
+    if (inflowFilter === 'DIVIDENDS' && isCashAsset) return;
+    if (inflowFilter === 'INTEREST' && !isCashAsset) return;
+
+    // Strict XD Cutoff: only count buy/sell transactions occurring on or before xd_date
     const eligibleShares = transactions
-      .filter((t) => t.asset_id === schedule.asset_id && t.transaction_date < schedule.xd_date)
+      .filter((t) => t.asset_id === schedule.asset_id && t.transaction_date <= schedule.xd_date)
       .reduce((sum, t) => sum + (t.type === 'BUY' ? Number(t.shares) : -Number(t.shares)), 0);
 
     if (eligibleShares <= 0) return;
 
     const taxRate = parentAsset.tax_rate !== undefined && parentAsset.tax_rate !== null
       ? Number(parentAsset.tax_rate)
-      : 0.1000;
+      : (isCashAsset ? 0 : 0.1000);
     const dpu = Number(schedule.dpu) || 0;
     const netDividend = eligibleShares * dpu * (1 - taxRate);
 
@@ -229,6 +242,7 @@ export const Dashboard: React.FC = () => {
         shares: eligibleShares,
         netAmount: netDividend,
         xdDate: schedule.xd_date,
+        isInterest: isCashAsset,
       });
       projectedAnnualNetDividend += netDividend;
     }
@@ -322,13 +336,27 @@ export const Dashboard: React.FC = () => {
 
         <View style={styles.categoryCardsContainer}>
           {categories.map((cat) => (
-            <View key={cat.type} style={styles.categoryCard}>
+            <TouchableOpacity
+              key={cat.type}
+              style={styles.categoryCard}
+              activeOpacity={0.7}
+              onPress={() => {
+                setSelectedCategoryForBreakdown(cat);
+                setIsCategoryModalVisible(true);
+              }}
+            >
               <View style={styles.categoryHeader}>
                 <View style={[styles.categoryIconCircle, { backgroundColor: cat.bgColor }]}>
                   <Ionicons name={cat.icon} size={20} color={cat.color} />
                 </View>
-                <View style={styles.categoryHeaderRight}>
-                  <Text style={styles.categoryAllocationText}>{cat.allocationPercent.toFixed(1)}%</Text>
+                <View style={styles.categoryHeaderRightRow}>
+                  <View style={[styles.tapToPieBadge, { backgroundColor: cat.bgColor }]}>
+                    <Ionicons name="pie-chart" size={12} color={cat.color} />
+                    <Text style={[styles.tapToPieText, { color: cat.color }]}>สัดส่วน Segment</Text>
+                  </View>
+                  <View style={styles.categoryHeaderRight}>
+                    <Text style={styles.categoryAllocationText}>{cat.allocationPercent.toFixed(1)}%</Text>
+                  </View>
                 </View>
               </View>
 
@@ -354,19 +382,53 @@ export const Dashboard: React.FC = () => {
                   ]}
                 />
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
 
-        {/* 3. Dividend Forecast Chart: Monthly Bar Chart (Jan - Dec) */}
+        {/* 3. Dividend & Interest Forecast Chart: Monthly Bar Chart (Jan - Dec) */}
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>คาดการณ์กระแสเงินปันผล 12 เดือน</Text>
-            <Text style={styles.sectionSubtitle}>คำนวณสุทธิหลังหักภาษี 10% (ตามวัน XD)</Text>
+            <Text style={styles.sectionTitle}>
+              {inflowFilter === 'ALL'
+                ? 'กระแสเงินปันผลและดอกเบี้ย 12 เดือน'
+                : inflowFilter === 'DIVIDENDS'
+                ? 'กระแสเงินปันผล 12 เดือน (หุ้น & กองทุน)'
+                : 'ดอกเบี้ยเงินฝากรับ 12 เดือน'}
+            </Text>
+            <Text style={styles.sectionSubtitle}>คำนวณสุทธิหลังหักภาษี (ตามรอบปันผล/ดอกเบี้ย)</Text>
           </View>
           <View style={styles.badgeXD}>
             <Text style={styles.badgeXDText}>XD Cutoff</Text>
           </View>
+        </View>
+
+        {/* 3-Way Inflow Toggle Filter (Option 3) */}
+        <View style={styles.inflowFilterContainer}>
+          {[
+            { label: 'ทั้งหมด (ปันผล+ดอกเบี้ย)', value: 'ALL' },
+            { label: 'เฉพาะปันผล', value: 'DIVIDENDS' },
+            { label: 'เฉพาะดอกเบี้ย', value: 'INTEREST' },
+          ].map((f) => (
+            <TouchableOpacity
+              key={f.value}
+              style={[
+                styles.inflowFilterBtn,
+                inflowFilter === f.value && styles.inflowFilterBtnActive,
+              ]}
+              onPress={() => setInflowFilter(f.value as any)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.inflowFilterBtnText,
+                  inflowFilter === f.value && styles.inflowFilterBtnTextActive,
+                ]}
+              >
+                {f.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         <View style={styles.chartCard}>
@@ -434,10 +496,21 @@ export const Dashboard: React.FC = () => {
                   </View>
                   {activeMonthData.details.map((d, idx) => (
                     <View key={idx} style={styles.detailRow}>
-                      <Text style={styles.detailSymbol}>{d.symbol}</Text>
-                      <Text style={styles.detailInfo}>
-                        {d.shares.toLocaleString()} หุ้น × ฿{d.dpu.toFixed(4)} (XD: {d.xdDate})
-                      </Text>
+                      <View style={styles.detailRowLeft}>
+                        <View style={styles.detailSymbolRow}>
+                          <Text style={styles.detailSymbol}>{d.symbol}</Text>
+                          <View style={d.isInterest ? styles.interestTag : styles.divTag}>
+                            <Text style={d.isInterest ? styles.interestTagText : styles.divTagText}>
+                              {d.isInterest ? 'ดอกเบี้ย' : 'ปันผล'}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={styles.detailInfo}>
+                          {d.isInterest
+                            ? `ดอกเบี้ยเข้า (${d.xdDate})`
+                            : `${d.shares.toLocaleString()} หุ้น × ฿${d.dpu.toFixed(4)} (XD: ${d.xdDate})`}
+                        </Text>
+                      </View>
                       <Text style={styles.detailAmount}>
                         ฿{d.netAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
                       </Text>
@@ -467,10 +540,24 @@ export const Dashboard: React.FC = () => {
           </View>
         ) : (
           assets.map((item) => (
-            <View key={item.id} style={styles.assetCard}>
+            <TouchableOpacity
+              key={item.id}
+              style={styles.assetCard}
+              activeOpacity={0.7}
+              onPress={() => {
+                setSelectedAssetForEdit(item);
+                setIsEditModalVisible(true);
+              }}
+            >
               <View style={styles.assetHeader}>
-                <View>
-                  <Text style={styles.assetSymbol}>{item.symbol}</Text>
+                <View style={styles.assetSymbolContainer}>
+                  <View style={styles.assetSymbolTitleRow}>
+                    <Text style={styles.assetSymbol}>{item.symbol}</Text>
+                    <View style={styles.editBadge}>
+                      <Ionicons name="pencil" size={11} color="#059669" />
+                      <Text style={styles.editBadgeText}>แก้ไข</Text>
+                    </View>
+                  </View>
                   <View style={styles.assetTagRow}>
                     <Text style={styles.assetTypeTag}>{item.asset_type}</Text>
                     <Text style={styles.assetSharesTag}>
@@ -503,7 +590,7 @@ export const Dashboard: React.FC = () => {
                   ต้นทุนเฉลี่ย: ฿{Number(item.weighted_average_cost).toFixed(2)}
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
           ))
         )}
 
@@ -512,6 +599,38 @@ export const Dashboard: React.FC = () => {
 
       {/* 5. Integrate Step 4: Add Asset FAB & Modal */}
       <AddAssetModal onSuccess={loadData} />
+
+      {/* 6. Edit & Delete Asset Modal */}
+      <EditAssetModal
+        visible={isEditModalVisible}
+        asset={selectedAssetForEdit}
+        onClose={() => {
+          setIsEditModalVisible(false);
+          setSelectedAssetForEdit(null);
+        }}
+        onSuccess={() => {
+          loadData();
+        }}
+      />
+
+      {/* 7. Category Breakdown & Segment Pie Chart Modal */}
+      <CategoryBreakdownModal
+        visible={isCategoryModalVisible}
+        categoryType={selectedCategoryForBreakdown?.type ?? null}
+        categoryLabel={selectedCategoryForBreakdown?.label ?? ''}
+        categoryColor={selectedCategoryForBreakdown?.color ?? '#059669'}
+        categoryIcon={selectedCategoryForBreakdown?.icon ?? 'pie-chart'}
+        assets={assets}
+        dividendSchedules={dividendSchedules}
+        onClose={() => {
+          setIsCategoryModalVisible(false);
+          setSelectedCategoryForBreakdown(null);
+        }}
+        onEditAsset={(asset) => {
+          setSelectedAssetForEdit(asset);
+          setIsEditModalVisible(true);
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -921,6 +1040,30 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
   },
+  assetSymbolContainer: {
+    flex: 1,
+  },
+  assetSymbolTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  editBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
+  },
   assetTagRow: {
     flexDirection: 'row',
     gap: 6,
@@ -1004,6 +1147,89 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 60,
+  },
+  inflowFilterContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 3,
+    marginBottom: 12,
+    gap: 4,
+  },
+  inflowFilterBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    alignItems: 'center',
+    borderRadius: 9,
+  },
+  inflowFilterBtnActive: {
+    backgroundColor: '#FFFFFF',
+    elevation: 1,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  inflowFilterBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  inflowFilterBtnTextActive: {
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  categoryHeaderRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tapToPieBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  tapToPieText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  detailRowLeft: {
+    flex: 1,
+  },
+  detailSymbolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  divTag: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  divTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  interestTag: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  interestTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#2563EB',
   },
 });
 

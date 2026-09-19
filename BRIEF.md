@@ -17,7 +17,8 @@
 | `@supabase/supabase-js` | เชื่อมต่อ Database, Auth และ Edge Functions | [x] ติดตั้งและใช้งานแล้ว |
 | `@react-native-async-storage/async-storage` | บันทึก Auth Session ภายในเครื่อง | [x] ติดตั้งและใช้งานแล้ว |
 | `expo-notifications` | จัดการ Local Notification บน Android (แจ้งเตือนวัน XD) | [x] ติดตั้งและใช้งานแล้ว (มี patch สำหรับ Expo Go) |
-| `react-native-gifted-charts` & `react-native-svg` | แสดงผลกราฟ Bar Chart คาดการณ์ปันผล | [x] ติดตั้งแล้ว (UI ออกแบบ Interactive Custom Bar Chart) |
+| `react-native-gifted-charts`, `react-native-svg` & `expo-linear-gradient` | แสดงผลกราฟ Bar Chart และ Donut Pie Chart | [x] ติดตั้งและใช้งานแล้ว |
+| `react-native-safe-area-context` | จัดการ Safe Area / ขอบจอ Notch สำหรับ Android & iOS | [x] ติดตั้งและใช้งานแล้ว |
 | `@expo/vector-icons` | ไอคอน UI และ Material FAB (Ionicons) | [x] ติดตั้งและใช้งานแล้ว |
 | `@expo/ngrok` | ระบบ Expo Tunnel สำหรับพรีวิวผ่าน WiFi ในสถาบัน/ออฟฟิศ | [x] ติดตั้งและใช้งานแล้ว |
 
@@ -105,6 +106,75 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - สร้าง Android Notification Channel: `xd-reminders` (High Importance, เสียง และการสั่น)
 - ข้อความแจ้งเตือน: `🔔 [Symbol] ขึ้นเครื่องหมาย XD พรุ่งนี้! ถือหุ้นไว้เพื่อรับสิทธิเงินปันผล`
 
+### 4.7 ระบบแก้ไขและลบสินทรัพย์ (Asset Edit & Deletion)
+- ไฟล์จัดการ: `src/components/EditAssetModal.tsx`
+- **การเปิดใช้งาน**: ผู้ใช้สามารถแตะที่การ์ดสินทรัพย์ใน Asset List บนหน้า Dashboard เพื่อเปิด Bottom Sheet Modal สำหรับแก้ไข
+- **สิ่งที่สามารถแก้ไขได้**:
+  - สัญลักษณ์ (Symbol) และหมวดหมู่สินทรัพย์ (STOCKS, FUNDS, CASH)
+  - ราคาปัจจุบันต่อหน่วย (Current Price) พร้อมปุ่มดึงราคาตลาดล่าสุด (Auto Refresh Price)
+  - จำนวนหุ้น/หน่วยที่ถือ (Shares) และราคาต้นทุนเฉลี่ย (Cost Price) โดยระบบจะปรับปรุงประวัติธุรกรรมเพื่อให้อัปเดตยอดคำนวณใน `view_asset_summary` อัตโนมัติ
+  - อัตราภาษีหัก ณ ที่จ่าย (Withholding Tax Rate)
+  - เงินปันผลคาดการณ์ (Projected DPU) และวันขึ้นเครื่องหมาย XD รอบถัดไป
+- **การลบสินทรัพย์ (Soft Delete)**:
+  - มีปุ่มสีแดงเด่นชัด (Red Button) พร้อมไอคอนถังขยะ: "ลบสินทรัพย์ออกจากพอร์ต"
+  - มีกล่องข้อความ Alert ยืนยันก่อนทำรายการลบ เพื่อป้องกันความผิดพลาด
+  - ทำการปรับสถานะ `is_archived = true` ในตาราง `assets` ซึ่งทำให้สินทรัพย์นั้นถูกคัดออกจาก Dashboard และกราฟ 12 เดือนทันที
+
+### 4.8 ระบบจำแนก Segment และ Pie Chart แสดงสัดส่วนหมวดหมู่ (Category Breakdown)
+- ไฟล์จัดการ: `src/components/CategoryBreakdownModal.tsx`, `src/services/sectorService.ts`
+- **การเปิดใช้งาน**: แตะที่การ์ดหมวดหมู่ (หุ้น STOCKS, กองทุน FUNDS, เงินฝาก CASH) บนหน้า Dashboard
+- **การแสดงผล**:
+  - Donut / Pie Chart วงกลมแบ่งตามกลุ่มอุตสาหกรรม/ประเภท (Segments)
+  - **White Callout Lines**: มีเส้นสีขาวชี้ออกจากแต่ละชิ้นพายไปยังป้ายตัวเลขเปอร์เซ็นต์ (%) อย่างคมชัดสวยงามบนพื้นหลังการ์ดสีเข้ม
+  - รายละเอียดแต่ละ Segment พร้อมมูลค่าเงินรวม และรายชื่อสินทรัพย์ในกลุ่ม แตะเพื่อเปิดแก้ไขได้ทันที
+- **การจำแนก Segment**:
+  - **STOCKS (10 กลุ่ม GICS)**: Technology, Energy, Financials, Healthcare, Consumer Staples, Consumer Discretionary, Industrials, Materials, Real Estate, Telecom, Other
+  - **FUNDS (7 กลุ่ม AIMC)**: Fixed Income Fund (ตราสารหนี้/พันธบัตร), Equity Fund, Mixed Fund, Property & Infra, Commodity (ทอง/น้ำมัน), Foreign (FIF), Money Market, Other
+  - **CASH (4 กลุ่มเงินฝาก)**: Digital Savings (เงินฝากดิจิทัลดอกเบี้ยสูง เช่น Dime!, Kept), Fixed Deposit (ฝากประจำ), Savings (ออมทรัพย์ทั่วไป), Other Bank Accounts
+
+### 4.9 ระบบจัดการบัญชีเงินฝากและดอกเบี้ย (Cash & Interest Engine)
+- ไฟล์จัดการ: `src/components/CashAssetForm.tsx`, `src/components/AddAssetModal.tsx`, `src/components/EditAssetModal.tsx`
+- **การแยกคอมโพเนนต์ย่อย (Modular Sub-component)**:
+  - แยกฟอร์มจัดการเงินฝากออกมาเป็น `src/components/CashAssetForm.tsx` เพื่อให้คอมโพเนนต์มีขนาดกะทัดรัด แยกการทำงานเด็ดขาดจากฟอร์มหุ้น และสามารถนำไปใช้ร่วมกันได้ทันทีทั้งในหน้าเพิ่ม (`AddAssetModal`) และหน้าแก้ไข (`EditAssetModal`)
+- **การปรับเปลี่ยนฟอร์มเฉพาะสำหรับ CASH**:
+  - เปลี่ยนชื่อย่อหุ้นเป็น **"ชื่อบัญชี / สถาบันการเงิน"**
+  - ซ่อนช่องหุ้นและราคาต้นทุน โดยแทนที่ด้วย **"จำนวนเงินฝาก (฿)"** และ **"อัตราดอกเบี้ยต่อปี (% p.a.)"**
+  - **รอบการจ่ายดอกเบี้ย**: เลือกได้ 3 รูปแบบ:
+    1. ทุกเดือน (Monthly - บัญชีดิจิทัล เช่น Dime!, Kept)
+    2. ทุก 6 เดือน (มิ.ย. และ ธ.ค. - มาตรฐานธนาคารไทย)
+    3. ปีละครั้ง (สิ้นปี / ธ.ค.)
+  - **ภาษีดอกเบี้ยหัก ณ ที่จ่าย**: ตัวเลือก 0% (บุคคลธรรมดาไม่เกินเกณฑ์) หรือ 15% พร้อมระบบ Auto-Calculate ตามเกณฑ์ 20,000 บาท/ปี
+- **การบันทึกฐานข้อมูล**:
+  - เงินต้น: บันทึก `current_price = 1.0000`, `shares = เงินต้น`, `price_per_share = 1.0000` ใน `transactions` (Unrealized P/L = 0%)
+  - ดอกเบี้ย: สร้าง `dividend_schedules` อัตโนมัติตามรอบที่เลือก เพื่อให้แสดงผลในกราฟ 12 เดือน
+
+### 4.10 ระบบตัวกรองกระแสเงินสด 3 มุมมองบนกราฟ 12 เดือน (Multi-View Inflow Toggle)
+- เพิ่มแถบสวิตช์ฟิลเตอร์ 3 โหมดเหนือแท่งกราฟคาดการณ์กระแสเงินสด 12 เดือนใน Dashboard:
+  1. **[ทั้งหมด]**: แสดงกระแสเงินสดรับรวม (เงินปันผลหุ้น/กองทุน + ดอกเบี้ยเงินฝาก)
+  2. **[เฉพาะปันผล]**: แสดงเฉพาะเงินปันผลจากหุ้นและกองทุน
+  3. **[เฉพาะดอกเบี้ย]**: แสดงเฉพาะดอกเบี้ยเงินฝากธนาคาร
+- ในกล่องรายละเอียดรายเดือนมีป้ายระบุประเภทชัดเจน: สีเขียว `[ปันผล]` และสีฟ้า `[ดอกเบี้ย]`
+
+### 4.11 ระบบคำนวณภาษีดอกเบี้ยเงินฝากอัตโนมัติ (Thai Bank Interest Tax Engine - เกณฑ์ 20,000 บาท/ปี)
+- ไฟล์จัดการ: `src/services/taxService.ts`, `src/components/CashAssetForm.tsx`, `src/components/AddAssetModal.tsx`, `src/components/EditAssetModal.tsx`, `src/components/CategoryBreakdownModal.tsx`
+- **หลักเกณฑ์ตามประมวลรัษฎากร (กรมสรรพากร)**:
+  - **เงินฝากออมทรัพย์ทั่วไป และเงินฝากดิจิทัล (Digital Savings & Savings)**:
+    - ดอกเบี้ยรับรวมจากทุกธนาคารตลอดปีภาษี $\le$ 20,000 บาท $\rightarrow$ **ยกเว้นภาษี (0%)**
+    - ดอกเบี้ยรับรวมจากทุกธนาคารตลอดปีภาษี $> 20,000$ บาท $\rightarrow$ **ถูกหักภาษี ณ ที่จ่าย 15% จากยอดดอกเบี้ยทั้งหมดตั้งแต่บาทแรก**
+  - **เงินฝากประจำ (Fixed Deposit)**: ถูกหักภาษี 15% ทันที เว้นแต่เป็นบัญชีเงินฝากประจำปลอดภาษี 24-36 เดือน (0%)
+- **ฟีเจอร์ที่พัฒนา**:
+  1. **Smart Auto-Tax Calculation ในหน้าเพิ่ม/แก้ไขสินทรัพย์**:
+     - คำนวณดอกเบี้ยรายปีทันทีเมื่อพิมพ์เงินต้นและอัตราดอกเบี้ย
+     - หากดอกเบี้ย $\le$ 20,000 บาท เลือกลดหย่อนภาษี 0% พร้อมแสดงโควตาที่เหลือ
+     - หากดอกเบี้ย $> 20,000$ บาท ปรับภาษีเป็น 15% อัตโนมัติ พร้อมแสดงแถบเตือนสีส้มและยอดภาษีที่ต้องถูกหัก
+     - ผู้ใช้สามารถกดสลับปุ่ม "กำหนดเอง (Manual)" เพื่อ Override อัตราภาษีได้ตามต้องการ
+     - กล่องสรุป Live Preview แสดงแจกแจงละเอียด 3 ยอด: ดอกเบี้ยรวมก่อนภาษี (Gross), ภาษีหัก ณ ที่จ่าย 15%, และดอกเบี้ยรับสุทธิ (Net Inflow) ทั้งรายปีและต่องวด
+  2. **Thai Tax-Free Interest Quota Meter ใน Category Breakdown Modal**:
+     - เมื่อแตะการ์ดหมวดหมู่ "เงินฝาก (CASH)" จะแสดงการ์ดติดตามโควตาดอกเบี้ย 20,000 บาท/ปี
+     - มีแถบ Progress Bar แสดงยอดดอกเบี้ยออมทรัพย์สะสมทั้งพอร์ตเทียบกับเพดาน 20,000 บาท
+     - แสดงสถานะชัดเจนว่ายังได้รับสิทธิปลอดภาษี (0%) หรือเกินเกณฑ์ที่ต้องเสียภาษี 15%
+      - มี Donut Pie Chart สัดส่วน Segment พร้อมขีดชี้สีขาว (Callout Line) แสดงประเภทสินทรัพย์และเปอร์เซ็นต์ (%) โดยสีกรอบและสีข้อความปรับตามสีของแต่ละ Segment
+
 ---
 
 ## 5. Mobile & Network Operational Guidelines
@@ -118,7 +188,12 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - ผูกเข้ากับคำสั่ง `"postinstall": "node ./scripts/patch-expo-notifications.js"` ใน `package.json`
   - ติดตั้ง [RootErrorBoundary](file:///c:/Users/lenovo/Documents/My%20dividend/App.tsx) ใน `App.tsx` เพื่อดักจับข้อผิดพลาดและแสดงปุ่มลองใหม่อย่างสวยงาม
 
-### 5.2 สภาพแวดล้อมเครือข่ายและการรันแอพ (Expo Tunnel Mode)
+### 5.2 Safe Area & Native UI Graphics Standards
+- **Safe Area**: เปลี่ยนจาก SafeAreaView ดั้งเดิมของ react-native ที่ถูก Deprecated มาใช้ react-native-safe-area-context ครอบทั้งใน App.tsx และ Dashboard.tsx
+- **Linear Gradient**: ติดตั้ง expo-linear-gradient สำหรับ react-native-gifted-charts
+- **Expo Go Warning Cleanup**: ตั้งค่า LogBox.ignoreLogs ใน App.tsx ปิด Warning เรื่อง Push Notifications ของ Expo Go
+
+### 5.3 สภาพแวดล้อมเครือข่ายและการรันแอพ (Expo Tunnel Mode)
 - **ข้อจำกัดเครือข่าย**: เครือข่ายสถาบัน/สำนักงาน (เช่น WiFi `CAMT`) มีการเปิดใช้งาน AP/Client Isolation ทำให้มือถือไม่สามารถเชื่อมต่อ IP Local (LAN) ของเครื่องคอมพิวเตอร์ได้โดยตรง (เกิดอาการหมุนค้าง)
 - **คำสั่งที่ต้องใช้รันเซิร์ฟเวอร์เสมอ**:
   ```bash
@@ -136,8 +211,13 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - `src/`
   - `types/database.ts`: TypeScript Database Definitions สำหรับ Supabase
   - `lib/supabase.ts`: Supabase Client Config พร้อม AsyncStorage
-  - `screens/Dashboard.tsx`: หน้าจอหลัก Dashboard พอร์ต, การ์ดหมวดหมู่, และ Bar Chart คาดการณ์ปันผล
+  - `screens/Dashboard.tsx`: หน้าจอหลัก Dashboard พอร์ต, การ์ดหมวดหมู่, ตัวกรอง 3 มุมมอง, และ Bar Chart คาดการณ์ปันผล/ดอกเบี้ย
   - `components/AddAssetModal.tsx`: Bottom Sheet เพิ่มสินทรัพย์, Autocomplete หุ้น, Toggle USD/THB, FAB Button
+  - `components/EditAssetModal.tsx`: Bottom Sheet สำหรับแก้ไขและลบสินทรัพย์เดิมในพอร์ต
+  - `components/CashAssetForm.tsx`: ฟอร์มจัดการบัญชีเงินฝาก, ดอกเบี้ย และระบบคำนวณภาษีหัก ณ ที่จ่าย 20,000 บาท/ปี (Modular Component ที่ใช้ร่วมกันทั้งหน้าเพิ่มและแก้ไข)
+  - `components/CategoryBreakdownModal.tsx`: Bottom Sheet แสดง Pie Chart วงกลมสัดส่วน Segment และมิเตอร์ติดตามโควตาดอกเบี้ยปลอดภาษี 20,000 บาท/ปี
+  - `services/taxService.ts`: ระบบคำนวณและประเมินภาษีดอกเบี้ยเงินฝากธนาคารตามเกณฑ์ยกเว้น 20,000 บาท/ปี ของกรมสรรพากร
+  - `services/sectorService.ts`: ระบบจำแนกและจัดการ Segment มาตรฐานของหุ้น, กองทุน, และเงินฝาก
   - `services/stockService.ts`: ระบบค้นหาหุ้น US/TH, ดึงราคาปิด และอัตราแลกเปลี่ยน
   - `services/notificationService.ts`: ระบบตั้งเวลาแจ้งเตือนวัน XD บน Android
 - `scripts/`

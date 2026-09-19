@@ -17,6 +17,9 @@ import { supabase } from '../lib/supabase';
 import { AssetType } from '../types/database';
 import { scheduleXdReminder } from '../services/notificationService';
 import { searchStocks, fetchStockPrice, fetchExchangeRate, fetchDividendAnalysis, StockSuggestion, DividendAnalysis } from '../services/stockService';
+import { getSectorsForType, detectSector, setAssetSector } from '../services/sectorService';
+import { evaluateCashTax, calculateAnnualGrossInterest } from '../services/taxService';
+import { CashAssetForm } from './CashAssetForm';
 
 interface AddAssetModalProps {
   visible?: boolean;
@@ -62,6 +65,21 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
   const [dividendAnalysis, setDividendAnalysis] = useState<DividendAnalysis | null>(null);
   const [isFetchingDividends, setIsFetchingDividends] = useState(false);
   const [taxRatePercent, setTaxRatePercent] = useState('10');
+  const [selectedSector, setSelectedSector] = useState<string>('Technology');
+  const [depositAmount, setDepositAmount] = useState<string>('');
+  const [interestRate, setInterestRate] = useState<string>('1.5');
+  const [interestFrequency, setInterestFrequency] = useState<'MONTHLY' | 'SEMI_ANNUAL' | 'ANNUAL'>('MONTHLY');
+  const [isAutoCashTax, setIsAutoCashTax] = useState(true);
+
+  // Auto-calculate tax rate for CASH when deposit amount, interest rate or segment changes
+  React.useEffect(() => {
+    if (assetType === 'CASH' && isAutoCashTax) {
+      const dep = parseFloat(depositAmount) || 0;
+      const rate = parseFloat(interestRate) || 0;
+      const evalResult = evaluateCashTax(dep, rate, selectedSector);
+      setTaxRatePercent(evalResult.suggestedTaxRatePercent.toString());
+    }
+  }, [assetType, depositAmount, interestRate, selectedSector, isAutoCashTax]);
 
   const handleOpen = () => {
     setInternalVisible(true);
@@ -89,6 +107,30 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     setDividendAnalysis(null);
     setIsFetchingDividends(false);
     setTaxRatePercent('10');
+    setSelectedSector('Technology');
+    setDepositAmount('');
+    setInterestRate('1.5');
+    setInterestFrequency('MONTHLY');
+    setIsAutoCashTax(true);
+  };
+
+  const handleAssetTypeSelect = (newType: AssetType) => {
+    setAssetType(newType);
+    if (newType === 'CASH') {
+      setCurrency('THB');
+      setSelectedSector('DigitalSavings');
+      setIsAutoCashTax(true);
+      const dep = parseFloat(depositAmount) || 0;
+      const rate = parseFloat(interestRate) || 0;
+      const evalResult = evaluateCashTax(dep, rate, 'DigitalSavings');
+      setTaxRatePercent(evalResult.suggestedTaxRatePercent.toString());
+    } else if (newType === 'FUNDS') {
+      setTaxRatePercent('10');
+      setSelectedSector('Equity');
+    } else {
+      setTaxRatePercent('10');
+      setSelectedSector(detectSector(symbol, 'STOCKS'));
+    }
   };
 
   const refreshExchangeRate = async () => {
@@ -116,6 +158,11 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       const results = await searchStocks(text);
       setSuggestions(results);
       setShowSuggestions(results.length > 0);
+      setSelectedSector(detectSector(text, 'STOCKS'));
+    } else if (assetType === 'CASH') {
+      setSelectedSector(detectSector(text, 'CASH'));
+    } else if (assetType === 'FUNDS') {
+      setSelectedSector(detectSector(text, 'FUNDS'));
     } else {
       setSuggestions([]);
       setShowSuggestions(false);
@@ -185,6 +232,112 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
   };
 
   const handleSubmit = async () => {
+    // 1. CASH / BANK DEPOSIT SUBMIT FLOW
+    if (assetType === 'CASH') {
+      const trimmedAccount = symbol.trim();
+      const parsedDeposit = parseFloat(depositAmount);
+      const parsedRate = parseFloat(interestRate);
+
+      if (!trimmedAccount) {
+        Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกชื่อบัญชี หรือสถาบันการเงิน');
+        return;
+      }
+      if (isNaN(parsedDeposit) || parsedDeposit <= 0) {
+        Alert.alert('ข้อมูลไม่ถูกต้อง', 'กรุณากรอกจำนวนเงินฝากที่มากกว่า 0');
+        return;
+      }
+
+      setIsSubmitting(true);
+      try {
+        await ensureAuthenticated();
+        const taxRate = (parseFloat(taxRatePercent) || 0) / 100;
+
+        // Insert into assets table
+        const { data: asset, error: assetError } = await supabase
+          .from('assets')
+          .insert({
+            symbol: trimmedAccount,
+            asset_type: 'CASH',
+            current_price: 1.0000,
+            tax_rate: Number(taxRate.toFixed(4)),
+            is_archived: false,
+          })
+          .select()
+          .single();
+
+        if (assetError || !asset) throw new Error(assetError?.message || 'ไม่สามารถบันทึกเงินฝากได้');
+
+        // Insert into transactions table
+        const todayDate = new Date().toISOString().split('T')[0];
+        const { error: txError } = await supabase.from('transactions').insert({
+          asset_id: asset.id,
+          type: 'BUY',
+          shares: Number(parsedDeposit.toFixed(4)),
+          price_per_share: 1.0000,
+          transaction_date: todayDate,
+        });
+
+        if (txError) throw new Error(txError.message || 'ไม่สามารถบันทึกยอดเงินฝากได้');
+
+        // Insert interest schedules
+        if (!isNaN(parsedRate) && parsedRate > 0) {
+          const currentYear = new Date().getFullYear();
+          const schedules: any[] = [];
+          const annualDpu = parsedRate / 100;
+
+          if (interestFrequency === 'MONTHLY') {
+            for (let m = 0; m < 12; m++) {
+              const d = new Date(currentYear, m, 28);
+              schedules.push({
+                asset_id: asset.id,
+                dpu: Number((annualDpu / 12).toFixed(6)),
+                xd_date: d.toISOString().split('T')[0],
+                is_projected: true,
+              });
+            }
+          } else if (interestFrequency === 'SEMI_ANNUAL') {
+            schedules.push(
+              {
+                asset_id: asset.id,
+                dpu: Number((annualDpu / 2).toFixed(6)),
+                xd_date: `${currentYear}-06-30`,
+                is_projected: true,
+              },
+              {
+                asset_id: asset.id,
+                dpu: Number((annualDpu / 2).toFixed(6)),
+                xd_date: `${currentYear}-12-31`,
+                is_projected: true,
+              }
+            );
+          } else {
+            schedules.push({
+              asset_id: asset.id,
+              dpu: Number(annualDpu.toFixed(6)),
+              xd_date: `${currentYear}-12-31`,
+              is_projected: true,
+            });
+          }
+
+          await supabase.from('dividend_schedules').insert(schedules);
+        }
+
+        // Save sector
+        await setAssetSector(asset.id, selectedSector || 'DigitalSavings');
+
+        Alert.alert('สำเร็จ', `เพิ่มบัญชีเงินฝาก ${trimmedAccount} จำนวน ฿${parsedDeposit.toLocaleString()} เรียบร้อยแล้ว`);
+        resetForm();
+        handleClose();
+        onSuccess?.();
+      } catch (err: any) {
+        Alert.alert('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถบันทึกเงินฝากได้');
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    // 2. STOCKS & FUNDS SUBMIT FLOW
     const trimmedSymbol = symbol.trim().toUpperCase();
     const parsedShares = parseFloat(shares);
     const parsedCostPrice = parseFloat(costPrice);
@@ -293,6 +446,9 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         }
       }
 
+      // Save sector
+      await setAssetSector(asset.id, selectedSector || detectSector(trimmedSymbol, assetType));
+
       const alertMsg = currency === 'USD'
         ? `เพิ่มสินทรัพย์ ${trimmedSymbol} เข้าสู่พอร์ตแล้ว (ซื้อ $${parsedCostPrice.toFixed(2)} แปลงเป็น ฿${convertedCostPrice.toFixed(2)} ที่อัตรา ฿${rate.toFixed(2)}/USD)`
         : `เพิ่มสินทรัพย์ ${trimmedSymbol} เข้าสู่พอร์ตเรียบร้อยแล้ว`;
@@ -357,7 +513,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                     <TouchableOpacity
                       key={item.value}
                       style={[styles.typeButton, isSelected && styles.typeButtonSelected]}
-                      onPress={() => setAssetType(item.value)}
+                      onPress={() => handleAssetTypeSelect(item.value)}
                       activeOpacity={0.7}
                     >
                       <Ionicons
@@ -374,352 +530,390 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                 })}
               </View>
 
-              {/* Symbol with Suggestions */}
-              <View style={styles.symbolInputWrapper}>
-                <Text style={styles.label}>ชื่อย่อ / รหัสสินทรัพย์ (Symbol) *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={symbol}
-                  onChangeText={handleSymbolChange}
-                  onFocus={() => {
-                    if (assetType === 'STOCKS' && symbol.trim().length >= 1) {
-                      searchStocks(symbol).then((res) => {
-                        setSuggestions(res);
-                        setShowSuggestions(res.length > 0);
-                      });
+              {/* IF CASH: SHOW CASH & INTEREST FORM */}
+              {assetType === 'CASH' ? (
+                <CashAssetForm
+                  accountName={symbol}
+                  onChangeAccountName={handleSymbolChange}
+                  selectedSector={selectedSector}
+                  onChangeSector={setSelectedSector}
+                  depositAmount={depositAmount}
+                  onChangeDepositAmount={setDepositAmount}
+                  interestRate={interestRate}
+                  onChangeInterestRate={setInterestRate}
+                  interestFrequency={interestFrequency}
+                  onChangeInterestFrequency={setInterestFrequency}
+                  taxRatePercent={taxRatePercent}
+                  onChangeTaxRatePercent={(rate) => {
+                    setTaxRatePercent(rate);
+                    setIsAutoCashTax(false);
+                  }}
+                  isAutoCashTax={isAutoCashTax}
+                  onToggleAutoTax={() => {
+                    const nextAuto = !isAutoCashTax;
+                    setIsAutoCashTax(nextAuto);
+                    if (nextAuto) {
+                      const dep = parseFloat(depositAmount) || 0;
+                      const rate = parseFloat(interestRate) || 0;
+                      const evalResult = evaluateCashTax(dep, rate, selectedSector);
+                      setTaxRatePercent(evalResult.suggestedTaxRatePercent.toString());
                     }
                   }}
-                  placeholder="เช่น PTT, MCD, AAPL หรือชื่อสินทรัพย์นอกตลาด"
-                  placeholderTextColor="#94A3B8"
-                  autoCapitalize="characters"
-                  autoCorrect={false}
                 />
-
-                {/* Suggestions Dropdown */}
-                {showSuggestions && suggestions.length > 0 && (
-                  <View style={styles.suggestionsContainer}>
-                    <View style={styles.suggestionsHeader}>
-                      <Text style={styles.suggestionsHeaderText}>แนะนำหุ้นตลาด US & SET</Text>
-                      <TouchableOpacity onPress={() => setShowSuggestions(false)}>
-                        <Ionicons name="close-circle" size={16} color="#94A3B8" />
-                      </TouchableOpacity>
-                    </View>
-                    {suggestions.map((item) => (
-                      <TouchableOpacity
-                        key={item.rawSymbol}
-                        style={styles.suggestionItem}
-                        onPress={() => handleSelectSuggestion(item)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.suggestionLeft}>
-                          <View style={styles.suggestionTitleRow}>
-                            <Text style={styles.suggestionSymbol}>{item.symbol}</Text>
-                            <Text style={styles.suggestionExchange}>• {item.exchange}</Text>
-                          </View>
-                          <Text style={styles.suggestionName} numberOfLines={1}>
-                            {item.name}
-                          </Text>
-                        </View>
-                        <View
-                          style={[
-                            styles.marketBadge,
-                            item.market === 'US' ? styles.marketBadgeUS : styles.marketBadgeTH,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.marketBadgeText,
-                              item.market === 'US' ? styles.marketBadgeTextUS : styles.marketBadgeTextTH,
-                            ]}
-                          >
-                            {item.market === 'US' ? `🇺🇸 ${item.exchange}` : `🇹🇭 ${item.exchange}`}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-
-              {/* Currency Selector (THB vs USD) */}
-              <Text style={styles.label}>สกุลเงินที่ซื้อ (Currency)</Text>
-              <View style={styles.currencyToggleContainer}>
-                <TouchableOpacity
-                  style={[styles.currencyBtn, currency === 'THB' && styles.currencyBtnActive]}
-                  onPress={() => handleCurrencyChange('THB')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.currencyBtnText, currency === 'THB' && styles.currencyBtnTextActive]}>
-                    🇹🇭 บาทไทย (THB ฿)
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.currencyBtn, currency === 'USD' && styles.currencyBtnActive]}
-                  onPress={() => handleCurrencyChange('USD')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.currencyBtnText, currency === 'USD' && styles.currencyBtnTextActive]}>
-                    🇺🇸 ดอลลาร์สหรัฐ (USD $)
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* USD Exchange Rate & Live Conversion Box */}
-              {currency === 'USD' && (
-                <View style={styles.usdExchangeBox}>
-                  <View style={styles.usdExchangeHeader}>
-                    <Ionicons name="swap-horizontal" size={16} color="#2563EB" />
-                    <Text style={styles.usdExchangeTitle}>อัตราแลกเปลี่ยน (1 USD = กี่บาท)</Text>
-                    {isFetchingRate && <ActivityIndicator size="small" color="#2563EB" />}
-                  </View>
-                  <View style={styles.usdExchangeInputRow}>
+              ) : (
+                /* IF STOCKS OR FUNDS: SHOW STOCKS/FUNDS FORM */
+                <View>
+                  {/* Symbol with Suggestions */}
+                  <View style={styles.symbolInputWrapper}>
+                    <Text style={styles.label}>ชื่อย่อ / รหัสสินทรัพย์ (Symbol) *</Text>
                     <TextInput
-                      style={styles.usdExchangeInput}
-                      value={exchangeRate}
-                      onChangeText={setExchangeRate}
-                      keyboardType="decimal-pad"
-                      placeholder="34.00"
+                      style={styles.input}
+                      value={symbol}
+                      onChangeText={handleSymbolChange}
+                      onFocus={() => {
+                        if (assetType === 'STOCKS' && symbol.trim().length >= 1) {
+                          searchStocks(symbol).then((res) => {
+                            setSuggestions(res);
+                            setShowSuggestions(res.length > 0);
+                          });
+                        }
+                      }}
+                      placeholder="เช่น PTT, MCD, AAPL หรือชื่อสินทรัพย์นอกตลาด"
+                      placeholderTextColor="#94A3B8"
+                      autoCapitalize="characters"
+                      autoCorrect={false}
                     />
-                    <TouchableOpacity
-                      style={styles.fetchRateBtn}
-                      onPress={refreshExchangeRate}
-                      disabled={isFetchingRate}
-                    >
-                      <Ionicons name="refresh" size={14} color="#2563EB" />
-                      <Text style={styles.fetchRateBtnText}>ดึงเรทสด</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {costPrice.trim() && !isNaN(parseFloat(costPrice)) ? (
-                    <Text style={styles.usdConvertedHint}>
-                      ≈ ฿{(parseFloat(costPrice) * (parseFloat(exchangeRate) || 34)).toFixed(2)} บาท/หุ้น
-                      {shares.trim() && !isNaN(parseFloat(shares))
-                        ? ` (ยอดรวม: ฿${(parseFloat(shares) * parseFloat(costPrice) * (parseFloat(exchangeRate) || 34)).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`
-                        : ''}
-                    </Text>
-                  ) : null}
-                </View>
-              )}
 
-              {/* Shares and Cost Price (Row) */}
-              <View style={styles.row}>
-                <View style={styles.flexHalf}>
-                  <Text style={styles.label}>จำนวนหุ้น / หน่วย *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={shares}
-                    onChangeText={setShares}
-                    placeholder="0.0000"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="decimal-pad"
-                  />
-                </View>
-                <View style={styles.flexGap} />
-                <View style={styles.flexHalf}>
-                  <Text style={styles.label}>
-                    ราคาต้นทุน ({currency === 'USD' ? 'ดอลลาร์ $' : 'บาท ฿'}) *
-                  </Text>
-                  <TextInput
-                    style={styles.input}
-                    value={costPrice}
-                    onChangeText={setCostPrice}
-                    placeholder="0.0000"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="decimal-pad"
-                  />
-                </View>
-              </View>
-
-              {/* Current Price */}
-              <View style={styles.currentPriceHeaderRow}>
-                <Text style={styles.label}>
-                  ราคาตลาดปัจจุบัน ({currency === 'USD' ? 'ดอลลาร์ $' : 'บาท ฿'})
-                </Text>
-                {isFetchingPrice && (
-                  <View style={styles.fetchingPriceIndicator}>
-                    <ActivityIndicator size="small" color="#059669" />
-                    <Text style={styles.fetchingPriceText}>ดึงราคาล่าสุด...</Text>
-                  </View>
-                )}
-              </View>
-              <TextInput
-                style={styles.input}
-                value={currentPrice}
-                onChangeText={setCurrentPrice}
-                placeholder="หากเว้นว่างจะใช้ราคาต้นทุน"
-                placeholderTextColor="#94A3B8"
-                keyboardType="decimal-pad"
-              />
-              {priceNote ? (
-                <View style={styles.priceNoteRow}>
-                  <Ionicons name="information-circle-outline" size={14} color="#059669" />
-                  <Text style={styles.priceNoteText}>{priceNote}</Text>
-                </View>
-              ) : null}
-
-              {/* Conditional DPU field - ONLY for STOCKS */}
-              {assetType === 'STOCKS' && (
-                <View style={styles.dpuSection}>
-                  <View style={styles.dpuHeader}>
-                    <View style={styles.dpuHeaderLeft}>
-                      <Ionicons name="gift-outline" size={18} color="#059669" />
-                      <Text style={styles.dpuSectionTitle}>ข้อมูลเงินปันผลคาดการณ์ (Dividend)</Text>
-                    </View>
-                    {isFetchingDividends && (
-                      <View style={styles.fetchingPriceIndicator}>
-                        <ActivityIndicator size="small" color="#059669" />
-                        <Text style={styles.fetchingPriceText}>วิเคราะห์ปันผล...</Text>
+                    {/* Suggestions Dropdown */}
+                    {showSuggestions && suggestions.length > 0 && (
+                      <View style={styles.suggestionsContainer}>
+                        <View style={styles.suggestionsHeader}>
+                          <Text style={styles.suggestionsHeaderText}>แนะนำหุ้นตลาด US & SET</Text>
+                          <TouchableOpacity onPress={() => setShowSuggestions(false)}>
+                            <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                          </TouchableOpacity>
+                        </View>
+                        {suggestions.map((item) => (
+                          <TouchableOpacity
+                            key={item.rawSymbol}
+                            style={styles.suggestionItem}
+                            onPress={() => handleSelectSuggestion(item)}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.suggestionLeft}>
+                              <View style={styles.suggestionTitleRow}>
+                                <Text style={styles.suggestionSymbol}>{item.symbol}</Text>
+                                <Text style={styles.suggestionExchange}>• {item.exchange}</Text>
+                              </View>
+                              <Text style={styles.suggestionName} numberOfLines={1}>
+                                {item.name}
+                              </Text>
+                            </View>
+                            <View
+                              style={[
+                                styles.marketBadge,
+                                item.market === 'US' ? styles.marketBadgeUS : styles.marketBadgeTH,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.marketBadgeText,
+                                  item.market === 'US' ? styles.marketBadgeTextUS : styles.marketBadgeTextTH,
+                                ]}
+                              >
+                                {item.market === 'US' ? `🇺🇸 ${item.exchange}` : `🇹🇭 ${item.exchange}`}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        ))}
                       </View>
                     )}
                   </View>
 
-                  {/* Dividend Analysis Highlight Badge */}
-                  {dividendAnalysis && dividendAnalysis.hasDividends && (
-                    <View style={styles.divHighlightCard}>
-                      <View style={styles.divHighlightTop}>
-                        <Ionicons name="analytics-outline" size={16} color="#047857" />
-                        <Text style={styles.divHighlightTitle}>วิเคราะห์ปันผลอัตโนมัติ</Text>
-                        <View style={styles.divFreqBadge}>
-                          <Text style={styles.divFreqText}>{dividendAnalysis.frequencyLabel}</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.divStatsGrid}>
-                        <View style={styles.divStatBox}>
-                          <Text style={styles.divStatLabel}>รอบล่าสุดต่อหุ้น</Text>
-                          <Text style={styles.divStatValue}>
-                            {currency === 'USD' ? '$' : '฿'}{dividendAnalysis.latestDpu.toFixed(4)}
-                          </Text>
-                        </View>
-                        <View style={styles.divStatDivider} />
-                        <View style={styles.divStatBox}>
-                          <Text style={styles.divStatLabel}>คาดการณ์ทั้งปี (Annual)</Text>
-                          <Text style={styles.divStatValueHighlight}>
-                            {currency === 'USD' ? '$' : '฿'}{dividendAnalysis.annualProjectedDpu.toFixed(4)}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {dividendAnalysis.projectedNextXdDates.length > 1 && (
-                        <Text style={styles.divScheduleHint}>
-                          📅 ระบบจะสร้างตารางปันผลล่วงหน้า {dividendAnalysis.projectedNextXdDates.length} รอบให้อัตโนมัติใน Bar Chart
+                  {/* Segment Selector for Stocks/Funds */}
+                  <Text style={styles.label}>กลุ่มอุตสาหกรรม / ประเภท (Segment)</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectorChipsScroll}>
+                    {getSectorsForType(assetType).map((sec) => (
+                      <TouchableOpacity
+                        key={sec.id}
+                        style={[
+                          styles.sectorChip,
+                          selectedSector === sec.id && { backgroundColor: sec.color, borderColor: sec.color },
+                        ]}
+                        onPress={() => setSelectedSector(sec.id)}
+                      >
+                        <Text
+                          style={[
+                            styles.sectorChipText,
+                            selectedSector === sec.id && styles.sectorChipTextActive,
+                          ]}
+                        >
+                          {sec.label}
                         </Text>
-                      )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+
+                  {/* Currency Selector (THB vs USD) */}
+                  <Text style={styles.label}>สกุลเงินที่ซื้อ (Currency)</Text>
+                  <View style={styles.currencyToggleContainer}>
+                    <TouchableOpacity
+                      style={[styles.currencyBtn, currency === 'THB' && styles.currencyBtnActive]}
+                      onPress={() => handleCurrencyChange('THB')}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.currencyBtnText, currency === 'THB' && styles.currencyBtnTextActive]}>
+                        🇹🇭 บาทไทย (THB ฿)
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.currencyBtn, currency === 'USD' && styles.currencyBtnActive]}
+                      onPress={() => handleCurrencyChange('USD')}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.currencyBtnText, currency === 'USD' && styles.currencyBtnTextActive]}>
+                        🇺🇸 ดอลลาร์สหรัฐ (USD $)
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* USD Exchange Rate & Live Conversion Box */}
+                  {currency === 'USD' && (
+                    <View style={styles.usdExchangeBox}>
+                      <View style={styles.usdExchangeHeader}>
+                        <Ionicons name="swap-horizontal" size={16} color="#2563EB" />
+                        <Text style={styles.usdExchangeTitle}>อัตราแลกเปลี่ยน (1 USD = กี่บาท)</Text>
+                        {isFetchingRate && <ActivityIndicator size="small" color="#2563EB" />}
+                      </View>
+                      <View style={styles.usdExchangeInputRow}>
+                        <TextInput
+                          style={styles.usdExchangeInput}
+                          value={exchangeRate}
+                          onChangeText={setExchangeRate}
+                          keyboardType="decimal-pad"
+                          placeholder="34.00"
+                        />
+                        <TouchableOpacity
+                          style={styles.fetchRateBtn}
+                          onPress={refreshExchangeRate}
+                          disabled={isFetchingRate}
+                        >
+                          <Ionicons name="refresh" size={14} color="#2563EB" />
+                          <Text style={styles.fetchRateBtnText}>ดึงเรทสด</Text>
+                        </TouchableOpacity>
+                      </View>
+                      {costPrice.trim() && !isNaN(parseFloat(costPrice)) ? (
+                        <Text style={styles.usdConvertedHint}>
+                          ≈ ฿{(parseFloat(costPrice) * (parseFloat(exchangeRate) || 34)).toFixed(2)} บาท/หุ้น
+                          {shares.trim() && !isNaN(parseFloat(shares))
+                            ? ` (ยอดรวม: ฿${(parseFloat(shares) * parseFloat(costPrice) * (parseFloat(exchangeRate) || 34)).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`
+                            : ''}
+                        </Text>
+                      ) : null}
                     </View>
                   )}
 
-                  {/* Non-dividend paying stock alert */}
-                  {dividendAnalysis && !dividendAnalysis.hasDividends && (
-                    <View style={styles.nonDivCard}>
-                      <Ionicons name="information-circle" size={18} color="#64748B" />
-                      <View style={styles.nonDivTextCol}>
-                        <Text style={styles.nonDivTitle}>ไม่มีประวัติการจ่ายเงินปันผล</Text>
-                        <Text style={styles.nonDivDesc}>
-                          หุ้นนี้ไม่มีการจ่ายปันผล (Growth/Non-dividend) ระบบจะบันทึกเข้าพอร์ตเพื่อติดตามราคาและผลตอบแทนตามปกติ
-                        </Text>
-                      </View>
+                  {/* Shares and Cost Price (Row) */}
+                  <View style={styles.row}>
+                    <View style={styles.flexHalf}>
+                      <Text style={styles.label}>จำนวนหุ้น / หน่วย *</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={shares}
+                        onChangeText={setShares}
+                        placeholder="0.0000"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="decimal-pad"
+                      />
                     </View>
-                  )}
+                    <View style={styles.flexGap} />
+                    <View style={styles.flexHalf}>
+                      <Text style={styles.label}>
+                        ราคาต้นทุน ({currency === 'USD' ? 'ดอลลาร์ $' : 'บาท ฿'}) *
+                      </Text>
+                      <TextInput
+                        style={styles.input}
+                        value={costPrice}
+                        onChangeText={setCostPrice}
+                        placeholder="0.0000"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                  </View>
 
-                  <Text style={styles.label}>
-                    เงินปันผลคาดการณ์ต่อหุ้น (DPU: {currency === 'USD' ? 'USD/หุ้น $' : 'บาท/หุ้น ฿'})
-                  </Text>
+                  {/* Current Price */}
+                  <View style={styles.currentPriceHeaderRow}>
+                    <Text style={styles.label}>
+                      ราคาตลาดปัจจุบัน ({currency === 'USD' ? 'ดอลลาร์ $' : 'บาท ฿'})
+                    </Text>
+                    {isFetchingPrice && (
+                      <View style={styles.fetchingPriceIndicator}>
+                        <ActivityIndicator size="small" color="#059669" />
+                        <Text style={styles.fetchingPriceText}>ดึงราคาล่าสุด...</Text>
+                      </View>
+                    )}
+                  </View>
                   <TextInput
                     style={styles.input}
-                    value={expectedDpu}
-                    onChangeText={setExpectedDpu}
-                    placeholder="0.0000"
+                    value={currentPrice}
+                    onChangeText={setCurrentPrice}
+                    placeholder="หากเว้นว่างจะใช้ราคาต้นทุน"
                     placeholderTextColor="#94A3B8"
                     keyboardType="decimal-pad"
                   />
+                  {priceNote ? (
+                    <View style={styles.priceNoteRow}>
+                      <Ionicons name="information-circle-outline" size={14} color="#059669" />
+                      <Text style={styles.priceNoteText}>{priceNote}</Text>
+                    </View>
+                  ) : null}
 
-                  <Text style={styles.label}>วันขึ้นเครื่องหมาย XD คาดการณ์ (YYYY-MM-DD)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={xdDate}
-                    onChangeText={setXdDate}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#94A3B8"
-                  />
-
-                  {/* Withholding Tax Selector */}
-                  <View style={styles.taxSection}>
-                    <View style={styles.taxHeaderRow}>
-                      <View style={styles.taxHeaderLeft}>
-                        <Ionicons name="receipt-outline" size={16} color="#0F172A" />
-                        <Text style={styles.labelNoMargin}>
-                          ภาษีหัก ณ ที่จ่าย (Withholding Tax)
-                        </Text>
+                  {/* Conditional DPU field - ONLY for STOCKS */}
+                  {assetType === 'STOCKS' && (
+                    <View style={styles.dpuSection}>
+                      <View style={styles.dpuHeader}>
+                        <View style={styles.dpuHeaderLeft}>
+                          <Ionicons name="gift-outline" size={18} color="#059669" />
+                          <Text style={styles.dpuSectionTitle}>ข้อมูลเงินปันผลคาดการณ์ (Dividend)</Text>
+                        </View>
+                        {isFetchingDividends && (
+                          <View style={styles.fetchingPriceIndicator}>
+                            <ActivityIndicator size="small" color="#059669" />
+                            <Text style={styles.fetchingPriceText}>วิเคราะห์ปันผล...</Text>
+                          </View>
+                        )}
                       </View>
-                      <View style={styles.taxCurrentBadge}>
-                        <Text style={styles.taxCurrentBadgeText}>
-                          {parseFloat(taxRatePercent) || 0}%
+
+                      {/* Dividend Analysis Highlight Badge */}
+                      {dividendAnalysis && dividendAnalysis.hasDividends && (
+                        <View style={styles.divHighlightCard}>
+                          <View style={styles.divHighlightTop}>
+                            <Ionicons name="analytics-outline" size={16} color="#047857" />
+                            <Text style={styles.divHighlightTitle}>วิเคราะห์ปันผลอัตโนมัติ</Text>
+                            <View style={styles.divFreqBadge}>
+                              <Text style={styles.divFreqText}>{dividendAnalysis.frequencyLabel}</Text>
+                            </View>
+                          </View>
+
+                          <View style={styles.divStatsGrid}>
+                            <View style={styles.divStatBox}>
+                              <Text style={styles.divStatLabel}>รอบล่าสุดต่อหุ้น</Text>
+                              <Text style={styles.divStatValue}>
+                                {currency === 'USD' ? '$' : '฿'}{dividendAnalysis.latestDpu.toFixed(4)}
+                              </Text>
+                            </View>
+                            <View style={styles.divStatDivider} />
+                            <View style={styles.divStatBox}>
+                              <Text style={styles.divStatLabel}>คาดการณ์ทั้งปี (Annual)</Text>
+                              <Text style={styles.divStatValueHighlight}>
+                                {currency === 'USD' ? '$' : '฿'}{dividendAnalysis.annualProjectedDpu.toFixed(4)}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      )}
+
+                      <Text style={styles.label}>เงินปันผลคาดการณ์ต่อหุ้น (DPU ฿)</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={expectedDpu}
+                        onChangeText={setExpectedDpu}
+                        placeholder="0.0000"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="decimal-pad"
+                      />
+
+                      <Text style={styles.label}>วันขึ้นเครื่องหมาย XD คาดการณ์ (YYYY-MM-DD)</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={xdDate}
+                        onChangeText={setXdDate}
+                        placeholder="YYYY-MM-DD"
+                        placeholderTextColor="#94A3B8"
+                      />
+
+                      {/* Withholding Tax Selector */}
+                      <View style={styles.taxSection}>
+                        <View style={styles.taxHeaderRow}>
+                          <View style={styles.taxHeaderLeft}>
+                            <Ionicons name="receipt-outline" size={16} color="#0F172A" />
+                            <Text style={styles.labelNoMargin}>
+                              ภาษีหัก ณ ที่จ่าย (Withholding Tax)
+                            </Text>
+                          </View>
+                          <View style={styles.taxCurrentBadge}>
+                            <Text style={styles.taxCurrentBadgeText}>
+                              {parseFloat(taxRatePercent) || 0}%
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Quick Tax Selector Pills */}
+                        <View style={styles.taxPillRow}>
+                          {[
+                            { label: '0% ยกเว้น', value: '0' },
+                            { label: '10% หุ้นไทย', value: '10' },
+                            { label: '15% US (W-8BEN)', value: '15' },
+                            { label: '30% ทั่วไป', value: '30' },
+                          ].map((pill) => (
+                            <TouchableOpacity
+                              key={pill.value}
+                              style={[
+                                styles.taxPill,
+                                taxRatePercent === pill.value && styles.taxPillActive,
+                              ]}
+                              onPress={() => setTaxRatePercent(pill.value)}
+                            >
+                              <Text
+                                style={[
+                                  styles.taxPillText,
+                                  taxRatePercent === pill.value && styles.taxPillTextActive,
+                                ]}
+                              >
+                                {pill.label}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+
+                        <TextInput
+                          style={styles.input}
+                          value={taxRatePercent}
+                          onChangeText={setTaxRatePercent}
+                          placeholder="เช่น 10 หรือ 15"
+                          placeholderTextColor="#94A3B8"
+                          keyboardType="decimal-pad"
+                        />
+                        <Text style={styles.taxHintText}>
+                          🇹🇭 หุ้นไทยมาตรฐาน 10% • 🇺🇸 หุ้นสหรัฐฯ มาตรฐาน 15% (อนุสัญญา W-8BEN)
                         </Text>
                       </View>
                     </View>
-
-                    {/* Quick Tax Selector Pills */}
-                    <View style={styles.taxPillRow}>
-                      {[
-                        { label: '0% ยกเว้น', value: '0' },
-                        { label: '10% หุ้นไทย', value: '10' },
-                        { label: '15% US (W-8BEN)', value: '15' },
-                        { label: '30% ทั่วไป', value: '30' },
-                      ].map((pill) => (
-                        <TouchableOpacity
-                          key={pill.value}
-                          style={[
-                            styles.taxPill,
-                            taxRatePercent === pill.value && styles.taxPillActive,
-                          ]}
-                          onPress={() => setTaxRatePercent(pill.value)}
-                        >
-                          <Text
-                            style={[
-                              styles.taxPillText,
-                              taxRatePercent === pill.value && styles.taxPillTextActive,
-                            ]}
-                          >
-                            {pill.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-
-                    <TextInput
-                      style={styles.input}
-                      value={taxRatePercent}
-                      onChangeText={setTaxRatePercent}
-                      placeholder="เช่น 10 หรือ 15"
-                      placeholderTextColor="#94A3B8"
-                      keyboardType="decimal-pad"
-                    />
-                    <Text style={styles.taxHintText}>
-                      🇹🇭 หุ้นไทยมาตรฐาน 10% • 🇺🇸 หุ้นสหรัฐฯ มาตรฐาน 15% (อนุสัญญา W-8BEN)
-                    </Text>
-                  </View>
+                  )}
                 </View>
               )}
 
-              {/* Submit Button */}
-              <TouchableOpacity
-                style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-                onPress={handleSubmit}
-                disabled={isSubmitting}
-                activeOpacity={0.8}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" style={styles.submitIcon} />
-                    <Text style={styles.submitButtonText}>บันทึกสินทรัพย์</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          {/* Submit Button */}
+          <TouchableOpacity
+            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={isSubmitting}
+            activeOpacity={0.8}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" style={styles.submitIcon} />
+                <Text style={styles.submitButtonText}>บันทึกสินทรัพย์</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    </KeyboardAvoidingView >
+      </Modal >
     </>
   );
 };
@@ -1252,6 +1446,214 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 4,
     lineHeight: 15,
+  },
+  sectorChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  sectorChipsScroll: {
+    marginBottom: 14,
+  },
+  sectorChip: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginRight: 6,
+  },
+  sectorChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  sectorChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  frequencyRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 14,
+  },
+  frequencyBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  frequencyBtnActive: {
+    backgroundColor: '#059669',
+    borderColor: '#059669',
+  },
+  frequencyBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+    textAlign: 'center',
+  },
+  frequencyBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  cashPreviewCard: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    marginTop: 4,
+    marginBottom: 14,
+    gap: 6,
+  },
+  cashPreviewHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#D1FAE5',
+  },
+  cashPreviewHeaderTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#065F46',
+  },
+  taxStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  taxStatusBadgeFree: {
+    backgroundColor: '#DCFCE7',
+  },
+  taxStatusBadgeTaxed: {
+    backgroundColor: '#FEF3C7',
+  },
+  taxStatusBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  taxStatusBadgeFreeText: {
+    color: '#15803D',
+  },
+  taxStatusBadgeTaxedText: {
+    color: '#B45309',
+  },
+  cashPreviewRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cashPreviewTotalRow: {
+    paddingTop: 6,
+    marginTop: 2,
+    borderTopWidth: 1,
+    borderTopColor: '#D1FAE5',
+  },
+  cashPreviewLabel: {
+    fontSize: 12,
+    color: '#065F46',
+    fontWeight: '500',
+  },
+  cashPreviewHighlightLabel: {
+    fontSize: 13,
+    color: '#065F46',
+    fontWeight: '700',
+  },
+  cashPreviewMuted: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  cashPreviewTax: {
+    fontSize: 12,
+    color: '#DC2626',
+    fontWeight: '600',
+  },
+  cashPreviewHighlight: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  cashPreviewSub: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  cashTaxHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  autoTaxToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    gap: 4,
+  },
+  autoTaxToggleBtnActive: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  autoTaxToggleText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  autoTaxToggleTextActive: {
+    color: '#059669',
+    fontWeight: '700',
+  },
+  taxAlertBox: {
+    flexDirection: 'row',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+  },
+  taxAlertBoxNormal: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  taxAlertBoxExceeded: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  taxAlertTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  taxAlertTitleNormal: {
+    color: '#15803D',
+  },
+  taxAlertTitleExceeded: {
+    color: '#B45309',
+  },
+  taxAlertDetail: {
+    fontSize: 11,
+    color: '#475569',
+    lineHeight: 15,
+  },
+  taxAlertQuota: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#059669',
+    marginTop: 4,
   },
 });
 

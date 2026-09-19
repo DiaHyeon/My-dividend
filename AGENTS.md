@@ -10,4 +10,9 @@ Read BRIEF.md before doing anything. It is the single source of truth and contai
 - Never commit secret keys or sensitive URLs into version control; keep them in .env.
 - Explain any file you create, in one sentence.
 - Always run Expo with `--tunnel` mode (`node ./node_modules/expo/bin/cli start --tunnel --go --web`) due to network AP isolation.
+- Keep components modular: extract dedicated sub-components (e.g., `CashAssetForm.tsx` for bank deposits/tax) to keep components small, fast to inspect, and easy to maintain.
+- For all cash/deposit interest and tax calculations, use `taxService.ts` and `CashAssetForm.tsx` as the standard components.
+- Always use `SafeAreaView` and `SafeAreaProvider` from `react-native-safe-area-context` (never use the deprecated `SafeAreaView` from `react-native`).
+- Charts from `react-native-gifted-charts` require `expo-linear-gradient` and `react-native-svg`.
+
 

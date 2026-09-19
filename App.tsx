@@ -1,7 +1,14 @@
 import React, { Component, ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, LogBox } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Dashboard } from './src/screens/Dashboard';
+
+// ปิดการแจ้งเตือนข้อแนะนำ Expo Go Push Notifications ซึ่งแอพใช้ Local Notifications ในเครื่องเท่านั้น
+LogBox.ignoreLogs([
+  '`expo-notifications` functionality is not fully supported in Expo Go',
+  'expo-notifications: Android Push notifications',
+]);
 
 interface Props {
   children: ReactNode;
@@ -59,12 +66,14 @@ class RootErrorBoundary extends Component<Props, State> {
 
 export default function App() {
   return (
-    <RootErrorBoundary>
-      <View style={styles.container}>
-        <StatusBar style="dark" />
-        <Dashboard />
-      </View>
-    </RootErrorBoundary>
+    <SafeAreaProvider>
+      <RootErrorBoundary>
+        <View style={styles.container}>
+          <StatusBar style="dark" />
+          <Dashboard />
+        </View>
+      </RootErrorBoundary>
+    </SafeAreaProvider>
   );
 }
 
