@@ -209,7 +209,9 @@ export const Dashboard: React.FC = () => {
 
     if (eligibleShares <= 0) return;
 
-    const taxRate = Number(parentAsset.tax_rate) || 0.1000;
+    const taxRate = parentAsset.tax_rate !== undefined && parentAsset.tax_rate !== null
+      ? Number(parentAsset.tax_rate)
+      : 0.1000;
     const dpu = Number(schedule.dpu) || 0;
     const netDividend = eligibleShares * dpu * (1 - taxRate);
 

@@ -61,6 +61,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
   const [isFetchingRate, setIsFetchingRate] = useState(false);
   const [dividendAnalysis, setDividendAnalysis] = useState<DividendAnalysis | null>(null);
   const [isFetchingDividends, setIsFetchingDividends] = useState(false);
+  const [taxRatePercent, setTaxRatePercent] = useState('10');
 
   const handleOpen = () => {
     setInternalVisible(true);
@@ -87,6 +88,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     setCurrency('THB');
     setDividendAnalysis(null);
     setIsFetchingDividends(false);
+    setTaxRatePercent('10');
   };
 
   const refreshExchangeRate = async () => {
@@ -98,8 +100,13 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
 
   const handleCurrencyChange = async (newCurr: 'THB' | 'USD') => {
     setCurrency(newCurr);
-    if (newCurr === 'USD' && (!exchangeRate || exchangeRate === '34.00')) {
-      await refreshExchangeRate();
+    if (newCurr === 'USD') {
+      setTaxRatePercent('15');
+      if (!exchangeRate || exchangeRate === '34.00') {
+        await refreshExchangeRate();
+      }
+    } else if (newCurr === 'THB' && taxRatePercent === '15') {
+      setTaxRatePercent('10');
     }
   };
 
@@ -125,9 +132,11 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
 
     if (item.market === 'US') {
       setCurrency('USD');
+      setTaxRatePercent('15');
       refreshExchangeRate();
     } else {
       setCurrency('THB');
+      setTaxRatePercent('10');
     }
 
     const [price, divAnalysis] = await Promise.all([
@@ -212,6 +221,11 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       const convertedCurrentPrice = parsedCurrentPrice * rate;
       const convertedDpu = parsedDpu * rate;
 
+      const parsedTaxPercent = parseFloat(taxRatePercent);
+      const calculatedTaxRate = isNaN(parsedTaxPercent) || parsedTaxPercent < 0
+        ? (currency === 'USD' ? 0.1500 : 0.1000)
+        : Number((parsedTaxPercent / 100).toFixed(4));
+
       // 1. Insert new record to assets table (prices in THB for unified portfolio)
       const { data: asset, error: assetError } = await supabase
         .from('assets')
@@ -219,7 +233,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
           symbol: trimmedSymbol,
           asset_type: assetType,
           current_price: Number(convertedCurrentPrice.toFixed(4)),
-          tax_rate: 0.1000,
+          tax_rate: calculatedTaxRate,
           is_archived: false,
         })
         .select()
@@ -626,6 +640,63 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                     placeholder="YYYY-MM-DD"
                     placeholderTextColor="#94A3B8"
                   />
+
+                  {/* Withholding Tax Selector */}
+                  <View style={styles.taxSection}>
+                    <View style={styles.taxHeaderRow}>
+                      <View style={styles.taxHeaderLeft}>
+                        <Ionicons name="receipt-outline" size={16} color="#0F172A" />
+                        <Text style={styles.labelNoMargin}>
+                          ภาษีหัก ณ ที่จ่าย (Withholding Tax)
+                        </Text>
+                      </View>
+                      <View style={styles.taxCurrentBadge}>
+                        <Text style={styles.taxCurrentBadgeText}>
+                          {parseFloat(taxRatePercent) || 0}%
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Quick Tax Selector Pills */}
+                    <View style={styles.taxPillRow}>
+                      {[
+                        { label: '0% ยกเว้น', value: '0' },
+                        { label: '10% หุ้นไทย', value: '10' },
+                        { label: '15% US (W-8BEN)', value: '15' },
+                        { label: '30% ทั่วไป', value: '30' },
+                      ].map((pill) => (
+                        <TouchableOpacity
+                          key={pill.value}
+                          style={[
+                            styles.taxPill,
+                            taxRatePercent === pill.value && styles.taxPillActive,
+                          ]}
+                          onPress={() => setTaxRatePercent(pill.value)}
+                        >
+                          <Text
+                            style={[
+                              styles.taxPillText,
+                              taxRatePercent === pill.value && styles.taxPillTextActive,
+                            ]}
+                          >
+                            {pill.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <TextInput
+                      style={styles.input}
+                      value={taxRatePercent}
+                      onChangeText={setTaxRatePercent}
+                      placeholder="เช่น 10 หรือ 15"
+                      placeholderTextColor="#94A3B8"
+                      keyboardType="decimal-pad"
+                    />
+                    <Text style={styles.taxHintText}>
+                      🇹🇭 หุ้นไทยมาตรฐาน 10% • 🇺🇸 หุ้นสหรัฐฯ มาตรฐาน 15% (อนุสัญญา W-8BEN)
+                    </Text>
+                  </View>
                 </View>
               )}
 
@@ -1111,6 +1182,75 @@ const styles = StyleSheet.create({
   nonDivDesc: {
     fontSize: 11,
     color: '#64748B',
+    lineHeight: 15,
+  },
+  taxSection: {
+    marginTop: 12,
+    marginBottom: 4,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  taxHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  taxHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  labelNoMargin: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  taxCurrentBadge: {
+    backgroundColor: '#E0E7FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  taxCurrentBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#3730A3',
+  },
+  taxPillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  taxPill: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  taxPillActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  taxPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  taxPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  taxHintText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 4,
     lineHeight: 15,
   },
 });
