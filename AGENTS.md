@@ -21,3 +21,4 @@ Read BRIEF.md before doing anything. It is the single source of truth and contai
 - For monthly passive income goals and presets, use `GoalSettingsModal.tsx` and AsyncStorage key `@mydividend_monthly_goal`.
 - For Privacy Mode, format monetary values with masking (`฿••••••`) while keeping percentage and Yield on Cost ratios visible.
 - For Upcoming Payday Radar, calculate schedule differences within 14 days and sort chronologically with clear days-remaining countdowns.
+- For asset holdings cards and sparkline area charts, use `AssetSparklineCard.tsx` and `historyService.ts` with Once-a-Day EOD caching and on-demand refresh to minimize external API calls.

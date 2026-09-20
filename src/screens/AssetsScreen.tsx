@@ -18,6 +18,7 @@ import { supabase } from '../lib/supabase';
 import { AssetSummary, AssetType, Transaction, TransactionType } from '../types/database';
 import { EditAssetModal } from '../components/EditAssetModal';
 import { AddAssetModal } from '../components/AddAssetModal';
+import { AssetSparklineCard } from '../components/AssetSparklineCard';
 import { isKnownUSSymbol, getCachedExchangeRate } from '../services/currencyService';
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
 
@@ -64,6 +65,7 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -130,6 +132,7 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
+    setRefreshTrigger((prev) => prev + 1);
     loadData();
   }, [loadData]);
 
@@ -452,112 +455,18 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                 <Text style={styles.emptySubtitle}>ลองเปลี่ยนคำค้นหา หรือแตะปุ่ม + เพื่อบันทึกสินทรัพย์ใหม่</Text>
               </View>
             ) : (
-              filteredHoldings.map((item) => {
-                const isUS = isUSStock(item.symbol, item.asset_type);
-                const rate = exchangeRate > 0 ? exchangeRate : 34.00;
-                const currentPriceTHB = Number(item.current_price);
-                const costPriceTHB = Number(item.weighted_average_cost);
-                const currentPriceUSD = isUS ? currentPriceTHB / rate : 0;
-                const costPriceUSD = isUS ? costPriceTHB / rate : 0;
-
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={styles.assetCard}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      setSelectedAssetForEdit(item);
-                      setIsEditModalVisible(true);
-                    }}
-                  >
-                    <View style={styles.assetHeader}>
-                      <View style={styles.assetSymbolContainer}>
-                        <View style={styles.assetSymbolTitleRow}>
-                          <Text style={styles.assetSymbol}>{item.symbol}</Text>
-                          {isUS && (
-                            <View style={styles.usBadge}>
-                              <Text style={styles.usBadgeText}>USD $</Text>
-                            </View>
-                          )}
-                          <View
-                            style={[
-                              styles.typeBadge,
-                              item.asset_type === 'STOCKS'
-                                ? styles.stocksBadge
-                                : item.asset_type === 'FUNDS'
-                                ? styles.fundsBadge
-                                : styles.cashBadge,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.typeBadgeText,
-                                item.asset_type === 'STOCKS'
-                                  ? styles.stocksBadgeText
-                                  : item.asset_type === 'FUNDS'
-                                  ? styles.fundsBadgeText
-                                  : styles.cashBadgeText,
-                              ]}
-                            >
-                              {item.asset_type === 'STOCKS' ? 'หุ้น' : item.asset_type === 'FUNDS' ? 'กองทุน' : 'เงินฝาก'}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text style={styles.assetHoldingsSub}>
-                          {item.asset_type === 'CASH'
-                            ? `เงินต้น ฿${Number(item.market_value).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`
-                            : item.asset_type === 'FUNDS'
-                            ? `${Number(item.net_shares).toLocaleString('th-TH', { minimumFractionDigits: 4 })} หน่วย`
-                            : `${Number(item.net_shares).toLocaleString('th-TH')} หุ้น`}
-                        </Text>
-                      </View>
-
-                      <View style={styles.editBadge}>
-                        <Ionicons name="pencil" size={12} color="#059669" />
-                        <Text style={styles.editBadgeText}>แก้ไข</Text>
-                      </View>
-                    </View>
-
-                    {/* Price & Value Details Row */}
-                    <View style={styles.assetBody}>
-                      <View style={styles.assetBodyCol}>
-                        <Text style={styles.colLabel}>
-                          {item.asset_type === 'FUNDS' ? 'NAV ล่าสุด' : item.asset_type === 'CASH' ? 'อัตราดอกเบี้ย' : 'ราคาตลาด'}
-                        </Text>
-                        <Text style={styles.colValue}>
-                          {item.asset_type === 'CASH'
-                            ? `${(Number(item.current_price) * 100).toFixed(2)}% p.a.`
-                            : `฿${currentPriceTHB.toFixed(2)}`}
-                        </Text>
-                        {isUS && <Text style={styles.colSubValue}>${currentPriceUSD.toFixed(2)}</Text>}
-                      </View>
-
-                      <View style={styles.assetBodyCol}>
-                        <Text style={styles.colLabel}>
-                          {item.asset_type === 'CASH' ? 'ภาษีหัก ณ ที่จ่าย' : 'ราคาต้นทุนเฉลี่ย'}
-                        </Text>
-                        <Text style={styles.colValue}>
-                          {item.asset_type === 'CASH'
-                            ? `${(Number(item.tax_rate) * 100).toFixed(0)}%`
-                            : `฿${costPriceTHB.toFixed(2)}`}
-                        </Text>
-                        {isUS && <Text style={styles.colSubValue}>${costPriceUSD.toFixed(2)}</Text>}
-                      </View>
-
-                      <View style={[styles.assetBodyCol, { alignItems: 'flex-end' }]}>
-                        <Text style={styles.colLabel}>มูลค่ารวม</Text>
-                        <Text style={styles.marketVal}>
-                          ฿{Number(item.market_value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </Text>
-                        <Text style={[styles.plText, Number(item.unrealized_pl) >= 0 ? styles.profitColor : styles.lossColor]}>
-                          {Number(item.unrealized_pl) >= 0 ? '+' : ''}
-                          {Number(item.unrealized_pl_percent).toFixed(1)}%
-                        </Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })
+              filteredHoldings.map((item) => (
+                <AssetSparklineCard
+                  key={item.id}
+                  item={item}
+                  exchangeRate={exchangeRate}
+                  refreshTrigger={refreshTrigger}
+                  onPressEdit={(selected) => {
+                    setSelectedAssetForEdit(selected);
+                    setIsEditModalVisible(true);
+                  }}
+                />
+              ))
             )}
           </>
         )}

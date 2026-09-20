@@ -226,7 +226,7 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Open API subscription key
   - รองรับการปรับเปลี่ยน Segment ด้วยตนเอง (Manual Override) ได้อย่างอิสระ
 
 ### 4.13 ระบบจัดการสินทรัพย์คงเหลือและประวัติธุรกรรม (Assets & Transaction History Engine)
-- ไฟล์จัดการ: `src/screens/AssetsScreen.tsx`, `App.tsx`
+- ไฟล์จัดการ: `src/screens/AssetsScreen.tsx`, `src/components/AssetSparklineCard.tsx`, `src/services/historyService.ts`, `App.tsx`
 - **การเข้าใช้งาน**: แตะที่แท็บที่ 3 บน Bottom Navigation Bar (`สินทรัพย์ & ธุรกรรม`), หรือแตะปุ่ม "ดูทั้งหมด" จากหน้า Dashboard หรือหน้า Portfolio
 - **การสลับมุมมอง 2 รูปแบบ (Dual View Switcher)**:
   1. **[ 📦 สินทรัพย์คงเหลือ (Holdings View) ]**:
@@ -235,7 +235,7 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Open API subscription key
      - **Category Filter Pills**: สลับกรองเฉพาะ หุ้น (STOCKS), กองทุน (FUNDS), เงินฝาก (CASH) หรือ ทั้งหมด
      - **Sort Options**: จัดเรียงตาม มูลค่าสูงสุด (Market Value), กำไรสูงสุด (% Gain), ขาดทุนมากสุด (% Loss), หรือตามตัวอักษร A-Z
      - **Live Stats Banner**: สรุปมูลค่ารวมของรายการที่กำลังแสดงผล และผลรวมกำไร/ขาดทุน
-     - **Asset Cards**: การ์ดแสดงราคาตลาด, ต้นทุนเฉลี่ย, สัดส่วนหุ้น, พร้อมปุ่มและแตะเพื่อเปิด Edit Modal ได้ทันที
+     - **FinTech Sparkline Area Chart Cards (AssetSparklineCard.tsx & historyService.ts)**: แสดงผลการ์ดสินทรัพย์สไตล์ FinTech สุดพรีเมียม พร้อมกราฟพื้นที่มินิมอล (Sparkline Area Chart) แสดงแนวโน้มราคาปิดจริง 7 วันล่าสุด วาดด้วย `react-native-svg` แบบ Monotone Spline และไล่ระดับสี Gradient ใต้เส้นกราฟ พร้อมระบบ **Once-a-Day EOD Cache (แคชรอบวันตามเวลาปิดตลาด 16-24 ชม.)** ร่วมกับ In-Memory Cache (0ms) และระบบ On-Demand Refresh (ยิง API ใหม่เฉพาะเมื่อดึงรูดรีเฟรชหน้าจอเท่านั้น) ช่วยลดจำนวนครั้งการยิง API ภายนอกลงได้มากกว่า 95%
    2. **[ 📜 ประวัติรายการ (Transaction History View) ]**:
       - แสดงไทม์ไลน์ประวัติการซื้อและฝากเงินย้อนหลัง เรียงจากวันที่ล่าสุด
       - **Minimal Dropdown Filter Bar (แถบตัวกรองแถวเดียวสไตล์มินิมอล)**: รวม 3 ตัวกรองไว้ในแถวเดียว แทนที่แถบเลื่อนแนวนอนแบบเดิม ประหยัดพื้นที่หน้าจอ เพิ่มพื้นที่แสดงข้อมูลธุรกรรม
@@ -350,6 +350,7 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Open API subscription key
   - `screens/AssetsScreen.tsx`: หน้าจอจัดการสินทรัพย์คงเหลือและประวัติธุรกรรม (Holdings & Transactions) พร้อมระบบค้นหาและ Filter ปี/เดือน
   - `components/AddAssetModal.tsx`: Bottom Sheet เพิ่มสินทรัพย์, Autocomplete หุ้น, Toggle USD/THB, FAB Button
   - `components/EditAssetModal.tsx`: Bottom Sheet สำหรับแก้ไขและลบสินทรัพย์เดิมในพอร์ต
+  - `components/AssetSparklineCard.tsx`: การ์ดแสดงผลสินทรัพย์คงเหลือสไตล์ FinTech พร้อมกราฟเส้นพื้นที่มินิมอล (Sparkline Area Chart) แสดงแนวโน้มผลตอบแทนและข้อมูลการถือครอง
   - `components/CashAssetForm.tsx`: ฟอร์มจัดการบัญชีเงินฝาก, ดอกเบี้ย และระบบคำนวณภาษีหัก ณ ที่จ่าย 20,000 บาท/ปี (Modular Component ที่ใช้ร่วมกันทั้งหน้าเพิ่มและแก้ไข)
   - `components/CategoryBreakdownModal.tsx`: Bottom Sheet แสดง Pie Chart วงกลมสัดส่วน Segment และมิเตอร์ติดตามโควตาดอกเบี้ยปลอดภาษี 20,000 บาท/ปี
   - `components/GoalSettingsModal.tsx`: Bottom Sheet Modal มินิมอล สำหรับตั้งค่าเป้าหมายกระแสเงินสดรายเดือน (Level Presets & Custom Target)
@@ -360,6 +361,7 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Open API subscription key
   - `services/notificationService.ts`: ระบบตั้งเวลาแจ้งเตือนวัน XD บน Android
   - `services/assetConsolidationService.ts`: บริการรวมข้อมูลสินทรัพย์คงเหลือที่ซื้อซ้ำ จัดระเบียบพอร์ต และโอนย้ายประวัติธุรกรรม
   - `services/benchmarkService.ts`: บริการคำนวณและประมวลผลจุดพล็อตเปรียบเทียบผลตอบแทนกับดัชนีตลาด (SET, S&P 500, NASDAQ) และค่า Alpha
+  - `services/historyService.ts`: บริการดึงและจัดเก็บแคชข้อมูลราคาปิดย้อนหลัง 7 วัน (Historical 7-Day Prices) ของหุ้นและกองทุน เพื่อแสดงผลกราฟแนวโน้มจริงในหน้าสินทรัพย์
 - `scripts/`
   - `patch-expo-notifications.js`: สคริปต์แก้ไขปัญหา Expo Go Crash บน Android
 - `supabase/functions/stock-proxy/`: Source code ของ Supabase Edge Function
