@@ -18,3 +18,6 @@ Read BRIEF.md before doing anything. It is the single source of truth and contai
 - For position accumulation and buy DCA, maintain unique holdings by `(symbol, asset_type)` via `assetConsolidationService.ts` and record multi-buy details in `transactions`.
 - For Portfolio Performance and Benchmark comparisons, use `benchmarkService.ts` and always calculate dynamic scale bounds (`maxValue`, `stepValue`, `noOfSections`, `mostNegativeValue`, `overflowTop`) across both primary and secondary datasets to prevent graph overflow.
 - For minimal dropdowns and filter selectors, use unified bottom sheet modal pickers with checkmarks for seamless mobile and web UX.
+- For monthly passive income goals and presets, use `GoalSettingsModal.tsx` and AsyncStorage key `@mydividend_monthly_goal`.
+- For Privacy Mode, format monetary values with masking (`฿••••••`) while keeping percentage and Yield on Cost ratios visible.
+- For Upcoming Payday Radar, calculate schedule differences within 14 days and sort chronologically with clear days-remaining countdowns.

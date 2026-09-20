@@ -293,6 +293,24 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Open API subscription key
 
 ---
 
+### 4.16 ระบบ Minimal Hybrid Dashboard & Cashflow Engine (Dual Yield, Privacy Mode, Payday Radar, Goal Card)
+- ไฟล์จัดการ: `src/screens/Dashboard.tsx`, `src/components/GoalSettingsModal.tsx`
+- **Dual Yield & เฉลี่ยต่อเดือนใน Hero Card**:
+  - **Current Dividend Yield**: $\frac{\text{Projected Annual Net Inflow}}{\text{Total Market Value}} \times 100$
+  - **Yield on Cost (YoC)**: $\frac{\text{Projected Annual Net Inflow}}{\text{Total Cost Basis}} \times 100$ (ชี้วัดความคุ้มค่าของเงินต้นที่ลงทุนจริง)
+  - **เฉลี่ยต่อเดือน**: แสดงตัวเลขกระแสเงินสดรับต่อเดือนโดยประมาณ (`~฿X/ด.`)
+- **Privacy Mode (ปุ่มดวงตา 👁️)**:
+  - ปุ่มสลับที่มุมบนขวาของ Header ซ่อนตัวเลขเงินบาททั้งหมดในหน้า Dashboard เป็น `฿••••••` เพื่อความปลอดภัยในที่สาธารณะ โดยยังคงแสดงสัดส่วน (%) และเปอร์เซ็นต์ผลตอบแทน (Yield, YoC)
+- **Mini Payday Radar (เรดาร์เตือนเงินเข้าสัปดาห์นี้)**:
+  - แถบเตือนมินิมอล 1 บรรทัดเหนือแท่งกราฟ 12 เดือน กรองเฉพาะรายการ XD หรือวันจ่ายเงินปันผล/ดอกเบี้ยที่จะเข้าภายใน 14 วันข้างหน้า
+  - หากไม่มีรายการ จะแสดงรายการถัดไปที่ใกล้ที่สุดให้อัตโนมัติ
+- **Minimal Passive Income Goal Card (การ์ดเป้าหมายกระแสเงินสด)**:
+  - แสดงสถานะความคืบหน้าสู่เป้าหมายรายได้ปันผล/ดอกเบี้ยต่อเดือน (เช่น Level 1: ค่ากาแฟ ฿1,000, Level 2: ค่าน้ำค่าไฟ ฿3,000, Level 3: ค่ากินอยู่ ฿10,000, Level 4: Lean FIRE ฿30,000 หรือกำหนดเอง)
+  - แถบ Progress Bar สไตล์เรียบหรู พร้อมคำนวณยอดที่ยังขาดอีกต่องวด
+  - ปรับแต่งผ่าน [GoalSettingsModal.tsx](file:///c:/Users/lenovo/Documents/My%20dividend/src/components/GoalSettingsModal.tsx) และบันทึกลง AsyncStorage
+
+---
+
 ## 5. Mobile & Network Operational Guidelines
 
 ### 5.1 การแก้ปัญหา Expo Go Android Runtime Crash
@@ -334,6 +352,7 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Open API subscription key
   - `components/EditAssetModal.tsx`: Bottom Sheet สำหรับแก้ไขและลบสินทรัพย์เดิมในพอร์ต
   - `components/CashAssetForm.tsx`: ฟอร์มจัดการบัญชีเงินฝาก, ดอกเบี้ย และระบบคำนวณภาษีหัก ณ ที่จ่าย 20,000 บาท/ปี (Modular Component ที่ใช้ร่วมกันทั้งหน้าเพิ่มและแก้ไข)
   - `components/CategoryBreakdownModal.tsx`: Bottom Sheet แสดง Pie Chart วงกลมสัดส่วน Segment และมิเตอร์ติดตามโควตาดอกเบี้ยปลอดภาษี 20,000 บาท/ปี
+  - `components/GoalSettingsModal.tsx`: Bottom Sheet Modal มินิมอล สำหรับตั้งค่าเป้าหมายกระแสเงินสดรายเดือน (Level Presets & Custom Target)
   - `services/taxService.ts`: ระบบคำนวณและประเมินภาษีดอกเบี้ยเงินฝากธนาคารตามเกณฑ์ยกเว้น 20,000 บาท/ปี ของกรมสรรพากร
   - `services/sectorService.ts`: ระบบจำแนกและจัดการ Segment มาตรฐานของหุ้น, กองทุน, และเงินฝาก
   - `services/stockService.ts`: ระบบค้นหาหุ้น US/TH, ดึงราคาปิด และอัตราแลกเปลี่ยน
