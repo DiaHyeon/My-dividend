@@ -18,6 +18,7 @@ import { EditAssetModal } from '../components/EditAssetModal';
 import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal';
 import { getAllAssetCurrencies, getCachedExchangeRate, isKnownUSSymbol } from '../services/currencyService';
 import { calculateScheduleCashPayout } from '../services/taxService';
+import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
 
 const MONTH_NAMES = [
   'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
@@ -56,9 +57,13 @@ interface CategoryStats {
 
 interface DashboardProps {
   onNavigateToPortfolio?: (category?: 'ALL' | AssetType) => void;
+  onNavigateToAssets?: (view?: 'HOLDINGS' | 'TRANSACTIONS', category?: 'ALL' | AssetType) => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onNavigateToPortfolio }) => {
+export const Dashboard: React.FC<DashboardProps> = ({
+  onNavigateToPortfolio,
+  onNavigateToAssets,
+}) => {
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [dividendSchedules, setDividendSchedules] = useState<DividendSchedule[]>([]);
@@ -95,6 +100,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateToPortfolio }) =
   const loadData = useCallback(async () => {
     try {
       await ensureAuthenticated();
+
+      // 0. Auto-consolidate any duplicate assets if present
+      await consolidateDuplicateAssets();
 
       // 1. Fetch assets summary view
       const { data: summaryData, error: summaryError } = await supabase
@@ -650,9 +658,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateToPortfolio }) =
               )}
             </View>
 
-            {/* Quick Preview of Top 3 Assets */}
+            {/* Quick Preview of Top 3 Assets by Highest Market Value */}
             <View style={styles.topAssetsList}>
-              {assets.slice(0, 3).map((item) => {
+              {[...assets]
+                .sort((a, b) => (Number(b.market_value) || 0) - (Number(a.market_value) || 0))
+                .slice(0, 3)
+                .map((item) => {
                 const isUS = isUSStock(item);
                 const rate = exchangeRate > 0 ? exchangeRate : 34.00;
                 const priceUSD = isUS ? Number(item.current_price) / rate : 0;
@@ -698,7 +709,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateToPortfolio }) =
               })}
             </View>
 
-            {onNavigateToPortfolio && (
+            {onNavigateToAssets ? (
+              <TouchableOpacity
+                style={styles.viewFullPortfolioBtn}
+                onPress={() => onNavigateToAssets('HOLDINGS', 'ALL')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.viewFullPortfolioBtnText}>
+                  {assets.length > 3
+                    ? `ดูสินทรัพย์ทั้งหมด ${assets.length} รายการ & ประวัติธุรกรรม →`
+                    : 'เปิดดูรายการสินทรัพย์ทั้งหมด & ประวัติธุรกรรม →'}
+                </Text>
+              </TouchableOpacity>
+            ) : onNavigateToPortfolio && (
               <TouchableOpacity
                 style={styles.viewFullPortfolioBtn}
                 onPress={() => onNavigateToPortfolio('ALL')}

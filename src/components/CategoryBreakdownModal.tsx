@@ -62,6 +62,7 @@ const getShortSegmentLabel = (label: string): string => {
   if (label.includes('ดิจิทัล')) return 'เงินฝากดิจิทัล';
   if (label.includes('ประจำ')) return 'ฝากประจำ';
   if (label.includes('ออมทรัพย์')) return 'ออมทรัพย์';
+  if (label.includes('อื่นๆ') || label.includes('Other')) return 'อื่นๆ';
   if (label.length > 12) return label.slice(0, 10) + '..';
   return label;
 };
@@ -195,10 +196,24 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
   interface SegmentPieDataItem extends pieDataItem {
     segmentLabel: string;
     segmentColor: string;
+    isOther?: boolean;
   }
 
+  // Option A Grouping: Keep major segments (>= 6% or top 3, max top 5), group minor into Others
+  const THRESHOLD = 6.0;
+  const majorGroups: SegmentGroup[] = [];
+  const minorGroups: SegmentGroup[] = [];
+
+  segmentGroups.forEach((group, idx) => {
+    if (idx < 5 && (group.percentage >= THRESHOLD || idx < 3)) {
+      majorGroups.push(group);
+    } else {
+      minorGroups.push(group);
+    }
+  });
+
   // Prepare PieChart data with white callout lines
-  const pieData: SegmentPieDataItem[] = segmentGroups.map((group) => {
+  const pieData: SegmentPieDataItem[] = majorGroups.map((group) => {
     const isSelected = selectedSegmentId === group.definition.id;
     const roundedVal = Math.round(group.percentage * 10) / 10;
     return {
@@ -214,6 +229,27 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
       },
     };
   });
+
+  if (minorGroups.length > 0) {
+    const otherMarketValue = minorGroups.reduce((s, g) => s + g.totalMarketValue, 0);
+    const otherPercentage = totalMarketValue > 0 ? (otherMarketValue / totalMarketValue) * 100 : 0;
+    const roundedOther = Math.round(otherPercentage * 10) / 10;
+    const isOtherSelected = selectedSegmentId === 'OTHER_COMBINED';
+
+    pieData.push({
+      value: Math.max(0.1, roundedOther),
+      color: '#64748B',
+      segmentLabel: 'อื่นๆ',
+      segmentColor: '#94A3B8',
+      strokeWidth: 2,
+      strokeColor: '#0F172A',
+      focused: isOtherSelected,
+      isOther: true,
+      onPress: () => {
+        setSelectedSegmentId(isOtherSelected ? null : 'OTHER_COMBINED');
+      },
+    });
+  }
 
   return (
     <Modal
@@ -457,7 +493,10 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
             <Text style={styles.sectionHeaderTitle}>รายละเอียดแต่ละ Segment</Text>
 
             {segmentGroups.map((group) => {
-              const isSelected = selectedSegmentId === group.definition.id;
+              const isMinor = minorGroups.some((mg) => mg.definition.id === group.definition.id);
+              const isSelected =
+                selectedSegmentId === group.definition.id ||
+                (selectedSegmentId === 'OTHER_COMBINED' && isMinor);
 
               return (
                 <View
@@ -475,11 +514,18 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
                       <View
                         style={[
                           styles.segmentColorBar,
-                          { backgroundColor: group.definition.color },
+                          { backgroundColor: isMinor ? '#64748B' : group.definition.color },
                         ]}
                       />
                       <View>
-                        <Text style={styles.segmentName}>{group.definition.label}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.segmentName}>{group.definition.label}</Text>
+                          {isMinor && (
+                            <View style={styles.minorBadge}>
+                              <Text style={styles.minorBadgeText}>อื่นๆ</Text>
+                            </View>
+                          )}
+                        </View>
                         <Text style={styles.segmentSubName}>{group.definition.enLabel}</Text>
                       </View>
                     </View>
@@ -775,6 +821,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#475569',
+  },
+  minorBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  minorBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
   },
   assetsInsideList: {
     borderTopWidth: 1,

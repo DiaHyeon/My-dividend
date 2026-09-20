@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
-import { AssetType } from '../types/database';
+import { Asset, AssetType } from '../types/database';
 import { scheduleXdReminder } from '../services/notificationService';
 import { searchStocks, fetchStockPrice, fetchExchangeRate, fetchDividendAnalysis, StockSuggestion, DividendAnalysis } from '../services/stockService';
 import { searchThaiFunds, fetchFundNav, fetchFundDividendAnalysis, FundSuggestion, POPULAR_THAI_FUNDS, fetchFundCategory } from '../services/fundService';
@@ -74,6 +74,54 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
   const [isAutoCashTax, setIsAutoCashTax] = useState(true);
   const [depositDate, setDepositDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
 
+  // Existing Asset Detection State
+  const [existingHolding, setExistingHolding] = useState<{
+    id: string;
+    shares: number;
+    avgCost: number;
+  } | null>(null);
+
+  // Live Check: Check if asset already exists in portfolio
+  React.useEffect(() => {
+    const trimmed = symbol.trim().toUpperCase();
+    if (!trimmed || trimmed.length < 2) {
+      setExistingHolding(null);
+      return;
+    }
+
+    let isMounted = true;
+    const checkExisting = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('view_asset_summary')
+          .select('id, net_shares, weighted_average_cost')
+          .ilike('symbol', trimmed)
+          .eq('asset_type', assetType)
+          .limit(1);
+
+        if (isMounted) {
+          if (!error && data && data.length > 0 && Number(data[0].net_shares) > 0) {
+            setExistingHolding({
+              id: data[0].id,
+              shares: Number(data[0].net_shares),
+              avgCost: Number(data[0].weighted_average_cost) || 0,
+            });
+          } else {
+            setExistingHolding(null);
+          }
+        }
+      } catch {
+        if (isMounted) setExistingHolding(null);
+      }
+    };
+
+    const timer = setTimeout(checkExisting, 350);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [symbol, assetType]);
+
   // Auto-calculate tax rate for CASH when deposit amount, interest rate or segment changes
   React.useEffect(() => {
     if (assetType === 'CASH' && isAutoCashTax) {
@@ -103,6 +151,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     setCostPrice('');
     setCurrentPrice('');
     setExpectedDpu('');
+    setExistingHolding(null);
     setAssetType('STOCKS');
     setSuggestions([]);
     setShowSuggestions(false);
@@ -341,20 +390,41 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         await ensureAuthenticated();
         const taxRate = (parseFloat(taxRatePercent) || 0) / 100;
 
-        // Insert into assets table
-        const { data: asset, error: assetError } = await supabase
+        // Check if cash account already exists
+        const { data: existingCashAssets } = await supabase
           .from('assets')
-          .insert({
-            symbol: trimmedAccount,
-            asset_type: 'CASH',
-            current_price: 1.0000,
-            tax_rate: Number(taxRate.toFixed(4)),
-            is_archived: false,
-          })
-          .select()
-          .single();
+          .select('*')
+          .ilike('symbol', trimmedAccount)
+          .eq('asset_type', 'CASH')
+          .eq('is_archived', false)
+          .order('created_at', { ascending: true })
+          .limit(1);
 
-        if (assetError || !asset) throw new Error(assetError?.message || 'ไม่สามารถบันทึกเงินฝากได้');
+        let asset: Asset | null = existingCashAssets && existingCashAssets.length > 0 ? existingCashAssets[0] : null;
+        const isExistingCash = !!asset;
+
+        if (asset) {
+          await supabase
+            .from('assets')
+            .update({ tax_rate: Number(taxRate.toFixed(4)) })
+            .eq('id', asset.id);
+        } else {
+          // Insert into assets table
+          const { data: newAsset, error: assetError } = await supabase
+            .from('assets')
+            .insert({
+              symbol: trimmedAccount,
+              asset_type: 'CASH',
+              current_price: 1.0000,
+              tax_rate: Number(taxRate.toFixed(4)),
+              is_archived: false,
+            })
+            .select()
+            .single();
+
+          if (assetError || !newAsset) throw new Error(assetError?.message || 'ไม่สามารถบันทึกเงินฝากได้');
+          asset = newAsset;
+        }
 
         // Insert into transactions table
         const todayDate = (depositDate && depositDate.trim()) || new Date().toISOString().split('T')[0];
@@ -415,7 +485,10 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         await setAssetSector(asset.id, selectedSector || 'DigitalSavings');
         await setAssetCurrency(asset.id, 'THB');
 
-        Alert.alert('สำเร็จ', `เพิ่มบัญชีเงินฝาก ${trimmedAccount} จำนวน ฿${parsedDeposit.toLocaleString()} เรียบร้อยแล้ว`);
+        const alertMsg = isExistingCash
+          ? `บันทึกรายการฝากเงินเพิ่มในบัญชี ${trimmedAccount} จำนวน ฿${parsedDeposit.toLocaleString()} เรียบร้อยแล้ว (ระบบรวมยอดเงินฝากให้อัตโนมัติ)`
+          : `เพิ่มบัญชีเงินฝาก ${trimmedAccount} จำนวน ฿${parsedDeposit.toLocaleString()} เรียบร้อยแล้ว`;
+        Alert.alert('สำเร็จ', alertMsg);
         resetForm();
         handleClose();
         onSuccess?.();
@@ -469,24 +542,55 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         ? (currency === 'USD' ? 0.1500 : 0.1000)
         : Number((parsedTaxPercent / 100).toFixed(4));
 
-      // 1. Insert new record to assets table (prices in THB for unified portfolio)
-      const { data: asset, error: assetError } = await supabase
+      // 1. Check if asset already exists in portfolio (non-archived)
+      const { data: existingAssets } = await supabase
         .from('assets')
-        .insert({
-          symbol: trimmedSymbol,
-          asset_type: assetType,
-          current_price: Number(convertedCurrentPrice.toFixed(4)),
-          tax_rate: calculatedTaxRate,
-          is_archived: false,
-        })
-        .select()
-        .single();
+        .select('*')
+        .ilike('symbol', trimmedSymbol)
+        .eq('asset_type', assetType)
+        .eq('is_archived', false)
+        .order('created_at', { ascending: true })
+        .limit(1);
 
-      if (assetError || !asset) {
-        throw new Error(assetError?.message || 'ไม่สามารถเพิ่มสินทรัพย์ได้');
+      let asset: Asset | null = existingAssets && existingAssets.length > 0 ? existingAssets[0] : null;
+      const isExisting = !!asset;
+
+      if (asset) {
+        // Asset already exists: update latest current_price and tax_rate
+        const { data: updatedAsset, error: updateErr } = await supabase
+          .from('assets')
+          .update({
+            current_price: Number(convertedCurrentPrice.toFixed(4)),
+            tax_rate: calculatedTaxRate,
+          })
+          .eq('id', asset.id)
+          .select()
+          .single();
+
+        if (!updateErr && updatedAsset) {
+          asset = updatedAsset;
+        }
+      } else {
+        // Insert new record to assets table (prices in THB for unified portfolio)
+        const { data: newAsset, error: assetError } = await supabase
+          .from('assets')
+          .insert({
+            symbol: trimmedSymbol,
+            asset_type: assetType,
+            current_price: Number(convertedCurrentPrice.toFixed(4)),
+            tax_rate: calculatedTaxRate,
+            is_archived: false,
+          })
+          .select()
+          .single();
+
+        if (assetError || !newAsset) {
+          throw new Error(assetError?.message || 'ไม่สามารถเพิ่มสินทรัพย์ได้');
+        }
+        asset = newAsset;
       }
 
-      // 2. Insert initial BUY record to transactions table
+      // 2. Insert BUY record to transactions table
       const todayDate = new Date().toISOString().split('T')[0];
       const { error: txError } = await supabase.from('transactions').insert({
         asset_id: asset.id,
@@ -497,7 +601,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       });
 
       if (txError) {
-        throw new Error(txError.message || 'ไม่สามารถบันทึกรายการซื้อเริ่มต้นได้');
+        throw new Error(txError.message || 'ไม่สามารถบันทึกรายการซื้อได้');
       }
 
       // 3. Insert projected DPU to dividend_schedules if (STOCKS or FUNDS) and DPU > 0
@@ -543,7 +647,9 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       await setAssetSector(asset.id, finalSector);
       await setAssetCurrency(asset.id, currency);
 
-      const alertMsg = currency === 'USD'
+      const alertMsg = isExisting
+        ? `บันทึกรายการซื้อเพิ่มใน ${trimmedSymbol} เรียบร้อยแล้ว (ระบบรวมจำนวนหุ้นและเฉลี่ยต้นทุนให้อัตโนมัติ)`
+        : currency === 'USD'
         ? `เพิ่มสินทรัพย์ ${trimmedSymbol} เข้าสู่พอร์ตแล้ว (ซื้อ $${parsedCostPrice.toFixed(2)} แปลงเป็น ฿${convertedCostPrice.toFixed(2)} ที่อัตรา ฿${rate.toFixed(2)}/USD)`
         : `เพิ่มสินทรัพย์ ${trimmedSymbol} เข้าสู่พอร์ตเรียบร้อยแล้ว`;
 
@@ -625,6 +731,21 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
               </View>
 
               {/* IF CASH: SHOW CASH & INTEREST FORM */}
+              {existingHolding && assetType === 'CASH' && (
+                <View style={styles.existingHoldingBanner}>
+                  <View style={styles.existingHoldingHeader}>
+                    <Ionicons name="layers" size={15} color="#2563EB" />
+                    <Text style={styles.existingHoldingTitle}>
+                      มีบัญชีนี้ในพอร์ตแล้ว (ยอดคงเหลือ ฿{existingHolding.shares.toLocaleString()})
+                    </Text>
+                  </View>
+                  <Text style={styles.existingHoldingSubtitle}>
+                    การบันทึกครั้งนี้จะถือเป็น{' '}
+                    <Text style={{ fontWeight: '700', color: '#1E40AF' }}>การฝากเงินเพิ่ม (Deposit)</Text>{' '}
+                    ระบบจะรวมยอดเงินฝากเข้าบัญชีเดิมให้อัตโนมัติ
+                  </Text>
+                </View>
+              )}
               {assetType === 'CASH' ? (
                 <CashAssetForm
                   accountName={symbol}
@@ -782,6 +903,23 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                       </View>
                     )}
                   </View>
+
+                  {/* Existing Holding / DCA Accumulation Notice */}
+                  {existingHolding && (
+                    <View style={styles.existingHoldingBanner}>
+                      <View style={styles.existingHoldingHeader}>
+                        <Ionicons name="layers" size={15} color="#2563EB" />
+                        <Text style={styles.existingHoldingTitle}>
+                          มีสินทรัพย์นี้ในพอร์ตแล้ว ({existingHolding.shares.toLocaleString()} หุ้น)
+                        </Text>
+                      </View>
+                      <Text style={styles.existingHoldingSubtitle}>
+                        ต้นทุนเฉลี่ยปัจจุบัน: ฿{existingHolding.avgCost.toFixed(2)} • การบันทึกครั้งนี้จะถือเป็น{' '}
+                        <Text style={{ fontWeight: '700', color: '#1E40AF' }}>การซื้อเพิ่ม (DCA)</Text>{' '}
+                        ระบบจะรวมจำนวนหุ้นและเฉลี่ยต้นทุนให้อัตโนมัติ
+                      </Text>
+                    </View>
+                  )}
 
                   {/* Segment / Category Selector for Stocks/Funds */}
                   <View style={styles.sectorHeaderRow}>
@@ -1884,6 +2022,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#059669',
     marginTop: 4,
+  },
+  existingHoldingBanner: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  existingHoldingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 3,
+  },
+  existingHoldingTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E40AF',
+  },
+  existingHoldingSubtitle: {
+    fontSize: 11,
+    color: '#3B82F6',
+    lineHeight: 16,
   },
 });
 

@@ -124,6 +124,8 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Open API subscription key
 
 ### 4.6 Local Notifications (แจ้งเตือนวัน XD)
 - ไฟล์จัดการ: `src/services/notificationService.ts`
+  - `services/assetConsolidationService.ts`: บริการรวมข้อมูลสินทรัพย์คงเหลือที่ซื้อซ้ำ จัดระเบียบพอร์ต และโอนย้ายประวัติธุรกรรม
+  - `services/benchmarkService.ts`: บริการคำนวณและประมวลผลจุดพล็อตเปรียบเทียบผลตอบแทนกับดัชนีตลาด (SET, S&P 500, NASDAQ) และค่า Alpha
 - ตั้งเวลาแจ้งเตือนล่วงหน้า 1 วันก่อนวันขึ้นเครื่องหมาย XD ในเวลา 08:30 น.
 - สร้าง Android Notification Channel: `xd-reminders` (High Importance, เสียง และการสั่น)
 - ข้อความแจ้งเตือน: `🔔 [Symbol] ขึ้นเครื่องหมาย XD พรุ่งนี้! ถือหุ้นไว้เพื่อรับสิทธิเงินปันผล`
@@ -142,13 +144,16 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Open API subscription key
   - มีกล่องข้อความ Alert ยืนยันก่อนทำรายการลบ เพื่อป้องกันความผิดพลาด
   - ทำการปรับสถานะ `is_archived = true` ในตาราง `assets` ซึ่งทำให้สินทรัพย์นั้นถูกคัดออกจาก Dashboard และกราฟ 12 เดือนทันที
 
-### 4.8 ระบบจำแนก Segment และ Pie Chart แสดงสัดส่วนหมวดหมู่ (Category Breakdown)
-- ไฟล์จัดการ: `src/components/CategoryBreakdownModal.tsx`, `src/services/sectorService.ts`
-- **การเปิดใช้งาน**: แตะที่การ์ดหมวดหมู่ (หุ้น STOCKS, กองทุน FUNDS, เงินฝาก CASH) บนหน้า Dashboard
-- **การแสดงผล**:
-  - Donut / Pie Chart วงกลมแบ่งตามกลุ่มอุตสาหกรรม/ประเภท (Segments)
-  - **White Callout Lines**: มีเส้นสีขาวชี้ออกจากแต่ละชิ้นพายไปยังป้ายตัวเลขเปอร์เซ็นต์ (%) อย่างคมชัดสวยงามบนพื้นหลังการ์ดสีเข้ม
-  - รายละเอียดแต่ละ Segment พร้อมมูลค่าเงินรวม และรายชื่อสินทรัพย์ในกลุ่ม แตะเพื่อเปิดแก้ไขได้ทันที
+### 4.8 ระบบจำแนก Segment และ Pie Chart แสดงสัดส่วนหมวดหมู่ & พอร์ตโฟลิโอ (Category Breakdown & Portfolio Allocation)
+- ไฟล์จัดการ: `src/components/CategoryBreakdownModal.tsx`, `src/screens/Portfolio.tsx`, `src/services/sectorService.ts`
+- **การเปิดใช้งาน**: แตะที่การ์ดหมวดหมู่บนหน้า Dashboard หรือแตะ "เปิดดู Pie Chart" เพื่อเข้าสู่หน้าพอร์ตโฟลิโอ
+- **การแสดงผล & เส้น Callout สีขาว (White Callout Lines)**:
+  - Donut / Pie Chart แสดงผลบนการ์ดสีเข้มพรีเมียม (`#0F172A`)
+  - **White Callout Lines**: มีเส้นสีขาวชี้ออกจากแต่ละชิ้นพายไปยังป้ายตัวเลขเปอร์เซ็นต์ (%) และชื่อสินทรัพย์/หมวดหมู่ อย่างคมชัดสวยงาม ป้องกันป้ายทับกัน
+  - **ระบบรวมกลุ่มสัดส่วนย่อย Option A (Minor Items Grouping - "อื่นๆ / Others")**:
+    - สินทรัพย์หรือ Segment ที่มีสัดส่วน $\ge 6\%$ (หรือ Top Holdings หลัก) จะได้ชิ้นพายตัวเองพร้อมเส้นสีขาวชี้ระบุชื่อและ % ชัดเจน
+    - สินทรัพย์หรือ Segment ย่อยที่มีสัดส่วน $< 6\%$ จะถูกรวบเป็นชิ้นพายก้อนเดียวสีเทาสลレート (`#64748B`) ในชื่อ **"อื่นๆ (Others)"** พร้อมเส้นชี้อันเดียว เพื่อแก้ปัญหาป้ายและเส้นทับซ้อนกันบนจอมือถือ
+    - ในตาราง Legend และรายการสินทรัพย์ด้านล่างยังคงแสดงข้อมูลรายตัวครบ 100%
 - **การจำแนก Segment**:
   - **STOCKS (10 กลุ่ม GICS)**: Technology, Energy, Financials, Healthcare, Consumer Staples, Consumer Discretionary, Industrials, Materials, Real Estate, Telecom, Other
   - **FUNDS (7 กลุ่ม AIMC)**: Fixed Income Fund (ตราสารหนี้/พันธบัตร), Equity Fund, Mixed Fund, Property & Infra, Commodity (ทอง/น้ำมัน), Foreign (FIF), Money Market, Other
@@ -220,6 +225,72 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Open API subscription key
   - แสดงป้ายประเภทกองทุน (Category Badge) ในรายการแนะนำค้นหา (Dropdown), ข้อความสรุปใต้ชื่อสินทรัพย์, และป้าย `[ตรวจพบอัตโนมัติ]` เหนือตัวเลือก Segment
   - รองรับการปรับเปลี่ยน Segment ด้วยตนเอง (Manual Override) ได้อย่างอิสระ
 
+### 4.13 ระบบจัดการสินทรัพย์คงเหลือและประวัติธุรกรรม (Assets & Transaction History Engine)
+- ไฟล์จัดการ: `src/screens/AssetsScreen.tsx`, `App.tsx`
+- **การเข้าใช้งาน**: แตะที่แท็บที่ 3 บน Bottom Navigation Bar (`สินทรัพย์ & ธุรกรรม`), หรือแตะปุ่ม "ดูทั้งหมด" จากหน้า Dashboard หรือหน้า Portfolio
+- **การสลับมุมมอง 2 รูปแบบ (Dual View Switcher)**:
+  1. **[ 📦 สินทรัพย์คงเหลือ (Holdings View) ]**:
+     - รวบรวมสินทรัพย์ทุกตัวที่มีอยู่ในพอร์ต ย้ายออกจากหน้ากราฟเพื่อแก้ปัญหาจอยาวเลื่อนไม่รู้จบ (Endless Scrolling)
+     - **Search Bar**: ค้นหาตามชื่อย่อสินทรัพย์หรือบัญชีเงินฝากทันที
+     - **Category Filter Pills**: สลับกรองเฉพาะ หุ้น (STOCKS), กองทุน (FUNDS), เงินฝาก (CASH) หรือ ทั้งหมด
+     - **Sort Options**: จัดเรียงตาม มูลค่าสูงสุด (Market Value), กำไรสูงสุด (% Gain), ขาดทุนมากสุด (% Loss), หรือตามตัวอักษร A-Z
+     - **Live Stats Banner**: สรุปมูลค่ารวมของรายการที่กำลังแสดงผล และผลรวมกำไร/ขาดทุน
+     - **Asset Cards**: การ์ดแสดงราคาตลาด, ต้นทุนเฉลี่ย, สัดส่วนหุ้น, พร้อมปุ่มและแตะเพื่อเปิด Edit Modal ได้ทันที
+   2. **[ 📜 ประวัติรายการ (Transaction History View) ]**:
+      - แสดงไทม์ไลน์ประวัติการซื้อและฝากเงินย้อนหลัง เรียงจากวันที่ล่าสุด
+      - **Minimal Dropdown Filter Bar (แถบตัวกรองแถวเดียวสไตล์มินิมอล)**: รวม 3 ตัวกรองไว้ในแถวเดียว แทนที่แถบเลื่อนแนวนอนแบบเดิม ประหยัดพื้นที่หน้าจอ เพิ่มพื้นที่แสดงข้อมูลธุรกรรม
+        - **Dropdown ปี (Year Chip)**: แตะเพื่อเปิด Bottom Sheet Modal เลือกปีจริงจากฐานข้อมูล (เช่น `ทุกปี`, `2026 (2569)`, `2025 (2568)` ฯลฯ)
+        - **Dropdown เดือน (Month Chip)**: แตะเพื่อเปิด Modal แบบ Grid ตาราง 12 เดือน (ม.ค. - ธ.ค.) หรือปุ่ม "ทุกเดือน (ตลอดทั้งปี)"
+        - **Dropdown ประเภท (Type Chip)**: กรองระหว่าง `ทุกประเภท (ทั้งหมด)`, `ซื้อหุ้น / กองทุน (BUY)`, และ `เงินฝากธนาคาร (DEPOSIT)` (ตัดตัวเลือก SELL ออกเพื่อความชัดเจน เนื่องจากแอปยังไม่มีระบบขายสินทรัพย์)
+        - **ปุ่มรีเซ็ต (Reset Chip)**: แสดงปุ่มกากบาท/ล้างตัวกรองสีแดงอัตโนมัติเมื่อมีการเลือกตัวกรองใดตัวกรองหนึ่งอยู่
+      - **Search Bar**: ค้นหาตามชื่อสินทรัพย์ในประวัติรายการ
+      - **Transaction Volume Banner**: สรุปยอดเงินรวมของธุรกรรมที่เกิดขึ้นในช่วงเวลาที่เลือก พร้อมจำนวนรายการ
+
+---
+
+### 4.14 ระบบรวมสินทรัพย์ที่ซื้อซ้ำ และการซื้อเพิ่มแบบ DCA (Position Accumulation & Duplicate Consolidation Engine)
+- ไฟล์จัดการ: `src/services/assetConsolidationService.ts`, `src/components/AddAssetModal.tsx`, `src/screens/AssetsScreen.tsx`, `src/screens/Portfolio.tsx`, `src/screens/Dashboard.tsx`
+- **หลักการออกแบบพอร์ตการลงทุน (Portfolio Model Rule)**:
+  - **หน้าสินทรัพย์คงเหลือ (Holdings View)**: สินทรัพย์แต่ละตัว (Symbol เดียวกัน และ Asset Type เดียวกัน) จะต้องแสดงผลเพียง **1 รายการ / 1 การ์ดเท่านั้น** โดยระบบจะรวมจำนวนหุ้นคงเหลือทั้งหมด (`net_shares`) และคำนวณราคาต้นทุนเฉลี่ยถ่วงน้ำหนัก (`weighted_average_cost`) ให้อัตโนมัติผ่าน SQL View `view_asset_summary`
+  - **หน้าประวัติรายการ (Transaction History View)**: เป็นที่สำหรับจัดเก็บและแสดงผลประวัติการซื้อแต่ละครั้งแยกกันตามจริง (เช่น ซื้อรอบที่ 1 วันที่ X, ซื้อรอบที่ 2 วันที่ Y)
+- **Live Detection & DCA Hint Banner ใน AddAssetModal**:
+  - เมื่อผู้ใช้งานพิมพ์หรือเลือกหุ้น/กองทุน/บัญชีเงินฝาก ระบบจะตรวจเช็คพอร์ตแบบ Real-time
+  - หากพบว่ามีสินทรัพย์นี้อยู่ในพอร์ตแล้ว จะแสดงกล่องข้อความสีฟ้าแจ้งเตือนชัดเจน: `💡 มีสินทรัพย์นี้ในพอร์ตแล้ว (X หุ้น @ ฿Y) — การบันทึกครั้งนี้จะถือเป็นการซื้อเพิ่ม (DCA) ระบบจะรวมจำนวนหุ้นและเฉลี่ยต้นทุนให้อัตโนมัติ`
+  - เมื่อกดยืนยัน ระบบจะไม่สร้าง Asset แถวใหม่ แต่จะนำ `asset_id` เดิมมาใช้ในการบันทึก Transaction ซื้อเพิ่ม
+- **Auto Duplicate Consolidation (การรวมรายการซ้ำเดิมอัตโนมัติ)**:
+  - ฟังก์ชัน `consolidateDuplicateAssets()` ใน `assetConsolidationService.ts` จะสแกนค้นหา Asset ที่ซ้ำกันในฐานข้อมูล
+  - ย้าย Transactions และ Dividend Schedules ทั้งหมดของรายการซ้ำมาผูกกับ Asset หลัก แล้วทำการ Soft-delete (Archive) รายการที่ซ้ำ
+  - เรียกทำงานอัตโนมัติเมื่อโหลดหน้า Dashboard, Portfolio, และ AssetsScreen
+
+---
+
+### 4.15 ระบบวัดผลตอบแทนพอร์ต และเปรียบเทียบดัชนีตลาด (Portfolio Performance & Benchmark Comparison Engine)
+- ไฟล์จัดการ: `src/services/benchmarkService.ts`, `src/screens/Portfolio.tsx`
+- **การสลับมุมมองพอร์ตแบบ Dual Tab Switcher**:
+  1. **[ 🥧 สัดส่วนพอร์ต (Allocation) ]**:
+     - ตัดกล่อง Hero Card ด้านบนออก เพื่อขจัดความซ้ำซ้อนกับตัวเลขรวมตรงกลางรูกลมของ Donut Pie Chart (`฿xxxk`)
+     - ชู Donut Pie Chart ขึ้นมาเด่นสง่าทันที พร้อมปุ่มตัวกรองหมวดหมู่ (หุ้น/กองทุน/เงินฝาก) และพรีวิว 3 สินทรัพย์หลักที่มีมูลค่าสูงสุดในพอร์ต
+  2. **[ 📈 ผลงานพอร์ต (Performance) ]**:
+     - **Performance Hero Card**: แสดง **% ผลตอบแทนสะสม (Cumulative Return)** เช่น `+14.8%` พร้อมยอดกำไร/ขาดทุนสุทธิ (฿) และเงินต้นสะสมเพื่อความโปร่งใส
+     - **Timeframe Selector Bar**: กรองช่วงเวลา `[ 1M | 3M | 6M | 1Y | ทั้งหมด ]`
+      - **Benchmark Selector Dropdown (กล่องเลือกดัชนีตลาดแบบ Dropdown)**:
+        - ออกแบบเป็นการ์ด Dropdown สไตล์มินิมอล แสดงไอคอน/ธง, ชื่อดัชนีที่เลือก, และลูกศร `chevron-down`
+        - แตะเพื่อเปิด **Bottom Sheet Modal Picker**: เลือกดัชนีได้อย่างรวดเร็ว ไม่เกะกะหน้าจอ
+          - `พอร์ตเดี่ยว (ไม่เปรียบเทียบ)`: แสดงกราฟเส้นเดี่ยวแบบ Area Fill
+          - `🇹🇭 SET Index`: เปรียบเทียบกับดัชนีตลาดหลักทรัพย์แห่งประเทศไทย (SET)
+          - `🇺🇸 S&P 500`: เปรียบเทียบกับดัชนี 500 บริษัทชั้นนำสหรัฐฯ
+          - `🇺🇸 NASDAQ`: เปรียบเทียบกับดัชนีหุ้นกลุ่มเทคโนโลยีสหรัฐฯ
+      - **Dual-Line Comparison Chart พร้อม Dynamic Safe Scale Bounds**:
+        - กราฟเส้นคู่แบบ Interactive จาก `react-native-gifted-charts`
+        - **ระบบคำนวณสเกลป้องกันกราฟทะลุขอบ (Overflow Prevention Engine)**:
+          - คำนวณ `maxValue`, `stepValue`, และ `noOfSections` แบบ Real-time ครอบคลุมทั้งข้อมูลพอร์ตและดัชนีอ้างอิง
+          - เพิ่ม Headroom เผื่อส่วนโค้ง Bezier อย่างน้อย 25% ป้องกันไม่ให้กราฟพุ่งทะลุขอบบนแม้ในดัชนีที่ผลตอบแทนสูงมาก (เช่น NASDAQ +31.5%)
+          - รองรับค่าติดลบด้านล่าง (`mostNegativeValue`, `noOfSectionsBelowXAxis`) อย่างแม่นยำ
+        - เส้นที่ 1: พอร์ตของคุณ (สีเขียว `#10B981`)
+        - เส้นที่ 2: ดัชนีอ้างอิงที่เลือก (สีส้ม/ม่วง/ชมพู)
+     - **Alpha / Outperformance Banner**: กล่องสรุปผลเปรียบเทียบ เช่น `🎉 พอร์ตของคุณชนะ S&P 500 อยู่ +3.5% (Outperforming)` หรือ `📊 ตามหลังดัชนี -1.2%`
+     - **Asset Return Ranking (จัดอันดับผลงานรายสินทรัพย์)**: แสดงรายชื่อหุ้น/กองทุนทั้งหมดในพอร์ต เรียงลำดับจาก % กำไรสูงสุดไปหาน้อยสุด
+
 ---
 
 ## 5. Mobile & Network Operational Guidelines
@@ -257,6 +328,8 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Open API subscription key
   - `types/database.ts`: TypeScript Database Definitions สำหรับ Supabase
   - `lib/supabase.ts`: Supabase Client Config พร้อม AsyncStorage
   - `screens/Dashboard.tsx`: หน้าจอหลัก Dashboard พอร์ต, การ์ดหมวดหมู่, ตัวกรอง 3 มุมมอง, และ Bar Chart คาดการณ์ปันผล/ดอกเบี้ย
+  - `screens/Portfolio.tsx`: หน้าจอพอร์ตโฟลิโอรวม, Pie Chart สัดส่วนสินทรัพย์พร้อมเส้น Callout สีขาว และระบบรวมกลุ่มสัดส่วนย่อย (Option A)
+  - `screens/AssetsScreen.tsx`: หน้าจอจัดการสินทรัพย์คงเหลือและประวัติธุรกรรม (Holdings & Transactions) พร้อมระบบค้นหาและ Filter ปี/เดือน
   - `components/AddAssetModal.tsx`: Bottom Sheet เพิ่มสินทรัพย์, Autocomplete หุ้น, Toggle USD/THB, FAB Button
   - `components/EditAssetModal.tsx`: Bottom Sheet สำหรับแก้ไขและลบสินทรัพย์เดิมในพอร์ต
   - `components/CashAssetForm.tsx`: ฟอร์มจัดการบัญชีเงินฝาก, ดอกเบี้ย และระบบคำนวณภาษีหัก ณ ที่จ่าย 20,000 บาท/ปี (Modular Component ที่ใช้ร่วมกันทั้งหน้าเพิ่มและแก้ไข)
@@ -266,6 +339,8 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Open API subscription key
   - `services/stockService.ts`: ระบบค้นหาหุ้น US/TH, ดึงราคาปิด และอัตราแลกเปลี่ยน
   - `services/fundService.ts`: ระบบค้นหากองทุนรวมไทย, ดึง NAV ล่าสุด และประวัติเงินปันผลผ่าน SEC Open API
   - `services/notificationService.ts`: ระบบตั้งเวลาแจ้งเตือนวัน XD บน Android
+  - `services/assetConsolidationService.ts`: บริการรวมข้อมูลสินทรัพย์คงเหลือที่ซื้อซ้ำ จัดระเบียบพอร์ต และโอนย้ายประวัติธุรกรรม
+  - `services/benchmarkService.ts`: บริการคำนวณและประมวลผลจุดพล็อตเปรียบเทียบผลตอบแทนกับดัชนีตลาด (SET, S&P 500, NASDAQ) และค่า Alpha
 - `scripts/`
   - `patch-expo-notifications.js`: สคริปต์แก้ไขปัญหา Expo Go Crash บน Android
 - `supabase/functions/stock-proxy/`: Source code ของ Supabase Edge Function

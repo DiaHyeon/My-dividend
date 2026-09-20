@@ -5,6 +5,7 @@ import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-
 import { Ionicons } from '@expo/vector-icons';
 import { Dashboard } from './src/screens/Dashboard';
 import { Portfolio } from './src/screens/Portfolio';
+import { AssetsScreen } from './src/screens/AssetsScreen';
 import { AssetType } from './src/types/database';
 
 // ปิดหน้าต่างแจ้งเตือน LogBox ทั้งหมดบนหน้าจอมือถือ
@@ -74,16 +75,27 @@ class RootErrorBoundary extends Component<Props, State> {
   }
 }
 
-type TabType = 'DASHBOARD' | 'PORTFOLIO';
+type TabType = 'DASHBOARD' | 'PORTFOLIO' | 'ASSETS';
 
 function MainNavigator() {
   const [currentTab, setCurrentTab] = useState<TabType>('DASHBOARD');
   const [portfolioCategory, setPortfolioCategory] = useState<'ALL' | AssetType>('ALL');
+  const [assetsInitialView, setAssetsInitialView] = useState<'HOLDINGS' | 'TRANSACTIONS'>('HOLDINGS');
+  const [assetsCategory, setAssetsCategory] = useState<'ALL' | AssetType>('ALL');
   const insets = useSafeAreaInsets();
 
   const handleNavigateToPortfolio = (category?: 'ALL' | AssetType) => {
     setPortfolioCategory(category || 'ALL');
     setCurrentTab('PORTFOLIO');
+  };
+
+  const handleNavigateToAssets = (
+    view: 'HOLDINGS' | 'TRANSACTIONS' = 'HOLDINGS',
+    category: 'ALL' | AssetType = 'ALL'
+  ) => {
+    setAssetsInitialView(view);
+    setAssetsCategory(category);
+    setCurrentTab('ASSETS');
   };
 
   const handleNavigateToDashboard = () => {
@@ -97,11 +109,22 @@ function MainNavigator() {
       {/* Screen Views */}
       <View style={styles.screenContainer}>
         {currentTab === 'DASHBOARD' ? (
-          <Dashboard onNavigateToPortfolio={handleNavigateToPortfolio} />
-        ) : (
+          <Dashboard
+            onNavigateToPortfolio={handleNavigateToPortfolio}
+            onNavigateToAssets={handleNavigateToAssets}
+          />
+        ) : currentTab === 'PORTFOLIO' ? (
           <Portfolio
             initialCategoryFilter={portfolioCategory}
             onNavigateToDashboard={handleNavigateToDashboard}
+            onNavigateToAssets={handleNavigateToAssets}
+          />
+        ) : (
+          <AssetsScreen
+            initialView={assetsInitialView}
+            initialCategoryFilter={assetsCategory}
+            onNavigateToDashboard={handleNavigateToDashboard}
+            onNavigateToPortfolio={handleNavigateToPortfolio}
           />
         )}
       </View>
@@ -141,7 +164,24 @@ function MainNavigator() {
             />
           </View>
           <Text style={[styles.tabLabel, currentTab === 'PORTFOLIO' && styles.tabLabelActive]}>
-            พอร์ตสินทรัพย์
+            สัดส่วนพอร์ต
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.tabButton}
+          onPress={() => handleNavigateToAssets('HOLDINGS', 'ALL')}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.iconWrapper, currentTab === 'ASSETS' && styles.iconWrapperActive]}>
+            <Ionicons
+              name={currentTab === 'ASSETS' ? 'receipt' : 'receipt-outline'}
+              size={22}
+              color={currentTab === 'ASSETS' ? '#059669' : '#64748B'}
+            />
+          </View>
+          <Text style={[styles.tabLabel, currentTab === 'ASSETS' && styles.tabLabelActive]}>
+            สินทรัพย์ & ธุรกรรม
           </Text>
         </TouchableOpacity>
       </View>
