@@ -1,13 +1,23 @@
-import React, { Component, ReactNode } from 'react';
+import React, { Component, ReactNode, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, LogBox } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { Dashboard } from './src/screens/Dashboard';
+import { Portfolio } from './src/screens/Portfolio';
+import { AssetType } from './src/types/database';
 
-// ปิดการแจ้งเตือนข้อแนะนำ Expo Go Push Notifications ซึ่งแอพใช้ Local Notifications ในเครื่องเท่านั้น
+// ปิดหน้าต่างแจ้งเตือน LogBox ทั้งหมดบนหน้าจอมือถือ
+LogBox.ignoreAllLogs(true);
 LogBox.ignoreLogs([
   '`expo-notifications` functionality is not fully supported in Expo Go',
   'expo-notifications: Android Push notifications',
+  'Error setting notification channel',
+  'ExpoNotificationChannelManager',
+  'NotificationsChannelsProvider',
+  'Failed to schedule XD reminder notification',
+  'Unable to configure notification handler',
+  'Cannot connect to Expo CLI',
 ]);
 
 interface Props {
@@ -64,14 +74,86 @@ class RootErrorBoundary extends Component<Props, State> {
   }
 }
 
+type TabType = 'DASHBOARD' | 'PORTFOLIO';
+
+function MainNavigator() {
+  const [currentTab, setCurrentTab] = useState<TabType>('DASHBOARD');
+  const [portfolioCategory, setPortfolioCategory] = useState<'ALL' | AssetType>('ALL');
+  const insets = useSafeAreaInsets();
+
+  const handleNavigateToPortfolio = (category?: 'ALL' | AssetType) => {
+    setPortfolioCategory(category || 'ALL');
+    setCurrentTab('PORTFOLIO');
+  };
+
+  const handleNavigateToDashboard = () => {
+    setCurrentTab('DASHBOARD');
+  };
+
+  return (
+    <View style={styles.container}>
+      <StatusBar style="dark" />
+
+      {/* Screen Views */}
+      <View style={styles.screenContainer}>
+        {currentTab === 'DASHBOARD' ? (
+          <Dashboard onNavigateToPortfolio={handleNavigateToPortfolio} />
+        ) : (
+          <Portfolio
+            initialCategoryFilter={portfolioCategory}
+            onNavigateToDashboard={handleNavigateToDashboard}
+          />
+        )}
+      </View>
+
+      {/* Modern Docked Bottom Navigation Bar */}
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+        <TouchableOpacity
+          style={styles.tabButton}
+          onPress={handleNavigateToDashboard}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.iconWrapper, currentTab === 'DASHBOARD' && styles.iconWrapperActive]}>
+            <Ionicons
+              name={currentTab === 'DASHBOARD' ? 'bar-chart' : 'bar-chart-outline'}
+              size={22}
+              color={currentTab === 'DASHBOARD' ? '#059669' : '#64748B'}
+            />
+          </View>
+          <Text style={[styles.tabLabel, currentTab === 'DASHBOARD' && styles.tabLabelActive]}>
+            ภาพรวมปันผล
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.tabButton}
+          onPress={() => {
+            setPortfolioCategory('ALL');
+            setCurrentTab('PORTFOLIO');
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.iconWrapper, currentTab === 'PORTFOLIO' && styles.iconWrapperActive]}>
+            <Ionicons
+              name={currentTab === 'PORTFOLIO' ? 'pie-chart' : 'pie-chart-outline'}
+              size={22}
+              color={currentTab === 'PORTFOLIO' ? '#059669' : '#64748B'}
+            />
+          </View>
+          <Text style={[styles.tabLabel, currentTab === 'PORTFOLIO' && styles.tabLabelActive]}>
+            พอร์ตสินทรัพย์
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 export default function App() {
   return (
     <SafeAreaProvider>
       <RootErrorBoundary>
-        <View style={styles.container}>
-          <StatusBar style="dark" />
-          <Dashboard />
-        </View>
+        <MainNavigator />
       </RootErrorBoundary>
     </SafeAreaProvider>
   );
@@ -127,6 +209,46 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 15,
+  },
+  screenContainer: {
+    flex: 1,
+  },
+  bottomBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 8,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  tabButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
+  iconWrapper: {
+    paddingHorizontal: 18,
+    paddingVertical: 4,
+    borderRadius: 16,
+    marginBottom: 2,
+  },
+  iconWrapperActive: {
+    backgroundColor: '#ECFDF5',
+  },
+  tabLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  tabLabelActive: {
+    color: '#059669',
+    fontWeight: '700',
   },
 });
 

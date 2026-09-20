@@ -15,10 +15,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { AssetSummary, AssetType } from '../types/database';
-import { fetchStockPrice } from '../services/stockService';
+import { fetchStockPrice, fetchExchangeRate } from '../services/stockService';
 import { scheduleXdReminder } from '../services/notificationService';
 import { getSectorsForType, getAssetSector, setAssetSector, detectSector } from '../services/sectorService';
 import { evaluateCashTax, calculateAnnualGrossInterest } from '../services/taxService';
+import { getAssetCurrency, setAssetCurrency, getCachedExchangeRate } from '../services/currencyService';
 import { CashAssetForm } from './CashAssetForm';
 
 interface EditAssetModalProps {
@@ -54,6 +55,11 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
   const [interestFrequency, setInterestFrequency] = useState<'MONTHLY' | 'SEMI_ANNUAL' | 'ANNUAL'>('MONTHLY');
   const [isAutoCashTax, setIsAutoCashTax] = useState(true);
 
+  // Currency State for Multi-currency Support
+  const [currency, setCurrency] = useState<'THB' | 'USD'>('THB');
+  const [exchangeRate, setExchangeRate] = useState<number>(34.00);
+  const [isFetchingRate, setIsFetchingRate] = useState(false);
+
   // Auto-calculate tax rate for CASH when deposit amount, interest rate or segment changes
   useEffect(() => {
     if (assetType === 'CASH' && isAutoCashTax) {
@@ -77,10 +83,6 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
     setSymbol(asset.symbol || '');
     setAssetType(asset.asset_type || 'STOCKS');
     setShares(asset.net_shares !== undefined ? asset.net_shares.toString() : '0');
-    setCostPrice(
-      asset.weighted_average_cost !== undefined ? asset.weighted_average_cost.toString() : '0'
-    );
-    setCurrentPrice(asset.current_price !== undefined ? asset.current_price.toString() : '0');
     setTaxRatePercent(
       asset.tax_rate !== undefined ? (Number(asset.tax_rate) * 100).toFixed(0) : (asset.asset_type === 'CASH' ? '0' : '10')
     );
@@ -91,10 +93,34 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
       setSelectedSector(sec);
     });
 
+    // Load Currency & Exchange Rate
+    const initializeCurrency = async () => {
+      const rate = await getCachedExchangeRate();
+      setExchangeRate(rate);
+
+      const detectedCurr = await getAssetCurrency(asset.id, asset.symbol, asset.tax_rate, asset.asset_type);
+      setCurrency(detectedCurr);
+
+      const dbCost = asset.weighted_average_cost !== undefined ? Number(asset.weighted_average_cost) : 0;
+      const dbPrice = asset.current_price !== undefined ? Number(asset.current_price) : 0;
+
+      if (detectedCurr === 'USD' && rate > 0) {
+        setCostPrice((dbCost / rate).toFixed(2));
+        setCurrentPrice((dbPrice / rate).toFixed(2));
+      } else {
+        setCostPrice(dbCost.toString());
+        setCurrentPrice(dbPrice.toString());
+      }
+    };
+    initializeCurrency();
+
     // Fetch related dividend schedule
     const loadSchedules = async () => {
       setIsLoadingDetails(true);
       try {
+        const rate = await getCachedExchangeRate();
+        const detectedCurr = await getAssetCurrency(asset.id, asset.symbol, asset.tax_rate, asset.asset_type);
+
         const { data: divData, error } = await supabase
           .from('dividend_schedules')
           .select('*')
@@ -103,17 +129,18 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
           .limit(1);
 
         if (!error && divData && divData.length > 0) {
-          const rawDpu = divData[0].dpu ? divData[0].dpu.toString() : '0';
-          setExpectedDpu(rawDpu);
+          const rawDpu = divData[0].dpu ? Number(divData[0].dpu) : 0;
+          if (detectedCurr === 'USD' && rate > 0) {
+            setExpectedDpu((rawDpu / rate).toFixed(4));
+          } else {
+            setExpectedDpu(rawDpu.toString());
+          }
           setXdDate(divData[0].xd_date || '');
           setExistingScheduleId(divData[0].id);
 
           if (asset.asset_type === 'CASH') {
-            // For CASH, estimate annual interest % from dpu
-            const dpuNum = Number(rawDpu);
-            // If dpu is per month (1/12), annual rate is dpu * 12 * 100
-            if (dpuNum > 0) {
-              setInterestRate((dpuNum * 12 * 100).toFixed(2));
+            if (rawDpu > 0) {
+              setInterestRate((rawDpu * 12 * 100).toFixed(2));
             }
           }
         } else {
@@ -133,6 +160,39 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
     loadSchedules();
   }, [asset, visible]);
 
+  // Handle switching currency toggle in Edit Modal
+  const handleCurrencyToggle = (targetCurr: 'THB' | 'USD') => {
+    if (targetCurr === currency) return;
+    const currentCost = parseFloat(costPrice) || 0;
+    const currentCurrPrice = parseFloat(currentPrice) || 0;
+    const currentDpu = parseFloat(expectedDpu) || 0;
+    const rate = exchangeRate > 0 ? exchangeRate : 34.00;
+
+    if (targetCurr === 'USD') {
+      // THB -> USD
+      setCostPrice((currentCost / rate).toFixed(2));
+      setCurrentPrice((currentCurrPrice / rate).toFixed(2));
+      if (currentDpu > 0) setExpectedDpu((currentDpu / rate).toFixed(4));
+      setTaxRatePercent('15');
+    } else {
+      // USD -> THB
+      setCostPrice((currentCost * rate).toFixed(2));
+      setCurrentPrice((currentCurrPrice * rate).toFixed(2));
+      if (currentDpu > 0) setExpectedDpu((currentDpu * rate).toFixed(4));
+      setTaxRatePercent('10');
+    }
+    setCurrency(targetCurr);
+  };
+
+  const refreshExchangeRate = async () => {
+    setIsFetchingRate(true);
+    const rate = await fetchExchangeRate();
+    if (rate && rate > 0) {
+      setExchangeRate(rate);
+    }
+    setIsFetchingRate(false);
+  };
+
   // Quick refresh latest price from stock service
   const handleRefreshLatestPrice = async () => {
     if (!symbol.trim()) return;
@@ -142,8 +202,14 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
     try {
       const price = await fetchStockPrice(symbol.trim().toUpperCase());
       if (price !== null && price > 0) {
-        setCurrentPrice(price.toString());
-        setPriceFeedback(`✅ อัปเดตราคาล่าสุดแล้ว: ฿${price.toFixed(2)}`);
+        if (currency === 'USD') {
+          setCurrentPrice(price.toString());
+          const thbEquivalent = (price * exchangeRate).toFixed(2);
+          setPriceFeedback(`✅ อัปเดตราคาล่าสุด: $${price.toFixed(2)} (~฿${thbEquivalent})`);
+        } else {
+          setCurrentPrice(price.toString());
+          setPriceFeedback(`✅ อัปเดตราคาล่าสุดแล้ว: ฿${price.toFixed(2)}`);
+        }
       } else {
         setPriceFeedback('ℹ️ ไม่พบราคาจากตลาด หรือเป็นสินทรัพย์นอกตลาด');
       }
@@ -158,8 +224,9 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
   const numShares = parseFloat(shares) || 0;
   const numCurrentPrice = parseFloat(currentPrice) || 0;
   const numCostPrice = parseFloat(costPrice) || 0;
-  const previewMarketValue = numShares * numCurrentPrice;
-  const previewTotalCost = numShares * numCostPrice;
+  const effectiveRate = currency === 'USD' ? exchangeRate : 1.0;
+  const previewMarketValue = numShares * numCurrentPrice * effectiveRate;
+  const previewTotalCost = numShares * numCostPrice * effectiveRate;
   const previewPL = previewMarketValue - previewTotalCost;
   const previewPLPercent = previewTotalCost > 0 ? (previewPL / previewTotalCost) * 100 : 0;
 
@@ -197,8 +264,13 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
     setIsSubmitting(true);
 
     try {
+      const rateMultiplier = currency === 'USD' ? (exchangeRate || 34.00) : 1.0;
+      const convertedCurrentPrice = parsedCurrentPrice * rateMultiplier;
+      const convertedCostPrice = parsedCostPrice * rateMultiplier;
+      const convertedDpu = parsedDpu * rateMultiplier;
+
       const calculatedTaxRate = isNaN(parsedTaxPercent) || parsedTaxPercent < 0
-        ? 0.1000
+        ? (currency === 'USD' ? 0.1500 : 0.1000)
         : Number((parsedTaxPercent / 100).toFixed(4));
 
       // 1. Update Asset table
@@ -207,7 +279,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
         .update({
           symbol: trimmedSymbol,
           asset_type: assetType,
-          current_price: Number(parsedCurrentPrice.toFixed(4)),
+          current_price: Number(convertedCurrentPrice.toFixed(4)),
           tax_rate: calculatedTaxRate,
         })
         .eq('id', asset.id);
@@ -230,7 +302,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
           .from('transactions')
           .update({
             shares: Number(parsedShares.toFixed(4)),
-            price_per_share: Number(parsedCostPrice.toFixed(4)),
+            price_per_share: Number(convertedCostPrice.toFixed(4)),
           })
           .eq('id', primaryTx.id);
 
@@ -244,7 +316,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
           asset_id: asset.id,
           type: 'BUY',
           shares: Number(parsedShares.toFixed(4)),
-          price_per_share: Number(parsedCostPrice.toFixed(4)),
+          price_per_share: Number(convertedCostPrice.toFixed(4)),
           transaction_date: todayDate,
         });
       }
@@ -257,14 +329,14 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
           await supabase
             .from('dividend_schedules')
             .update({
-              dpu: Number(parsedDpu.toFixed(4)),
+              dpu: Number(convertedDpu.toFixed(4)),
               xd_date: targetXdDate,
             })
             .eq('id', existingScheduleId);
         } else if (parsedDpu > 0) {
           await supabase.from('dividend_schedules').insert({
             asset_id: asset.id,
-            dpu: Number(parsedDpu.toFixed(4)),
+            dpu: Number(convertedDpu.toFixed(4)),
             xd_date: targetXdDate,
             is_projected: true,
           });
@@ -320,10 +392,17 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
         }
       }
 
-      // 4. Save Sector Override
-      await setAssetSector(asset.id, selectedSector || detectSector(trimmedSymbol, assetType));
+      // 4. Save Sector Override & Currency
+      const finalSector = selectedSector && selectedSector !== 'Other'
+        ? selectedSector
+        : detectSector(trimmedSymbol, assetType);
+      await setAssetSector(asset.id, finalSector);
+      await setAssetCurrency(asset.id, currency);
 
-      Alert.alert('สำเร็จ', `แก้ไขข้อมูลสินทรัพย์ ${trimmedSymbol} เรียบร้อยแล้ว`);
+      const alertDetail = currency === 'USD'
+        ? ` (ราคาแปลงจาก $${parsedCostPrice.toFixed(2)} เป็น ฿${convertedCostPrice.toFixed(2)})`
+        : '';
+      Alert.alert('สำเร็จ', `แก้ไขข้อมูลสินทรัพย์ ${trimmedSymbol} เรียบร้อยแล้ว${alertDetail}`);
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -502,9 +581,63 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
+                {/* Currency Selector (THB vs USD) */}
+                {assetType === 'STOCKS' && (
+                  <>
+                    <Text style={styles.fieldLabel}>สกุลเงินที่บันทึก (Currency)</Text>
+                    <View style={styles.currencyToggleContainer}>
+                      <TouchableOpacity
+                        style={[styles.currencyBtn, currency === 'THB' && styles.currencyBtnActive]}
+                        onPress={() => handleCurrencyToggle('THB')}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.currencyBtnText, currency === 'THB' && styles.currencyBtnTextActive]}>
+                          🇹🇭 บาทไทย (THB ฿)
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.currencyBtn, currency === 'USD' && styles.currencyBtnActive]}
+                        onPress={() => handleCurrencyToggle('USD')}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.currencyBtnText, currency === 'USD' && styles.currencyBtnTextActive]}>
+                          🇺🇸 ดอลลาร์สหรัฐ (USD $)
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* USD Exchange Rate Box */}
+                    {currency === 'USD' && (
+                      <View style={styles.usdExchangeBox}>
+                        <View style={styles.usdExchangeHeader}>
+                          <Ionicons name="swap-horizontal" size={16} color="#2563EB" />
+                          <Text style={styles.usdExchangeTitle}>
+                            อัตราแลกเปลี่ยน (1 USD = {exchangeRate.toFixed(2)} บาท)
+                          </Text>
+                          {isFetchingRate ? (
+                            <ActivityIndicator size="small" color="#2563EB" />
+                          ) : (
+                            <TouchableOpacity onPress={refreshExchangeRate} hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}>
+                              <Text style={styles.fetchRateBtnText}>รีเฟรชเรท</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                        {costPrice.trim() && !isNaN(parseFloat(costPrice)) ? (
+                          <Text style={styles.usdConvertedHint}>
+                            ต้นทุน: ${parseFloat(costPrice).toFixed(2)} ≈ ฿{(parseFloat(costPrice) * exchangeRate).toFixed(2)} บาท/หุ้น
+                            {shares.trim() && !isNaN(parseFloat(shares))
+                              ? ` • ยอดรวม: ฿${(parseFloat(shares) * parseFloat(costPrice) * exchangeRate).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`
+                              : ''}
+                          </Text>
+                        ) : null}
+                      </View>
+                    )}
+                  </>
+                )}
+
                 {/* 3. Current Price Field with Quick Refresh Button */}
                 <View style={styles.labelRow}>
-                  <Text style={styles.fieldLabel}>ราคาปัจจุบันต่อหน่วย (฿ THB)</Text>
+                  <Text style={styles.fieldLabel}>ราคาปัจจุบันต่อหน่วย ({currency === 'USD' ? '$ USD' : '฿ THB'})</Text>
                   <TouchableOpacity
                     style={styles.refreshPriceBtn}
                     onPress={handleRefreshLatestPrice}
@@ -544,7 +677,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                     />
                   </View>
                   <View style={styles.columnItem}>
-                    <Text style={styles.fieldLabel}>ต้นทุนเฉลี่ยต่อหุ้น (฿)</Text>
+                    <Text style={styles.fieldLabel}>ต้นทุนเฉลี่ยต่อหุ้น ({currency === 'USD' ? '$' : '฿'})</Text>
                     <TextInput
                       style={styles.input}
                       value={costPrice}
@@ -562,6 +695,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                     <Text style={styles.previewLabel}>มูลค่ารวม:</Text>
                     <Text style={styles.previewValue}>
                       ฿{previewMarketValue.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {currency === 'USD' && ` ($${(numShares * numCurrentPrice).toFixed(2)})`}
                     </Text>
                   </View>
                   <View style={styles.previewRow}>
@@ -618,7 +752,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                 <Text style={styles.sectionHeaderTitle}>ข้อมูลเงินปันผลคาดการณ์</Text>
                 <View style={styles.twoColumnRow}>
                   <View style={styles.columnItem}>
-                    <Text style={styles.fieldLabel}>ปันผลต่อหุ้น (฿ DPU)</Text>
+                    <Text style={styles.fieldLabel}>ปันผลต่อหุ้น ({currency === 'USD' ? '$ DPU' : '฿ DPU'})</Text>
                     <TextInput
                       style={styles.input}
                       value={expectedDpu}
@@ -1177,6 +1311,68 @@ const styles = StyleSheet.create({
   taxPillTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+  currencyToggleContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 2,
+    marginBottom: 10,
+  },
+  currencyBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  currencyBtnActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  currencyBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  currencyBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  usdExchangeBox: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  usdExchangeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  usdExchangeTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E40AF',
+    flex: 1,
+  },
+  fetchRateBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563EB',
+    textDecorationLine: 'underline',
+  },
+  usdConvertedHint: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1E40AF',
+    marginTop: 2,
+    lineHeight: 16,
   },
 });
 

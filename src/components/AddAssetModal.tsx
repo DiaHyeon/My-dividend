@@ -19,6 +19,7 @@ import { scheduleXdReminder } from '../services/notificationService';
 import { searchStocks, fetchStockPrice, fetchExchangeRate, fetchDividendAnalysis, StockSuggestion, DividendAnalysis } from '../services/stockService';
 import { getSectorsForType, detectSector, setAssetSector } from '../services/sectorService';
 import { evaluateCashTax, calculateAnnualGrossInterest } from '../services/taxService';
+import { setAssetCurrency } from '../services/currencyService';
 import { CashAssetForm } from './CashAssetForm';
 
 interface AddAssetModalProps {
@@ -70,6 +71,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
   const [interestRate, setInterestRate] = useState<string>('1.5');
   const [interestFrequency, setInterestFrequency] = useState<'MONTHLY' | 'SEMI_ANNUAL' | 'ANNUAL'>('MONTHLY');
   const [isAutoCashTax, setIsAutoCashTax] = useState(true);
+  const [depositDate, setDepositDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
 
   // Auto-calculate tax rate for CASH when deposit amount, interest rate or segment changes
   React.useEffect(() => {
@@ -112,6 +114,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     setInterestRate('1.5');
     setInterestFrequency('MONTHLY');
     setIsAutoCashTax(true);
+    setDepositDate(new Date().toISOString().split('T')[0]);
   };
 
   const handleAssetTypeSelect = (newType: AssetType) => {
@@ -172,6 +175,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
   const handleSelectSuggestion = async (item: StockSuggestion) => {
     setSymbol(item.symbol);
     setShowSuggestions(false);
+    setSelectedSector(detectSector(item.symbol, 'STOCKS'));
     setIsFetchingPrice(true);
     setIsFetchingDividends(true);
     setDividendAnalysis(null);
@@ -268,7 +272,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         if (assetError || !asset) throw new Error(assetError?.message || 'ไม่สามารถบันทึกเงินฝากได้');
 
         // Insert into transactions table
-        const todayDate = new Date().toISOString().split('T')[0];
+        const todayDate = (depositDate && depositDate.trim()) || new Date().toISOString().split('T')[0];
         const { error: txError } = await supabase.from('transactions').insert({
           asset_id: asset.id,
           type: 'BUY',
@@ -322,8 +326,9 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
           await supabase.from('dividend_schedules').insert(schedules);
         }
 
-        // Save sector
+        // Save sector & currency
         await setAssetSector(asset.id, selectedSector || 'DigitalSavings');
+        await setAssetCurrency(asset.id, 'THB');
 
         Alert.alert('สำเร็จ', `เพิ่มบัญชีเงินฝาก ${trimmedAccount} จำนวน ฿${parsedDeposit.toLocaleString()} เรียบร้อยแล้ว`);
         resetForm();
@@ -446,8 +451,12 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         }
       }
 
-      // Save sector
-      await setAssetSector(asset.id, selectedSector || detectSector(trimmedSymbol, assetType));
+      // Save sector & currency
+      const finalSector = selectedSector && selectedSector !== 'Other'
+        ? selectedSector
+        : detectSector(trimmedSymbol, assetType);
+      await setAssetSector(asset.id, finalSector);
+      await setAssetCurrency(asset.id, currency);
 
       const alertMsg = currency === 'USD'
         ? `เพิ่มสินทรัพย์ ${trimmedSymbol} เข้าสู่พอร์ตแล้ว (ซื้อ $${parsedCostPrice.toFixed(2)} แปลงเป็น ฿${convertedCostPrice.toFixed(2)} ที่อัตรา ฿${rate.toFixed(2)}/USD)`
@@ -559,6 +568,8 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                       setTaxRatePercent(evalResult.suggestedTaxRatePercent.toString());
                     }
                   }}
+                  depositDate={depositDate}
+                  onChangeDepositDate={setDepositDate}
                 />
               ) : (
                 /* IF STOCKS OR FUNDS: SHOW STOCKS/FUNDS FORM */

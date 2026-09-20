@@ -104,11 +104,11 @@ export const detectSector = (symbol: string, assetType: AssetType): string => {
     return 'ConsumerStaples';
   }
   // Consumer Discretionary
-  if (['AOT', 'MINT', 'CENTEL', 'ERW', 'COM7', 'HMPRO', 'DOHOME', 'GLOBAL', 'AMZN', 'NKE', 'MCD', 'SBUX'].includes(upper)) {
+  if (['AOT', 'MINT', 'CENTEL', 'ERW', 'COM7', 'HMPRO', 'DOHOME', 'GLOBAL', 'AMZN', 'NKE', 'MCD', 'SBUX', 'DIS', 'HD', 'LOW', 'BKNG', 'TJX'].includes(upper)) {
     return 'ConsumerDiscretionary';
   }
   // Industrials & Transport
-  if (['BEM', 'BTS', 'SCGP', 'BA', 'AAV', 'III', 'WICE', 'CAT', 'GE', 'HON', 'UPS', 'FDX', 'LMT'].includes(upper)) {
+  if (['BEM', 'BTS', 'SCGP', 'BA', 'AAV', 'III', 'WICE', 'CAT', 'GE', 'HON', 'UPS', 'FDX', 'LMT', 'RTX', 'UNP'].includes(upper)) {
     return 'Industrials';
   }
   // Materials & Chemicals
@@ -152,12 +152,25 @@ export const getAssetSector = async (
   assetType: AssetType
 ): Promise<string> => {
   try {
+    const detected = detectSector(symbol, assetType);
     const raw = await AsyncStorage.getItem(ASSET_SECTOR_STORAGE_KEY);
     if (raw) {
       const map = JSON.parse(raw);
       if (map[assetId]) {
+        // Self-heal: If cached sector was mistakenly set to 'Other' but detectSector identifies a specific sector
+        if (map[assetId] === 'Other' && detected !== 'Other') {
+          map[assetId] = detected;
+          await AsyncStorage.setItem(ASSET_SECTOR_STORAGE_KEY, JSON.stringify(map));
+          return detected;
+        }
         return map[assetId];
       }
+      // If not cached yet, save detected
+      if (detected !== 'Other') {
+        map[assetId] = detected;
+        await AsyncStorage.setItem(ASSET_SECTOR_STORAGE_KEY, JSON.stringify(map));
+      }
+      return detected;
     }
   } catch (err) {
     console.warn('Error reading asset sector cache:', err);

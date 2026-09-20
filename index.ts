@@ -1,6 +1,9 @@
 import { registerRootComponent } from 'expo';
-
+import { LogBox } from 'react-native';
 import App from './App';
+
+// ปิดการแจ้งเตือน LogBox ทั้งหมดบนหน้าจอมือถือ (ทั้ง Warning และ Expo Go Connection notices)
+LogBox.ignoreAllLogs(true);
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,

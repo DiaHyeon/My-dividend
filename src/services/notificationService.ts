@@ -11,8 +11,8 @@ try {
       shouldSetBadge: false,
     }),
   });
-} catch (e: any) {
-  console.warn('Unable to configure notification handler:', e?.message);
+} catch {
+  // Silently handled for Expo Go
 }
 
 
@@ -22,15 +22,18 @@ try {
 export async function initNotificationChannel(): Promise<void> {
   if (Platform.OS === 'android') {
     try {
-      await Notifications.setNotificationChannelAsync('xd-reminders', {
-        name: 'XD Reminders',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#059669',
-        sound: 'default',
-      });
-    } catch (err: any) {
-      console.warn('Error setting notification channel:', err.message);
+      if (typeof Notifications.setNotificationChannelAsync === 'function') {
+        await Notifications.setNotificationChannelAsync('xd-reminders', {
+          name: 'XD Reminders',
+          importance: Notifications.AndroidImportance.HIGH,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#059669',
+          sound: 'default',
+        });
+      }
+    } catch {
+      // In Expo Go on Android, NotificationsChannelsProvider is null by design.
+      // Silently catch to avoid triggering intrusive LogBox warning on user's device.
     }
   }
 }
@@ -51,8 +54,7 @@ export async function requestNotificationPermissions(): Promise<boolean> {
       finalStatus = status;
     }
     return finalStatus === 'granted';
-  } catch (err: any) {
-    console.warn('Error requesting notification permissions:', err.message);
+  } catch {
     return false;
   }
 }
@@ -113,7 +115,7 @@ export async function scheduleXdReminder(
     console.log(`Scheduled XD notification [${notificationId}] for ${symbol} at ${triggerDate.toISOString()}`);
     return notificationId;
   } catch (err: any) {
-    console.warn('Failed to schedule XD reminder notification:', err.message);
+    console.log('[Notification notice] Local notification skipped in Expo Go:', err?.message);
     return null;
   }
 }

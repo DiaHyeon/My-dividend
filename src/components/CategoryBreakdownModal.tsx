@@ -10,6 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { G as SvgG, Rect, Text as SvgText } from 'react-native-svg';
 import { PieChart, pieDataItem } from 'react-native-gifted-charts';
 import { AssetSummary, AssetType, DividendSchedule } from '../types/database';
 import {
@@ -40,6 +41,30 @@ interface SegmentGroup {
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const getShortSegmentLabel = (label: string): string => {
+  if (label.includes('เทคโนโลยี')) return 'เทคโนโลยี';
+  if (label.includes('พลังงาน')) return 'พลังงาน';
+  if (label.includes('การเงิน')) return 'การเงิน';
+  if (label.includes('การแพทย์') || label.includes('สุขภาพ')) return 'การแพทย์';
+  if (label.includes('จำเป็น')) return 'สินค้าจำเป็น';
+  if (label.includes('ฟุ่มเฟือย')) return 'สินค้าฟุ่มเฟือย';
+  if (label.includes('อุตสาหกรรม')) return 'อุตสาหกรรม';
+  if (label.includes('วัสดุ')) return 'วัสดุ';
+  if (label.includes('อสังหา')) return 'อสังหาฯ';
+  if (label.includes('สื่อสาร')) return 'สื่อสาร';
+  if (label.includes('ตราสารหนี้') || label.includes('พันธบัตร')) return 'ตราสารหนี้';
+  if (label.includes('ตราสารทุน')) return 'ตราสารทุน';
+  if (label.includes('ผสม')) return 'กองทุนผสม';
+  if (label.includes('โภคภัณฑ์')) return 'โภคภัณฑ์';
+  if (label.includes('ต่างประเทศ') || label.includes('FIF')) return 'กองทุน ตปท.';
+  if (label.includes('ตลาดเงิน')) return 'ตลาดเงิน';
+  if (label.includes('ดิจิทัล')) return 'เงินฝากดิจิทัล';
+  if (label.includes('ประจำ')) return 'ฝากประจำ';
+  if (label.includes('ออมทรัพย์')) return 'ออมทรัพย์';
+  if (label.length > 12) return label.slice(0, 10) + '..';
+  return label;
+};
 
 export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
   visible,
@@ -175,11 +200,14 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
   // Prepare PieChart data with white callout lines
   const pieData: SegmentPieDataItem[] = segmentGroups.map((group) => {
     const isSelected = selectedSegmentId === group.definition.id;
+    const roundedVal = Math.round(group.percentage * 10) / 10;
     return {
-      value: Math.round(group.percentage * 10) / 10,
+      value: Math.max(0.1, roundedVal),
       color: group.definition.color,
       segmentLabel: group.definition.label,
       segmentColor: group.definition.color,
+      strokeWidth: 2,
+      strokeColor: '#0F172A',
       focused: isSelected,
       onPress: () => {
         setSelectedSegmentId(isSelected ? null : group.definition.id);
@@ -358,39 +386,61 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
                     radius={SCREEN_WIDTH * 0.22}
                     innerRadius={SCREEN_WIDTH * 0.13}
                     innerCircleColor="#0F172A"
+                    strokeWidth={2}
+                    strokeColor="#0F172A"
+                    extraRadius={70}
+                    paddingHorizontal={44}
+                    paddingVertical={16}
                     showExternalLabels={true}
                     labelLineConfig={{
                       color: '#FFFFFF',
                       thickness: 1.5,
-                      length: 16,
-                      tailLength: 10,
+                      length: 22,
+                      tailLength: 12,
                       avoidOverlappingOfLabels: true,
-                      labelComponentHeight: 32,
+                      labelComponentHeight: 30,
+                      labelComponentWidth: 68,
+                      labelComponentMargin: 6,
                     }}
-                    externalLabelComponent={(item?: any) => (
-                      <View
-                        style={[
-                          styles.externalLabelBadge,
-                          item?.segmentColor ? { borderColor: item.segmentColor + '99' } : null,
-                        ]}
-                      >
-                        <Text
-                          style={styles.externalLabelCategoryText}
-                          numberOfLines={1}
-                          ellipsizeMode="tail"
-                        >
-                          {item?.segmentLabel || ''}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.externalLabelPercentText,
-                            item?.segmentColor ? { color: item.segmentColor } : null,
-                          ]}
-                        >
-                          {item?.value !== undefined ? `${item.value}%` : ''}
-                        </Text>
-                      </View>
-                    )}
+                    externalLabelComponent={(item?: any) => {
+                      const shortLabel = getShortSegmentLabel(item?.segmentLabel || '');
+                      const percentText = item?.value !== undefined ? `${item.value}%` : '';
+                      const strokeColor = item?.segmentColor || '#38BDF8';
+                      return (
+                        <SvgG>
+                          <Rect
+                            x={0}
+                            y={-30}
+                            width={68}
+                            height={30}
+                            rx={6}
+                            fill="#0F172A"
+                            stroke={strokeColor}
+                            strokeWidth={1.5}
+                          />
+                          <SvgText
+                            x={34}
+                            y={-17}
+                            fill="#94A3B8"
+                            fontSize={8.5}
+                            fontWeight="600"
+                            textAnchor="middle"
+                          >
+                            {shortLabel}
+                          </SvgText>
+                          <SvgText
+                            x={34}
+                            y={-5}
+                            fill="#FFFFFF"
+                            fontSize={10.5}
+                            fontWeight="bold"
+                            textAnchor="middle"
+                          >
+                            {percentText}
+                          </SvgText>
+                        </SvgG>
+                      );
+                    }}
                     centerLabelComponent={() => (
                       <View style={styles.centerLabelContainer}>
                         <Text style={styles.centerLabelCount}>{segmentGroups.length}</Text>
@@ -620,27 +670,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   externalLabelBadge: {
-    backgroundColor: 'rgba(15, 23, 42, 0.94)',
-    paddingHorizontal: 6,
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+    paddingHorizontal: 4,
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#475569',
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 44,
-    maxWidth: 92,
+    width: 64,
   },
   externalLabelCategoryText: {
     color: '#94A3B8',
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: '600',
     textAlign: 'center',
     marginBottom: 1,
   },
   externalLabelPercentText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '800',
     textAlign: 'center',
   },

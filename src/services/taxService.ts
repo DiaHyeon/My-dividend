@@ -165,3 +165,132 @@ export const calculatePortfolioCashTaxSummary = (
     fixedCount,
   };
 };
+
+/**
+ * โครงสร้างข้อมูลรายละเอียดรอบการจ่ายดอกเบี้ยและจำนวนวันคำนวณจริง (Daily Accrual / Pro-Rata)
+ */
+export interface CashPayoutCycleInfo {
+  cycleStartDate: string;
+  cycleEndDate: string;
+  daysInCycle: number;
+  daysHeld: number;
+  isPartialCycle: boolean;
+  daysLabel: string;
+}
+
+/**
+ * คำนวณช่วงรอบการจ่ายดอกเบี้ย (Cycle Period) และจำนวนวันจริงที่ฝาก
+ */
+export const calculateCashCycleInfo = (
+  depositDateStr: string,
+  scheduleDateStr: string,
+  frequency: 'MONTHLY' | 'SEMI_ANNUAL' | 'ANNUAL' = 'SEMI_ANNUAL'
+): CashPayoutCycleInfo => {
+  const scheduleDate = new Date(scheduleDateStr);
+  const depositDate = new Date(depositDateStr);
+  const schedYear = scheduleDate.getFullYear();
+  const schedMonth = scheduleDate.getMonth(); // 0-indexed: 0=Jan, 5=Jun, 11=Dec
+
+  let cycleStart: Date;
+
+  if (frequency === 'SEMI_ANNUAL') {
+    // June payout (schedMonth <= 5): cycle runs Jan 1 - Jun 30
+    // Dec payout (schedMonth > 5): cycle runs Jul 1 - Dec 31
+    if (schedMonth <= 5) {
+      cycleStart = new Date(schedYear, 0, 1);
+    } else {
+      cycleStart = new Date(schedYear, 6, 1);
+    }
+  } else if (frequency === 'MONTHLY') {
+    // Monthly cycle: 1st of payout month
+    cycleStart = new Date(schedYear, schedMonth, 1);
+  } else {
+    // Annual cycle: Jan 1 of that year
+    cycleStart = new Date(schedYear, 0, 1);
+  }
+
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const cycleDays = Math.max(1, Math.round((scheduleDate.getTime() - cycleStart.getTime()) / msPerDay) + 1);
+
+  // If deposit happened after cycleStart, it is a partial first cycle!
+  if (depositDate > cycleStart) {
+    // Number of days from deposit date to payout date
+    const diffTime = scheduleDate.getTime() - depositDate.getTime();
+    const daysHeld = Math.max(1, Math.round(diffTime / msPerDay));
+    return {
+      cycleStartDate: cycleStart.toISOString().split('T')[0],
+      cycleEndDate: scheduleDateStr,
+      daysInCycle: cycleDays,
+      daysHeld,
+      isPartialCycle: true,
+      daysLabel: `${daysHeld} วัน`,
+    };
+  }
+
+  // Full standard cycle
+  return {
+    cycleStartDate: cycleStart.toISOString().split('T')[0],
+    cycleEndDate: scheduleDateStr,
+    daysInCycle: cycleDays,
+    daysHeld: cycleDays,
+    isPartialCycle: false,
+    daysLabel: 'เต็มงวด',
+  };
+};
+
+/**
+ * คำนวณดอกเบี้ยรับสำหรับงวดนั้น ๆ รองรับทั้งรอบเต็มและรอบเฉลี่ยตามวันจริง (Pro-Rata / Daily Accrual)
+ */
+export interface ScheduleCashPayoutResult {
+  grossInterest: number;
+  taxAmount: number;
+  netInterest: number;
+  daysHeld: number;
+  isPartialCycle: boolean;
+  daysLabel: string;
+}
+
+export const calculateScheduleCashPayout = (
+  depositAmount: number,
+  annualInterestRatePercent: number,
+  taxRate: number,
+  depositDateStr: string,
+  scheduleDateStr: string,
+  frequency: 'MONTHLY' | 'SEMI_ANNUAL' | 'ANNUAL' = 'SEMI_ANNUAL'
+): ScheduleCashPayoutResult => {
+  if (isNaN(depositAmount) || depositAmount <= 0 || isNaN(annualInterestRatePercent) || annualInterestRatePercent <= 0) {
+    return {
+      grossInterest: 0,
+      taxAmount: 0,
+      netInterest: 0,
+      daysHeld: 0,
+      isPartialCycle: false,
+      daysLabel: '-',
+    };
+  }
+
+  const cycleInfo = calculateCashCycleInfo(depositDateStr, scheduleDateStr, frequency);
+
+  let grossInterest = 0;
+  if (cycleInfo.isPartialCycle) {
+    // Formula ธนาคารไทย: (เงินต้น * ดอกเบี้ย% * จำนวนวัน) / 365
+    grossInterest = (depositAmount * (annualInterestRatePercent / 100) * cycleInfo.daysHeld) / 365;
+  } else {
+    // Standard full period divisor
+    const divisor = frequency === 'MONTHLY' ? 12 : frequency === 'SEMI_ANNUAL' ? 2 : 1;
+    grossInterest = (depositAmount * (annualInterestRatePercent / 100)) / divisor;
+  }
+
+  const taxAmount = grossInterest * (taxRate || 0);
+  const netInterest = Math.max(0, grossInterest - taxAmount);
+
+  return {
+    grossInterest,
+    taxAmount,
+    netInterest,
+    daysHeld: cycleInfo.daysHeld,
+    isPartialCycle: cycleInfo.isPartialCycle,
+    daysLabel: cycleInfo.daysLabel,
+  };
+};
+

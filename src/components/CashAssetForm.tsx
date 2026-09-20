@@ -8,7 +8,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getSectorsForType } from '../services/sectorService';
-import { evaluateCashTax, calculateAnnualGrossInterest } from '../services/taxService';
+import {
+  evaluateCashTax,
+  calculateAnnualGrossInterest,
+  calculateScheduleCashPayout,
+} from '../services/taxService';
 
 export interface CashAssetFormProps {
   accountName: string;
@@ -25,6 +29,8 @@ export interface CashAssetFormProps {
   onChangeTaxRatePercent: (rate: string) => void;
   isAutoCashTax: boolean;
   onToggleAutoTax: () => void;
+  depositDate?: string;
+  onChangeDepositDate?: (date: string) => void;
 }
 
 export const CashAssetForm: React.FC<CashAssetFormProps> = ({
@@ -42,6 +48,8 @@ export const CashAssetForm: React.FC<CashAssetFormProps> = ({
   onChangeTaxRatePercent,
   isAutoCashTax,
   onToggleAutoTax,
+  depositDate,
+  onChangeDepositDate,
 }) => {
   const parsedDeposit = parseFloat(depositAmount) || 0;
   const parsedInterestRate = parseFloat(interestRate) || 0;
@@ -54,6 +62,48 @@ export const CashAssetForm: React.FC<CashAssetFormProps> = ({
   const netAnnual = grossAnnual - annualTax;
   const divisor = interestFrequency === 'MONTHLY' ? 12 : interestFrequency === 'SEMI_ANNUAL' ? 2 : 1;
   const netPerPeriod = netAnnual / divisor;
+
+  // Calculate upcoming first payout pro-rata based on deposit date
+  const effectiveDepositDate = (depositDate && depositDate.trim()) || new Date().toISOString().split('T')[0];
+  let nextScheduleDate = `${new Date().getFullYear()}-12-31`;
+
+  try {
+    const dDate = new Date(effectiveDepositDate);
+    const dYear = isNaN(dDate.getFullYear()) ? new Date().getFullYear() : dDate.getFullYear();
+    const dMonth = isNaN(dDate.getMonth()) ? new Date().getMonth() : dDate.getMonth();
+    const dDay = isNaN(dDate.getDate()) ? new Date().getDate() : dDate.getDate();
+
+    if (interestFrequency === 'SEMI_ANNUAL') {
+      if (dMonth < 5 || (dMonth === 5 && dDay <= 30)) {
+        nextScheduleDate = `${dYear}-06-30`;
+      } else {
+        nextScheduleDate = `${dYear}-12-31`;
+      }
+    } else if (interestFrequency === 'MONTHLY') {
+      if (dDay <= 28) {
+        const mStr = String(dMonth + 1).padStart(2, '0');
+        nextScheduleDate = `${dYear}-${mStr}-28`;
+      } else {
+        const nextM = (dMonth + 1) % 12;
+        const nextY = dMonth === 11 ? dYear + 1 : dYear;
+        const mStr = String(nextM + 1).padStart(2, '0');
+        nextScheduleDate = `${nextY}-${mStr}-28`;
+      }
+    } else {
+      nextScheduleDate = `${dYear}-12-31`;
+    }
+  } catch {
+    nextScheduleDate = `${new Date().getFullYear()}-12-31`;
+  }
+
+  const firstPayout = calculateScheduleCashPayout(
+    parsedDeposit,
+    parsedInterestRate,
+    currentTaxPct / 100,
+    effectiveDepositDate,
+    nextScheduleDate,
+    interestFrequency
+  );
 
   return (
     <View style={styles.container}>
@@ -113,6 +163,23 @@ export const CashAssetForm: React.FC<CashAssetFormProps> = ({
         placeholderTextColor="#94A3B8"
         keyboardType="decimal-pad"
       />
+
+      {/* 3.1 Deposit Start Date */}
+      {onChangeDepositDate && (
+        <View style={styles.inputGroup}>
+          <View style={styles.dateLabelRow}>
+            <Text style={styles.label}>วันที่เริ่มฝาก (ปี-เดือน-วัน)</Text>
+            <Text style={styles.dateHintText}>คำนวณดอกเบี้ยตามวันจริง</Text>
+          </View>
+          <TextInput
+            style={styles.input}
+            value={depositDate}
+            onChangeText={onChangeDepositDate}
+            placeholder="YYYY-MM-DD เช่น 2026-10-15"
+            placeholderTextColor="#94A3B8"
+          />
+        </View>
+      )}
 
       {/* 4. Payout Frequency */}
       <Text style={styles.label}>รอบการจ่ายดอกเบี้ย</Text>
@@ -247,6 +314,26 @@ export const CashAssetForm: React.FC<CashAssetFormProps> = ({
             </View>
           </View>
 
+          {/* First Cycle Pro-Rata Box if Partial */}
+          {firstPayout.isPartialCycle && (
+            <View style={styles.firstCycleBox}>
+              <View style={styles.firstCycleHeaderRow}>
+                <View style={styles.firstCycleTitleGroup}>
+                  <Ionicons name="time" size={15} color="#059669" />
+                  <Text style={styles.firstCycleLabel}>
+                    งวดแรกที่จะได้รับจริง ({firstPayout.daysLabel}):
+                  </Text>
+                </View>
+                <Text style={styles.firstCycleAmount}>
+                  ฿{firstPayout.netInterest.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+              </View>
+              <Text style={styles.firstCycleHint}>
+                🕒 คำนวณดอกเบี้ยรายวันสะสม {firstPayout.daysHeld} วัน ({effectiveDepositDate} ถึง {nextScheduleDate}) ตามเกณฑ์ธนาคาร
+              </Text>
+            </View>
+          )}
+
           <View style={styles.cashPreviewRow}>
             <Text style={styles.cashPreviewLabel}>ดอกเบี้ยรวมก่อนหักภาษี (Gross):</Text>
             <Text style={styles.cashPreviewMuted}>
@@ -272,10 +359,10 @@ export const CashAssetForm: React.FC<CashAssetFormProps> = ({
 
           <View style={styles.cashPreviewRow}>
             <Text style={styles.cashPreviewLabel}>
-              ดอกเบี้ยรับสุทธิต่องวด ({interestFrequency === 'MONTHLY' ? 'ต่อเดือน' : interestFrequency === 'SEMI_ANNUAL' ? 'งวดละ 6 เดือน' : 'ต่อปี'}):
+              ดอกเบี้ยรับสุทธิต่องวดปกติ ({interestFrequency === 'MONTHLY' ? 'ต่อเดือน' : interestFrequency === 'SEMI_ANNUAL' ? 'งวดละ 6 เดือน' : 'ต่อปี'}):
             </Text>
             <Text style={styles.cashPreviewSub}>
-              ฿{netPerPeriod.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ฿{netPerPeriod.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {firstPayout.isPartialCycle ? '(เต็มงวด)' : ''}
             </Text>
           </View>
         </View>
@@ -545,6 +632,51 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#047857',
+  },
+  dateLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  dateHintText: {
+    fontSize: 11,
+    color: '#059669',
+    fontWeight: '600',
+  },
+  firstCycleBox: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#6EE7B7',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 6,
+  },
+  firstCycleHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  firstCycleTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  firstCycleLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#065F46',
+  },
+  firstCycleAmount: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  firstCycleHint: {
+    fontSize: 10.5,
+    color: '#059669',
+    lineHeight: 15,
   },
 });
 
