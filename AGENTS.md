@@ -14,5 +14,6 @@ Read BRIEF.md before doing anything. It is the single source of truth and contai
 - For all cash/deposit interest and tax calculations, use `taxService.ts` and `CashAssetForm.tsx` as the standard components.
 - Always use `SafeAreaView` and `SafeAreaProvider` from `react-native-safe-area-context` (never use the deprecated `SafeAreaView` from `react-native`).
 - Charts from `react-native-gifted-charts` require `expo-linear-gradient` and `react-native-svg`.
+- For Thai mutual funds (`FUNDS`), use SEC Open API (`fundService.ts`), denominate strictly in THB (no USD toggle), and preserve exact symbol matching.
 
 

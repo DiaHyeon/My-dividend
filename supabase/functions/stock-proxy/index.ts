@@ -17,7 +17,8 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { action, query, symbol } = await req.json();
+    const reqBody = await req.json();
+    const { action, query, symbol } = reqBody;
 
     if (action === "search") {
       const cleanQuery = (query || "").trim();
@@ -105,8 +106,108 @@ serve(async (req: Request) => {
       });
     }
 
+    if (action === "fund-nav") {
+      const projId = (reqBody.projId || reqBody.proj_id || "").trim();
+      const symbol = (reqBody.symbol || "").trim().toUpperCase();
+      if (!projId && !symbol) {
+        return new Response(JSON.stringify({ error: "Missing projId or symbol parameter" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const secKey = Deno.env.get("SEC_API_KEY") || "";
+      const targetParam = projId
+        ? `proj_id=${encodeURIComponent(projId)}`
+        : `fund_class_name=${encodeURIComponent(symbol)}`;
+      const url = `https://api.sec.or.th/v2/fund/daily-info/nav?${targetParam}&page_size=100`;
+      const res = await fetch(url, {
+        headers: {
+          "Ocp-Apim-Subscription-Key": secKey,
+        },
+      });
+
+      if (!res.ok) {
+        return new Response(
+          JSON.stringify({ error: `SEC NAV error: ${res.statusText}` }),
+          { status: res.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (res.status === 204) {
+        return new Response(JSON.stringify({ latestNav: null, navDate: null, items: [] }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const textNav = await res.text();
+      const data = textNav ? JSON.parse(textNav) : {};
+      const items: any[] = data.items || [];
+      if (items.length === 0) {
+        return new Response(JSON.stringify({ latestNav: null, navDate: null, items: [] }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Sort by nav_date descending to get the most recent NAV
+      items.sort((a, b) => (b.nav_date || "").localeCompare(a.nav_date || ""));
+      const latest = items[0];
+
+      return new Response(
+        JSON.stringify({
+          latestNav: latest.last_val,
+          navDate: latest.nav_date,
+          fundClassName: latest.fund_class_name,
+          raw: latest,
+          history: items.slice(0, 10),
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (action === "fund-dividends") {
+      const projId = (reqBody.projId || reqBody.proj_id || "").trim();
+      const symbol = (reqBody.symbol || "").trim().toUpperCase();
+      if (!projId && !symbol) {
+        return new Response(JSON.stringify({ error: "Missing projId or symbol parameter" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const secKey = Deno.env.get("SEC_API_KEY") || "";
+      const targetParam = symbol
+        ? `class_abbr_name=${encodeURIComponent(symbol)}`
+        : `proj_id=${encodeURIComponent(projId)}`;
+      const url = `https://api.sec.or.th/v2/fund/daily-info/dividend-history?${targetParam}&page_size=20`;
+      const res = await fetch(url, {
+        headers: {
+          "Ocp-Apim-Subscription-Key": secKey,
+        },
+      });
+
+      if (!res.ok) {
+        return new Response(
+          JSON.stringify({ error: `SEC Dividend error: ${res.statusText}` }),
+          { status: res.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (res.status === 204) {
+        return new Response(JSON.stringify({ items: [] }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const textDiv = await res.text();
+      const data = textDiv ? JSON.parse(textDiv) : { items: [] };
+      return new Response(JSON.stringify(data), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(
-      JSON.stringify({ error: "Invalid action. Supported actions: 'search' | 'quote' | 'dividends'" }),
+      JSON.stringify({ error: "Invalid action. Supported actions: 'search' | 'quote' | 'dividends' | 'fund-nav' | 'fund-dividends'" }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {

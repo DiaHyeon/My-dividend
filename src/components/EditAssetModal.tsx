@@ -16,8 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { AssetSummary, AssetType } from '../types/database';
 import { fetchStockPrice, fetchExchangeRate } from '../services/stockService';
+import { fetchFundNav } from '../services/fundService';
 import { scheduleXdReminder } from '../services/notificationService';
-import { getSectorsForType, getAssetSector, setAssetSector, detectSector } from '../services/sectorService';
+import { getSectorsForType, getAssetSector, setAssetSector, detectSector, getSectorDefinition } from '../services/sectorService';
 import { evaluateCashTax, calculateAnnualGrossInterest } from '../services/taxService';
 import { getAssetCurrency, setAssetCurrency, getCachedExchangeRate } from '../services/currencyService';
 import { CashAssetForm } from './CashAssetForm';
@@ -193,10 +194,30 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
     setIsFetchingRate(false);
   };
 
-  // Quick refresh latest price from stock service
+  // Quick refresh latest price from stock / fund service
   const handleRefreshLatestPrice = async () => {
     if (!symbol.trim()) return;
     setIsRefreshingPrice(true);
+
+    if (assetType === 'FUNDS') {
+      setPriceFeedback('กำลังดึงค่า NAV ล่าสุดจาก ก.ล.ต...');
+      try {
+        const navData = await fetchFundNav(undefined, symbol.trim().toUpperCase());
+        if (navData && navData.latestNav > 0) {
+          const navStr = navData.latestNav.toFixed(4);
+          setCurrentPrice(navStr);
+          setPriceFeedback(`✅ อัปเดต NAV ล่าสุด: ฿${navStr}${navData.navDate ? ` (${navData.navDate})` : ''}`);
+        } else {
+          setPriceFeedback('ℹ️ ไม่พบ NAV จาก ก.ล.ต. กรุณากรอกด้วยตัวเอง');
+        }
+      } catch {
+        setPriceFeedback('⚠️ ไม่สามารถดึง NAV ได้ในขณะนี้');
+      } finally {
+        setIsRefreshingPrice(false);
+      }
+      return;
+    }
+
     setPriceFeedback('กำลังดึงราคาตลาดล่าสุด...');
 
     try {
@@ -321,8 +342,8 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
         });
       }
 
-      // 3. Update or Insert Dividend Schedule
-      if (assetType === 'STOCKS') {
+      // 3. Update or Insert Dividend Schedule (STOCKS & FUNDS)
+      if (assetType === 'STOCKS' || assetType === 'FUNDS') {
         const targetXdDate = xdDate.trim() || new Date().toISOString().split('T')[0];
 
         if (existingScheduleId) {
@@ -558,8 +579,38 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                   placeholderTextColor="#94A3B8"
                 />
 
-                {/* Segment Selector */}
-                <Text style={styles.fieldLabel}>กลุ่มอุตสาหกรรม / ประเภท (Segment)</Text>
+                {/* Segment / Category Selector */}
+                <View style={styles.sectorHeaderRow}>
+                  <Text style={styles.fieldLabelNoMargin}>
+                    {assetType === 'FUNDS' ? 'ประเภทกองทุน' : 'กลุ่มอุตสาหกรรม (Segment)'}
+                  </Text>
+                  {selectedSector ? (
+                    <View
+                      style={[
+                        styles.detectedSectorBadge,
+                        {
+                          backgroundColor:
+                            getSectorDefinition(selectedSector, assetType).color + '1A',
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={getSectorDefinition(selectedSector, assetType).icon as any}
+                        size={13}
+                        color={getSectorDefinition(selectedSector, assetType).color}
+                      />
+                      <Text
+                        style={[
+                          styles.detectedSectorBadgeText,
+                          { color: getSectorDefinition(selectedSector, assetType).color },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {getSectorDefinition(selectedSector, assetType).label}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectorChipsScroll}>
                   {getSectorsForType(assetType).map((sec) => (
                     <TouchableOpacity
@@ -637,7 +688,9 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
 
                 {/* 3. Current Price Field with Quick Refresh Button */}
                 <View style={styles.labelRow}>
-                  <Text style={styles.fieldLabel}>ราคาปัจจุบันต่อหน่วย ({currency === 'USD' ? '$ USD' : '฿ THB'})</Text>
+                  <Text style={styles.fieldLabel}>
+                    {assetType === 'FUNDS' ? 'NAV ล่าสุดต่อหน่วย (฿)' : `ราคาปัจจุบันต่อหน่วย (${currency === 'USD' ? '$ USD' : '฿ THB'})`}
+                  </Text>
                   <TouchableOpacity
                     style={styles.refreshPriceBtn}
                     onPress={handleRefreshLatestPrice}
@@ -648,7 +701,9 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                     ) : (
                       <>
                         <Ionicons name="sync-outline" size={14} color="#059669" />
-                        <Text style={styles.refreshPriceBtnText}>ดึงราคาล่าสุด</Text>
+                        <Text style={styles.refreshPriceBtnText}>
+                          {assetType === 'FUNDS' ? 'ดึง NAV ล่าสุด' : 'ดึงราคาล่าสุด'}
+                        </Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -666,7 +721,9 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                 {/* 4. Holdings: Shares & Cost Price */}
                 <View style={styles.twoColumnRow}>
                   <View style={styles.columnItem}>
-                    <Text style={styles.fieldLabel}>จำนวนหุ้น/หน่วยที่ถือ</Text>
+                    <Text style={styles.fieldLabel}>
+                      {assetType === 'FUNDS' ? 'จำนวนหน่วยลงทุน (Units)' : 'จำนวนหุ้น/หน่วยที่ถือ'}
+                    </Text>
                     <TextInput
                       style={styles.input}
                       value={shares}
@@ -677,7 +734,9 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                     />
                   </View>
                   <View style={styles.columnItem}>
-                    <Text style={styles.fieldLabel}>ต้นทุนเฉลี่ยต่อหุ้น ({currency === 'USD' ? '$' : '฿'})</Text>
+                    <Text style={styles.fieldLabel}>
+                      {assetType === 'FUNDS' ? 'NAV ต้นทุนเฉลี่ย (฿)' : `ต้นทุนเฉลี่ยต่อหุ้น (${currency === 'USD' ? '$' : '฿'})`}
+                    </Text>
                     <TextInput
                       style={styles.input}
                       value={costPrice}
@@ -746,13 +805,17 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
               </View>
             )}
 
-            {/* 6. Dividend Information (If STOCKS) */}
-            {assetType === 'STOCKS' ? (
+            {/* 6. Dividend Information (If STOCKS or FUNDS) */}
+            {assetType === 'STOCKS' || assetType === 'FUNDS' ? (
               <View style={styles.dividendSection}>
-                <Text style={styles.sectionHeaderTitle}>ข้อมูลเงินปันผลคาดการณ์</Text>
+                <Text style={styles.sectionHeaderTitle}>
+                  {assetType === 'FUNDS' ? 'ข้อมูลเงินปันผลกองทุนคาดการณ์' : 'ข้อมูลเงินปันผลคาดการณ์'}
+                </Text>
                 <View style={styles.twoColumnRow}>
                   <View style={styles.columnItem}>
-                    <Text style={styles.fieldLabel}>ปันผลต่อหุ้น ({currency === 'USD' ? '$ DPU' : '฿ DPU'})</Text>
+                    <Text style={styles.fieldLabel}>
+                      {assetType === 'FUNDS' ? 'ปันผลต่อหน่วย (฿ DPU)' : `ปันผลต่อหุ้น (${currency === 'USD' ? '$ DPU' : '฿ DPU'})`}
+                    </Text>
                     <TextInput
                       style={styles.input}
                       value={expectedDpu}
@@ -985,6 +1048,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  sectorHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    marginTop: 4,
+    gap: 8,
+  },
+  fieldLabelNoMargin: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  detectedSectorBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    flexShrink: 1,
+  },
+  detectedSectorBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    flexShrink: 1,
   },
   profitColor: {
     color: '#059669',

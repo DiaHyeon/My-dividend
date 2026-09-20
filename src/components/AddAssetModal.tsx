@@ -17,7 +17,8 @@ import { supabase } from '../lib/supabase';
 import { AssetType } from '../types/database';
 import { scheduleXdReminder } from '../services/notificationService';
 import { searchStocks, fetchStockPrice, fetchExchangeRate, fetchDividendAnalysis, StockSuggestion, DividendAnalysis } from '../services/stockService';
-import { getSectorsForType, detectSector, setAssetSector } from '../services/sectorService';
+import { searchThaiFunds, fetchFundNav, fetchFundDividendAnalysis, FundSuggestion, POPULAR_THAI_FUNDS, fetchFundCategory } from '../services/fundService';
+import { getSectorsForType, detectSector, setAssetSector, getSectorDefinition } from '../services/sectorService';
 import { evaluateCashTax, calculateAnnualGrossInterest } from '../services/taxService';
 import { setAssetCurrency } from '../services/currencyService';
 import { CashAssetForm } from './CashAssetForm';
@@ -56,7 +57,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     return nextMonth.toISOString().split('T')[0];
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [suggestions, setSuggestions] = useState<StockSuggestion[]>([]);
+  const [suggestions, setSuggestions] = useState<(StockSuggestion | FundSuggestion)[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isFetchingPrice, setIsFetchingPrice] = useState(false);
   const [priceNote, setPriceNote] = useState('');
@@ -88,6 +89,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
   };
 
   const handleClose = () => {
+    resetForm();
     if (controlledOnClose) {
       controlledOnClose();
     } else {
@@ -108,6 +110,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     setCurrency('THB');
     setDividendAnalysis(null);
     setIsFetchingDividends(false);
+    setIsFetchingPrice(false);
     setTaxRatePercent('10');
     setSelectedSector('Technology');
     setDepositAmount('');
@@ -115,24 +118,53 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     setInterestFrequency('MONTHLY');
     setIsAutoCashTax(true);
     setDepositDate(new Date().toISOString().split('T')[0]);
+    const nextMonth = new Date();
+    nextMonth.setDate(nextMonth.getDate() + 30);
+    setXdDate(nextMonth.toISOString().split('T')[0]);
   };
 
   const handleAssetTypeSelect = (newType: AssetType) => {
+    if (newType === assetType) return;
+
     setAssetType(newType);
+
+    // Completely clear all previous inputs so types never collide or mix
+    setSymbol('');
+    setShares('');
+    setCostPrice('');
+    setCurrentPrice('');
+    setExpectedDpu('');
+    setPriceNote('');
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setDividendAnalysis(null);
+    setIsFetchingDividends(false);
+    setIsFetchingPrice(false);
+
+    // Reset default projected XD date
+    const nextMonth = new Date();
+    nextMonth.setDate(nextMonth.getDate() + 30);
+    setXdDate(nextMonth.toISOString().split('T')[0]);
+
     if (newType === 'CASH') {
       setCurrency('THB');
       setSelectedSector('DigitalSavings');
       setIsAutoCashTax(true);
-      const dep = parseFloat(depositAmount) || 0;
-      const rate = parseFloat(interestRate) || 0;
-      const evalResult = evaluateCashTax(dep, rate, 'DigitalSavings');
+      setDepositAmount('');
+      setInterestRate('1.5');
+      setInterestFrequency('MONTHLY');
+      setDepositDate(new Date().toISOString().split('T')[0]);
+      const evalResult = evaluateCashTax(0, 1.5, 'DigitalSavings');
       setTaxRatePercent(evalResult.suggestedTaxRatePercent.toString());
     } else if (newType === 'FUNDS') {
+      setCurrency('THB');
       setTaxRatePercent('10');
       setSelectedSector('Equity');
     } else {
+      // STOCKS
+      setCurrency('THB');
       setTaxRatePercent('10');
-      setSelectedSector(detectSector(symbol, 'STOCKS'));
+      setSelectedSector('Technology');
     }
   };
 
@@ -162,19 +194,72 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       setSuggestions(results);
       setShowSuggestions(results.length > 0);
       setSelectedSector(detectSector(text, 'STOCKS'));
+    } else if (assetType === 'FUNDS') {
+      const results = await searchThaiFunds(text);
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
+      setSelectedSector(detectSector(text, 'FUNDS'));
     } else if (assetType === 'CASH') {
       setSelectedSector(detectSector(text, 'CASH'));
-    } else if (assetType === 'FUNDS') {
-      setSelectedSector(detectSector(text, 'FUNDS'));
     } else {
       setSuggestions([]);
       setShowSuggestions(false);
     }
   };
 
-  const handleSelectSuggestion = async (item: StockSuggestion) => {
+  const handleSelectSuggestion = async (item: StockSuggestion | FundSuggestion) => {
     setSymbol(item.symbol);
     setShowSuggestions(false);
+
+    // FUNDS FLOW (Thai Mutual Funds via SEC)
+    if (assetType === 'FUNDS' || ('amc' in item)) {
+      const fundItem = item as FundSuggestion;
+      const initialSector = fundItem.category || detectSector(fundItem.symbol, 'FUNDS');
+      setSelectedSector(initialSector);
+      setCurrency('THB');
+      setTaxRatePercent('10');
+      setIsFetchingPrice(true);
+      setIsFetchingDividends(true);
+      setDividendAnalysis(null);
+      setPriceNote(`กำลังดึง NAV ล่าสุดของ ${fundItem.symbol} จาก ก.ล.ต...`);
+
+      const [navResult, divAnalysis, secCategory] = await Promise.all([
+        fetchFundNav(fundItem.projId, fundItem.symbol),
+        fetchFundDividendAnalysis(fundItem.projId, fundItem.symbol),
+        !fundItem.category ? fetchFundCategory(fundItem.symbol) : Promise.resolve(null),
+      ]);
+
+      const finalSector = secCategory || initialSector;
+      setSelectedSector(finalSector);
+      const catDef = getSectorDefinition(finalSector, 'FUNDS');
+
+      setIsFetchingPrice(false);
+      setIsFetchingDividends(false);
+      setDividendAnalysis(divAnalysis);
+
+      if (navResult && navResult.latestNav) {
+        const navStr = navResult.latestNav.toFixed(4);
+        setCurrentPrice(navStr);
+        if (!costPrice.trim()) {
+          setCostPrice(navStr);
+        }
+        setPriceNote(`🇹🇭 ${fundItem.exchange || fundItem.amc} • ประเภท: ${catDef.label} • NAV ล่าสุด: ฿${navStr}${navResult.navDate ? ` (${navResult.navDate})` : ''}`);
+      } else {
+        setPriceNote(`🇹🇭 ${fundItem.exchange || fundItem.amc} • ประเภท: ${catDef.label} • ${fundItem.name}`);
+      }
+
+      if (divAnalysis && divAnalysis.hasDividends) {
+        setExpectedDpu(divAnalysis.latestDpu.toString());
+        if (divAnalysis.projectedNextXdDates.length > 0) {
+          setXdDate(divAnalysis.projectedNextXdDates[0]);
+        }
+      } else {
+        setExpectedDpu('0');
+      }
+      return;
+    }
+
+    // STOCKS FLOW (US & Thai Stocks via Yahoo Finance)
     setSelectedSector(detectSector(item.symbol, 'STOCKS'));
     setIsFetchingPrice(true);
     setIsFetchingDividends(true);
@@ -415,8 +500,8 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         throw new Error(txError.message || 'ไม่สามารถบันทึกรายการซื้อเริ่มต้นได้');
       }
 
-      // 3. Insert projected DPU to dividend_schedules if STOCKS and DPU > 0
-      if (assetType === 'STOCKS' && parsedDpu > 0) {
+      // 3. Insert projected DPU to dividend_schedules if (STOCKS or FUNDS) and DPU > 0
+      if ((assetType === 'STOCKS' || assetType === 'FUNDS') && parsedDpu > 0) {
         const targetXdDate = xdDate || todayDate;
 
         if (dividendAnalysis?.hasDividends && dividendAnalysis.projectedNextXdDates.length > 1) {
@@ -576,7 +661,9 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                 <View>
                   {/* Symbol with Suggestions */}
                   <View style={styles.symbolInputWrapper}>
-                    <Text style={styles.label}>ชื่อย่อ / รหัสสินทรัพย์ (Symbol) *</Text>
+                    <Text style={styles.label}>
+                      {assetType === 'FUNDS' ? 'ชื่อย่อกองทุน (Fund Symbol) *' : 'ชื่อย่อ / รหัสสินทรัพย์ (Symbol) *'}
+                    </Text>
                     <TextInput
                       style={styles.input}
                       value={symbol}
@@ -587,9 +674,40 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                             setSuggestions(res);
                             setShowSuggestions(res.length > 0);
                           });
+                        } else if (assetType === 'FUNDS') {
+                          searchThaiFunds(symbol).then((res) => {
+                            setSuggestions(res);
+                            setShowSuggestions(res.length > 0);
+                          });
                         }
                       }}
-                      placeholder="เช่น PTT, MCD, AAPL หรือชื่อสินทรัพย์นอกตลาด"
+                      onBlur={() => {
+                        const clean = symbol.trim().toUpperCase();
+                        if (clean && !isFetchingDividends && (!dividendAnalysis || !dividendAnalysis.hasDividends)) {
+                          if (assetType === 'FUNDS') {
+                            const matched = POPULAR_THAI_FUNDS.find(
+                              (f) => f.symbol.toUpperCase() === clean
+                            );
+                            handleSelectSuggestion(
+                              matched || {
+                                symbol: clean,
+                                rawSymbol: clean,
+                                name: clean,
+                                amc: 'กองทุนรวมไทย',
+                                exchange: 'SEC',
+                                market: 'TH',
+                                currency: 'THB',
+                                category: detectSector(clean, 'FUNDS'),
+                              }
+                            );
+                          }
+                        }
+                      }}
+                      placeholder={
+                        assetType === 'FUNDS'
+                          ? 'เช่น K-USA, SCBDV, B-INNOTECH, KF-GTECH'
+                          : 'เช่น PTT, MCD, AAPL หรือชื่อสินทรัพย์นอกตลาด'
+                      }
                       placeholderTextColor="#94A3B8"
                       autoCapitalize="characters"
                       autoCorrect={false}
@@ -599,7 +717,9 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                     {showSuggestions && suggestions.length > 0 && (
                       <View style={styles.suggestionsContainer}>
                         <View style={styles.suggestionsHeader}>
-                          <Text style={styles.suggestionsHeaderText}>แนะนำหุ้นตลาด US & SET</Text>
+                          <Text style={styles.suggestionsHeaderText}>
+                            {assetType === 'FUNDS' ? 'แนะนำกองทุนรวมไทย (ก.ล.ต.)' : 'แนะนำหุ้นตลาด US & SET'}
+                          </Text>
                           <TouchableOpacity onPress={() => setShowSuggestions(false)}>
                             <Ionicons name="close-circle" size={16} color="#94A3B8" />
                           </TouchableOpacity>
@@ -615,6 +735,28 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                               <View style={styles.suggestionTitleRow}>
                                 <Text style={styles.suggestionSymbol}>{item.symbol}</Text>
                                 <Text style={styles.suggestionExchange}>• {item.exchange}</Text>
+                                {'category' in item && item.category ? (
+                                  <View
+                                    style={[
+                                      styles.fundCatBadge,
+                                      {
+                                        backgroundColor:
+                                          getSectorDefinition(item.category, 'FUNDS').color + '20',
+                                      },
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.fundCatBadgeText,
+                                        {
+                                          color: getSectorDefinition(item.category, 'FUNDS').color,
+                                        },
+                                      ]}
+                                    >
+                                      {getSectorDefinition(item.category, 'FUNDS').label.split(' ')[0]}
+                                    </Text>
+                                  </View>
+                                ) : null}
                               </View>
                               <Text style={styles.suggestionName} numberOfLines={1}>
                                 {item.name}
@@ -641,8 +783,38 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                     )}
                   </View>
 
-                  {/* Segment Selector for Stocks/Funds */}
-                  <Text style={styles.label}>กลุ่มอุตสาหกรรม / ประเภท (Segment)</Text>
+                  {/* Segment / Category Selector for Stocks/Funds */}
+                  <View style={styles.sectorHeaderRow}>
+                    <Text style={styles.labelNoMargin}>
+                      {assetType === 'FUNDS' ? 'ประเภทกองทุน' : 'กลุ่มอุตสาหกรรม (Segment)'}
+                    </Text>
+                    {selectedSector ? (
+                      <View
+                        style={[
+                          styles.detectedSectorBadge,
+                          {
+                            backgroundColor:
+                              getSectorDefinition(selectedSector, assetType).color + '1A',
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name={getSectorDefinition(selectedSector, assetType).icon as any}
+                          size={13}
+                          color={getSectorDefinition(selectedSector, assetType).color}
+                        />
+                        <Text
+                          style={[
+                            styles.detectedSectorBadgeText,
+                            { color: getSectorDefinition(selectedSector, assetType).color },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {getSectorDefinition(selectedSector, assetType).label}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectorChipsScroll}>
                     {getSectorsForType(assetType).map((sec) => (
                       <TouchableOpacity
@@ -666,68 +838,74 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                   </ScrollView>
 
                   {/* Currency Selector (THB vs USD) */}
-                  <Text style={styles.label}>สกุลเงินที่ซื้อ (Currency)</Text>
-                  <View style={styles.currencyToggleContainer}>
-                    <TouchableOpacity
-                      style={[styles.currencyBtn, currency === 'THB' && styles.currencyBtnActive]}
-                      onPress={() => handleCurrencyChange('THB')}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.currencyBtnText, currency === 'THB' && styles.currencyBtnTextActive]}>
-                        🇹🇭 บาทไทย (THB ฿)
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.currencyBtn, currency === 'USD' && styles.currencyBtnActive]}
-                      onPress={() => handleCurrencyChange('USD')}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.currencyBtnText, currency === 'USD' && styles.currencyBtnTextActive]}>
-                        🇺🇸 ดอลลาร์สหรัฐ (USD $)
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* USD Exchange Rate & Live Conversion Box */}
-                  {currency === 'USD' && (
-                    <View style={styles.usdExchangeBox}>
-                      <View style={styles.usdExchangeHeader}>
-                        <Ionicons name="swap-horizontal" size={16} color="#2563EB" />
-                        <Text style={styles.usdExchangeTitle}>อัตราแลกเปลี่ยน (1 USD = กี่บาท)</Text>
-                        {isFetchingRate && <ActivityIndicator size="small" color="#2563EB" />}
-                      </View>
-                      <View style={styles.usdExchangeInputRow}>
-                        <TextInput
-                          style={styles.usdExchangeInput}
-                          value={exchangeRate}
-                          onChangeText={setExchangeRate}
-                          keyboardType="decimal-pad"
-                          placeholder="34.00"
-                        />
+                  {assetType === 'STOCKS' && (
+                    <>
+                      <Text style={styles.label}>สกุลเงินที่ซื้อ (Currency)</Text>
+                      <View style={styles.currencyToggleContainer}>
                         <TouchableOpacity
-                          style={styles.fetchRateBtn}
-                          onPress={refreshExchangeRate}
-                          disabled={isFetchingRate}
+                          style={[styles.currencyBtn, currency === 'THB' && styles.currencyBtnActive]}
+                          onPress={() => handleCurrencyChange('THB')}
+                          activeOpacity={0.7}
                         >
-                          <Ionicons name="refresh" size={14} color="#2563EB" />
-                          <Text style={styles.fetchRateBtnText}>ดึงเรทสด</Text>
+                          <Text style={[styles.currencyBtnText, currency === 'THB' && styles.currencyBtnTextActive]}>
+                            🇹🇭 บาทไทย (THB ฿)
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.currencyBtn, currency === 'USD' && styles.currencyBtnActive]}
+                          onPress={() => handleCurrencyChange('USD')}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.currencyBtnText, currency === 'USD' && styles.currencyBtnTextActive]}>
+                            🇺🇸 ดอลลาร์สหรัฐ (USD $)
+                          </Text>
                         </TouchableOpacity>
                       </View>
-                      {costPrice.trim() && !isNaN(parseFloat(costPrice)) ? (
-                        <Text style={styles.usdConvertedHint}>
-                          ≈ ฿{(parseFloat(costPrice) * (parseFloat(exchangeRate) || 34)).toFixed(2)} บาท/หุ้น
-                          {shares.trim() && !isNaN(parseFloat(shares))
-                            ? ` (ยอดรวม: ฿${(parseFloat(shares) * parseFloat(costPrice) * (parseFloat(exchangeRate) || 34)).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`
-                            : ''}
-                        </Text>
-                      ) : null}
-                    </View>
+
+                      {/* USD Exchange Rate & Live Conversion Box */}
+                      {currency === 'USD' && (
+                        <View style={styles.usdExchangeBox}>
+                          <View style={styles.usdExchangeHeader}>
+                            <Ionicons name="swap-horizontal" size={16} color="#2563EB" />
+                            <Text style={styles.usdExchangeTitle}>อัตราแลกเปลี่ยน (1 USD = กี่บาท)</Text>
+                            {isFetchingRate && <ActivityIndicator size="small" color="#2563EB" />}
+                          </View>
+                          <View style={styles.usdExchangeInputRow}>
+                            <TextInput
+                              style={styles.usdExchangeInput}
+                              value={exchangeRate}
+                              onChangeText={setExchangeRate}
+                              keyboardType="decimal-pad"
+                              placeholder="34.00"
+                            />
+                            <TouchableOpacity
+                              style={styles.fetchRateBtn}
+                              onPress={refreshExchangeRate}
+                              disabled={isFetchingRate}
+                            >
+                              <Ionicons name="refresh" size={14} color="#2563EB" />
+                              <Text style={styles.fetchRateBtnText}>ดึงเรทสด</Text>
+                            </TouchableOpacity>
+                          </View>
+                          {costPrice.trim() && !isNaN(parseFloat(costPrice)) ? (
+                            <Text style={styles.usdConvertedHint}>
+                              ≈ ฿{(parseFloat(costPrice) * (parseFloat(exchangeRate) || 34)).toFixed(2)} บาท/หุ้น
+                              {shares.trim() && !isNaN(parseFloat(shares))
+                                ? ` (ยอดรวม: ฿${(parseFloat(shares) * parseFloat(costPrice) * (parseFloat(exchangeRate) || 34)).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`
+                                : ''}
+                            </Text>
+                          ) : null}
+                        </View>
+                      )}
+                    </>
                   )}
 
                   {/* Shares and Cost Price (Row) */}
                   <View style={styles.row}>
                     <View style={styles.flexHalf}>
-                      <Text style={styles.label}>จำนวนหุ้น / หน่วย *</Text>
+                      <Text style={styles.label}>
+                        {assetType === 'FUNDS' ? 'จำนวนหน่วยลงทุน (Units) *' : 'จำนวนหุ้น / หน่วย *'}
+                      </Text>
                       <TextInput
                         style={styles.input}
                         value={shares}
@@ -740,7 +918,9 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                     <View style={styles.flexGap} />
                     <View style={styles.flexHalf}>
                       <Text style={styles.label}>
-                        ราคาต้นทุน ({currency === 'USD' ? 'ดอลลาร์ $' : 'บาท ฿'}) *
+                        {assetType === 'FUNDS'
+                          ? 'NAV ต้นทุนต่อหน่วย (฿) *'
+                          : `ราคาต้นทุน (${currency === 'USD' ? 'ดอลลาร์ $' : 'บาท ฿'}) *`}
                       </Text>
                       <TextInput
                         style={styles.input}
@@ -756,12 +936,16 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                   {/* Current Price */}
                   <View style={styles.currentPriceHeaderRow}>
                     <Text style={styles.label}>
-                      ราคาตลาดปัจจุบัน ({currency === 'USD' ? 'ดอลลาร์ $' : 'บาท ฿'})
+                      {assetType === 'FUNDS'
+                        ? 'NAV ล่าสุดต่อหน่วย (฿)'
+                        : `ราคาตลาดปัจจุบัน (${currency === 'USD' ? 'ดอลลาร์ $' : 'บาท ฿'})`}
                     </Text>
                     {isFetchingPrice && (
                       <View style={styles.fetchingPriceIndicator}>
                         <ActivityIndicator size="small" color="#059669" />
-                        <Text style={styles.fetchingPriceText}>ดึงราคาล่าสุด...</Text>
+                        <Text style={styles.fetchingPriceText}>
+                          {assetType === 'FUNDS' ? 'ดึง NAV ล่าสุด...' : 'ดึงราคาล่าสุด...'}
+                        </Text>
                       </View>
                     )}
                   </View>
@@ -769,7 +953,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                     style={styles.input}
                     value={currentPrice}
                     onChangeText={setCurrentPrice}
-                    placeholder="หากเว้นว่างจะใช้ราคาต้นทุน"
+                    placeholder={assetType === 'FUNDS' ? 'หากเว้นว่างจะใช้ NAV ต้นทุน' : 'หากเว้นว่างจะใช้ราคาต้นทุน'}
                     placeholderTextColor="#94A3B8"
                     keyboardType="decimal-pad"
                   />
@@ -780,13 +964,17 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                     </View>
                   ) : null}
 
-                  {/* Conditional DPU field - ONLY for STOCKS */}
-                  {assetType === 'STOCKS' && (
+                  {/* Conditional DPU field - for STOCKS & FUNDS */}
+                  {(assetType === 'STOCKS' || assetType === 'FUNDS') && (
                     <View style={styles.dpuSection}>
                       <View style={styles.dpuHeader}>
                         <View style={styles.dpuHeaderLeft}>
                           <Ionicons name="gift-outline" size={18} color="#059669" />
-                          <Text style={styles.dpuSectionTitle}>ข้อมูลเงินปันผลคาดการณ์ (Dividend)</Text>
+                          <Text style={styles.dpuSectionTitle}>
+                            {assetType === 'FUNDS'
+                              ? 'ข้อมูลเงินปันผลกองทุน (Fund Dividend)'
+                              : 'ข้อมูลเงินปันผลคาดการณ์ (Dividend)'}
+                          </Text>
                         </View>
                         {isFetchingDividends && (
                           <View style={styles.fetchingPriceIndicator}>
@@ -1200,6 +1388,37 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#64748B',
+  },
+  fundCatBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  fundCatBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  sectorHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    marginTop: 6,
+    gap: 8,
+  },
+  detectedSectorBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    flexShrink: 1,
+  },
+  detectedSectorBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    flexShrink: 1,
   },
   currencyToggleContainer: {
     flexDirection: 'row',

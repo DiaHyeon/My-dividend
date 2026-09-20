@@ -26,6 +26,7 @@
 ```bash
 EXPO_PUBLIC_SUPABASE_URL=https://ycflookcrilaujmeillt.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Open API subscription key
 ```
 
 ---
@@ -85,20 +86,41 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - **ดึงราคาปิดล่าสุดอัตโนมัติ (Auto Closing Price)**: เมื่อเลือกหุ้นจาก Dropdown ระบบจะดึงราคาปิดล่าสุด (Regular Market Price / Previous Close) มากรอกในช่อง "ราคาปัจจุบันต่อหน่วย" ให้อัตโนมัติ
 - **รองรับหุ้นนอกตลาด**: ผู้ใช้สามารถพิมพ์ชื่อย่อหุ้นหรือสินทรัพย์อื่น ๆ นอกตลาดหลักทรัพย์ และกรอกราคาเองได้ตามต้องการ
 
-### 4.4 รองรับการซื้อด้วยสกุลเงินดอลลาร์ (USD Currency Support)
-- มีปุ่มสวิตช์เลือกสกุลเงิน **THB / USD** ใน Modal เพิ่มสินทรัพย์
-- เมื่อเลือกเป็น **USD**:
+### 4.3.1 ระบบค้นหากองทุนรวมไทยและดึง NAV อัตโนมัติ (Thai Mutual Funds - SEC Open API)
+- ไฟล์จัดการ: `src/services/fundService.ts`, `src/components/AddAssetModal.tsx`, `src/components/EditAssetModal.tsx`
+- **การเชื่อมต่อ**: เชื่อมต่อกับสำนักงานคณะกรรมการกำกับหลักทรัพย์และตลาดหลักทรัพย์ (ก.ล.ต. / SEC Thailand) ผ่าน API v2
+- **ระบบ Autocomplete & แคตตาล็อกในตัว**:
+  - มีแคตตาล็อกกองทุนยอดนิยมในตัว ตอบสนองทันที 0ms ครอบคลุม บลจ. ชั้นนำในไทย (เช่น KAsset, SCBAM, BBLAM, KSAM, UOBAM, TISCOAM, ONEAM, KTAM, Principal ฯลฯ)
+  - รองรับการค้นหาด้วยชื่อย่อกองทุน (เช่น `K-USA`, `SCBDV`, `B-INNOTECH`, `KF-GTECH`), ชื่อภาษาไทย, หรือชื่อ บลจ.
+  - แสดงป้ายระบุชื่อ บลจ. อย่างชัดเจน เช่น `[KAsset]`, `[SCBAM]`, `[BBLAM]`, `[KSAM]`
+- **ดึง NAV ล่าสุดอัตโนมัติ (Auto NAV Fetching)**:
+  - เมื่อเลือกกองทุน ระบบจะดึงมูลค่าหน่วยลงทุนล่าสุด (NAV) จาก ก.ล.ต. มากรอกในช่อง "NAV ล่าสุดต่อหน่วย" ให้อัตโนมัติ
+  - ปรับป้ายกำกับในฟอร์มเป็นภาษาเฉพาะของกองทุน: *"จำนวนหน่วยลงทุน (Units)"*, *"NAV ต้นทุนต่อหน่วย"*, และ *"NAV ล่าสุดต่อหน่วย"*
+  - คำนวณมูลค่าตลาดรวม (Market Value) และ กำไร/ขาดทุนสุทธิ (Unrealized P/L) ผ่าน SQL View `view_asset_summary` อัตโนมัติ
+- **ประวัติการจ่ายปันผลกองทุน (Fund Dividends)**:
+  - ดึงข้อมูลประวัติการจ่ายเงินปันผลต่อหน่วย (DPU) และวันปิดสมุดทะเบียน (XD) จาก ก.ล.ต. เพื่อสร้างรอบคาดการณ์ปันผล 12 เดือนใน `dividend_schedules` อัตโนมัติ พร้อมระบบกรอง Exact Symbol Matching ป้องกันการดึงคลาสย่อยอื่น
+- **จำแนกประเภทกองทุนอัตโนมัติ (Fund Category Auto-Detection)**:
+  - วิเคราะห์นโยบายการลงทุน (`policy_desc`) จาก ก.ล.ต. เพื่อเลือกกลุ่ม Sector (ตราสารทุน, ตราสารหนี้, FIF ฯลฯ) ให้โดยอัตโนมัติทันทีที่เลือกกองทุน
+- **ระบบล้างฟอร์มเมื่อเปลี่ยนสินทรัพย์ (Clean State Switcher)**:
+  - เมื่อสลับระหว่าง หุ้น (STOCKS), กองทุน (FUNDS) และเงินฝาก (CASH) ระบบจะเคลียร์ค่าที่กรอกค้างไว้ทั้งหมด ป้องกันข้อมูลปนกันอย่างเด็ดขาด
+
+### 4.4 รองรับการซื้อด้วยสกุลเงินดอลลาร์ (USD Currency Support สำหรับหุ้น)
+- มีปุ่มสวิตช์เลือกสกุลเงิน **THB / USD** ใน Modal เพิ่มและแก้ไขสินทรัพย์ (แสดงผลเฉพาะเมื่อเลือกประเภทสินทรัพย์เป็น **หุ้น (STOCKS)** เท่านั้น สำหรับกองทุนรวมไทย [FUNDS] จะล็อกสกุลเงินเป็น **THB (฿)** โดยอัตโนมัติ เนื่องจากซื้อขายผ่าน บลจ. ไทยในรูปเงินบาท)
+- เมื่อเลือกเป็น **USD** สำหรับหุ้น:
   - ระบบจะดึงอัตราแลกเปลี่ยน USD/THB แบบ Real-time อัตโนมัติผ่าน Edge Function (เช่น 1 USD = 34.xx บาท)
   - ผู้ใช้กรอกต้นทุนเป็นเงิน USD ระบบจะคำนวณและแสดงยอดเงินบาทไทย (THB) ให้เห็นแบบ Real-time ทันที
   - บันทึกลงฐานข้อมูลในสกุลเงินบาท (Base Currency) เพื่อให้คำนวณรวมในพอร์ตได้อย่างแม่นยำ
 
 ### 4.5 Supabase Edge Function (`stock-proxy`)
-- แก้ปัญหา Browser CORS และข้อจำกัดการเรียก Yahoo Finance API จากอุปกรณ์มือถือ
+- แก้ปัญหา Browser CORS และทำหน้าที่ Proxy สำหรับ Yahoo Finance และ SEC Open API จากอุปกรณ์มือถือ
 - Deploy อยู่บน Supabase Project: `ycflookcrilaujmeillt`
 - Endpoint: `/functions/v1/stock-proxy`
-- รองรับ 2 Action:
-  1. `action: "search"`: ค้นหาหุ้นจาก Yahoo Finance Query API
+- รองรับ Actions:
+  1. `action: "search"`: ค้นหาหุ้น US & Thai จาก Yahoo Finance
   2. `action: "quote"`: ดึงราคาหุ้น และอัตราแลกเปลี่ยน (เช่น `USDTHB=X`)
+  3. `action: "dividends"`: ดึงประวัติเงินปันผลหุ้น
+  4. `action: "fund-nav"`: ดึงค่า NAV ล่าสุดของกองทุนรวมไทยจาก SEC API (`/v2/fund/daily-info/nav`)
+  5. `action: "fund-dividends"`: ดึงประวัติเงินปันผลกองทุนรวมไทยจาก SEC API (`/v2/fund/daily-info/dividend-history`)
 
 ### 4.6 Local Notifications (แจ้งเตือนวัน XD)
 - ไฟล์จัดการ: `src/services/notificationService.ts`
@@ -179,6 +201,25 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
      - แสดงสถานะชัดเจนว่ายังได้รับสิทธิปลอดภาษี (0%) หรือเกินเกณฑ์ที่ต้องเสียภาษี 15%
       - มี Donut Pie Chart สัดส่วน Segment พร้อมขีดชี้สีขาว (Callout Line) แสดงประเภทสินทรัพย์และเปอร์เซ็นต์ (%) โดยสีกรอบและสีข้อความปรับตามสีของแต่ละ Segment
 
+### 4.12 ระบบจัดการกองทุนรวมไทย และเชื่อมต่อ SEC Open API (Mutual Funds & SEC Open Data Engine)
+- ไฟล์จัดการ: `src/services/fundService.ts`, `src/services/sectorService.ts`, `src/components/AddAssetModal.tsx`, `src/components/EditAssetModal.tsx`, `supabase/functions/stock-proxy/index.ts`
+- **การเชื่อมต่อ SEC Open API (ก.ล.ต.)**:
+  - ใช้ API Key ของสำนักงาน ก.ล.ต. จัดเก็บใน `.env` (`EXPO_PUBLIC_SEC_API_KEY`)
+  - เชื่อมต่อผ่าน Supabase Edge Function (`stock-proxy`) พร้อม Fallback ตรงไปยัง SEC Open API
+  - รองรับการดึง NAV ล่าสุด (`daily-info/nav`) และประวัติเงินปันผล (`daily-info/dividend-history`) ด้วย `class_abbr_name` หรือ `proj_id`
+- **ระบบวิเคราะห์และคาดการณ์ปันผลกองทุนอัตโนมัติ**:
+  - คำนวณความถี่การจ่ายเงินปันผล (ไตรมาส, ปีละ 2 ครั้ง, ปีละครั้ง)
+  - คำนวณคาดการณ์ปันผลต่อหน่วยทั้งปี (Annual Projected DPU)
+  - กรอกตัวเลข DPU รอบล่าสุด และวัน XD รอบถัดไปลงในฟอร์มให้อัตโนมัติ พร้อมการ์ดไฮไลต์สีเขียวสรุปสถิติ
+- **ระบบจำแนกประเภทกองทุนอัตโนมัติ (Auto Category / Segment Detection)**:
+  - ดึงนโยบายการลงทุน (`policy_desc`) จากฐานข้อมูล ก.ล.ต. เพื่อจัดหมวดหมู่กองทุนทันที:
+    - **ตราสารทุน (หุ้น)**: กองทุนหุ้นไทย เช่น `SCBDV`, `K-VALUE`, `TISCOHD`
+    - **ตราสารหนี้ & พันธบัตร**: กองทุนตราสารหนี้ เช่น `K-FIXED`, `K-SFPLUS`
+    - **กองทุนต่างประเทศ (FIF)**: กองทุนที่ลงทุนต่างประเทศ เช่น `K-USA-A(D)`, `SCBBLN`, `UGIS`
+    - **กองทุนรวมผสม (Mixed)**, **อสังหาฯ & โครงสร้างพื้นฐาน (Property)**, **สินค้าโภคภัณฑ์ (Commodity)**, **ตลาดเงิน (Money Market)**
+  - แสดงป้ายประเภทกองทุน (Category Badge) ในรายการแนะนำค้นหา (Dropdown), ข้อความสรุปใต้ชื่อสินทรัพย์, และป้าย `[ตรวจพบอัตโนมัติ]` เหนือตัวเลือก Segment
+  - รองรับการปรับเปลี่ยน Segment ด้วยตนเอง (Manual Override) ได้อย่างอิสระ
+
 ---
 
 ## 5. Mobile & Network Operational Guidelines
@@ -223,6 +264,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - `services/taxService.ts`: ระบบคำนวณและประเมินภาษีดอกเบี้ยเงินฝากธนาคารตามเกณฑ์ยกเว้น 20,000 บาท/ปี ของกรมสรรพากร
   - `services/sectorService.ts`: ระบบจำแนกและจัดการ Segment มาตรฐานของหุ้น, กองทุน, และเงินฝาก
   - `services/stockService.ts`: ระบบค้นหาหุ้น US/TH, ดึงราคาปิด และอัตราแลกเปลี่ยน
+  - `services/fundService.ts`: ระบบค้นหากองทุนรวมไทย, ดึง NAV ล่าสุด และประวัติเงินปันผลผ่าน SEC Open API
   - `services/notificationService.ts`: ระบบตั้งเวลาแจ้งเตือนวัน XD บน Android
 - `scripts/`
   - `patch-expo-notifications.js`: สคริปต์แก้ไขปัญหา Expo Go Crash บน Android
