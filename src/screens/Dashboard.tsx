@@ -21,6 +21,7 @@ import { GoalSettingsModal, GOAL_STORAGE_KEY, GOAL_PRESETS } from '../components
 import { getAllAssetCurrencies, getCachedExchangeRate, isKnownUSSymbol } from '../services/currencyService';
 import { calculateScheduleCashPayout } from '../services/taxService';
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
+import { usePrivacyMode } from '../services/privacyService';
 
 const MONTH_NAMES = [
   'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
@@ -79,7 +80,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [inflowFilter, setInflowFilter] = useState<'ALL' | 'DIVIDENDS' | 'INTEREST'>('ALL');
   const [exchangeRate, setExchangeRate] = useState<number>(34.00);
   const [currencyMap, setCurrencyMap] = useState<Record<string, 'THB' | 'USD'>>({});
-  const [isPrivateMode, setIsPrivateMode] = useState<boolean>(false);
+  const { isPrivate: isPrivateMode, toggle: togglePrivateMode } = usePrivacyMode();
   const [monthlyGoal, setMonthlyGoal] = useState<number>(3000);
   const [isGoalModalVisible, setIsGoalModalVisible] = useState<boolean>(false);
 
@@ -449,39 +450,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#059669" />
         }
       >
-        {/* Header Title & Privacy Mode Toggle */}
+        {/* Header Title */}
         <View style={styles.topHeader}>
           <View>
             <Text style={styles.screenTitle}>My Dividend</Text>
             <Text style={styles.screenSubtitle}>ภาพรวมพอร์ตและการคาดการณ์ปันผล</Text>
           </View>
-          <View style={styles.headerRightActions}>
-            <TouchableOpacity
-              style={[styles.headerActionBtn, isPrivateMode && styles.headerActionBtnActive]}
-              onPress={() => setIsPrivateMode(!isPrivateMode)}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={isPrivateMode ? 'eye-off-outline' : 'eye-outline'}
-                size={20}
-                color={isPrivateMode ? '#059669' : '#64748B'}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerActionBtn} onPress={onRefresh} activeOpacity={0.7}>
-              <Ionicons name="refresh" size={20} color="#059669" />
-            </TouchableOpacity>
-          </View>
         </View>
 
         {/* 1. Header: Total Portfolio Value & Dual Yield Highlight */}
         <View style={styles.heroCard}>
+          {/* Top Row: Label + Frameless Eye Button on left, P/L Badge on right */}
           <View style={styles.heroTopRow}>
-            <View>
+            <View style={styles.heroLabelContainer}>
               <Text style={styles.heroLabel}>มูลค่าพอร์ตรวม (Total Net Worth)</Text>
-              <Text style={styles.heroValue}>
-                {formatMoney(totalMarketValue)}
-              </Text>
+              <TouchableOpacity
+                style={styles.heroEyeBtn}
+                onPress={togglePrivateMode}
+                activeOpacity={0.6}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons
+                  name={isPrivateMode ? 'eye-off-outline' : 'eye-outline'}
+                  size={18}
+                  color={isPrivateMode ? '#34D399' : '#94A3B8'}
+                />
+              </TouchableOpacity>
             </View>
+
             <View style={[styles.plBadge, totalUnrealizedPL >= 0 ? styles.plBadgeProfit : styles.plBadgeLoss]}>
               <Ionicons
                 name={totalUnrealizedPL >= 0 ? 'arrow-up' : 'arrow-down'}
@@ -493,6 +489,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 {totalUnrealizedPLPercent.toFixed(2)}%
               </Text>
             </View>
+          </View>
+
+          {/* Value Row: Total Market Value */}
+          <View style={styles.heroValueRow}>
+            <Text style={styles.heroValue} numberOfLines={1}>
+              {formatMoney(totalMarketValue)}
+            </Text>
           </View>
 
           {/* Annual Net Inflow Highlight with Dual Yield Badges */}
@@ -518,18 +521,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {/* Dual Yield & Monthly Avg Subrow */}
             <View style={styles.dualYieldRow}>
               <View style={styles.dualYieldItem}>
-                <Text style={styles.dualYieldSublabel}>เฉลี่ยต่อเดือน</Text>
-                <Text style={styles.dualYieldSubval}>~{formatMoney(monthlyAvgInflow, 0)}/ด.</Text>
+                <Text style={styles.dualYieldSublabel} numberOfLines={1}>เฉลี่ยต่อเดือน</Text>
+                <Text style={styles.dualYieldSubval} numberOfLines={1}>
+                  {isPrivateMode ? '฿••••••' : `~${formatMoney(monthlyAvgInflow, 0)}/ด.`}
+                </Text>
               </View>
               <View style={styles.dualYieldDivider} />
               <View style={styles.dualYieldItem}>
-                <Text style={styles.dualYieldSublabel}>Current Yield</Text>
-                <Text style={styles.dualYieldSubval}>{portfolioCurrentYield.toFixed(2)}%</Text>
+                <Text style={styles.dualYieldSublabel} numberOfLines={1}>Current Yield</Text>
+                <Text style={styles.dualYieldSubval} numberOfLines={1}>{portfolioCurrentYield.toFixed(2)}%</Text>
               </View>
               <View style={styles.dualYieldDivider} />
               <View style={styles.dualYieldItem}>
-                <Text style={styles.dualYieldSublabel}>Yield on Cost</Text>
-                <Text style={styles.dualYieldYoCVal}>{portfolioYoC.toFixed(2)}% 🚀</Text>
+                <Text style={styles.dualYieldSublabel} numberOfLines={1}>Yield on Cost</Text>
+                <Text style={styles.dualYieldYoCVal} numberOfLines={1}>{portfolioYoC.toFixed(2)}% 🚀</Text>
               </View>
             </View>
           </View>
@@ -597,7 +602,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   size={12}
                   color={cat.color}
                 />
-                <Text style={[styles.categoryInflowText, { color: cat.color }]}>
+                <Text
+                  style={[styles.categoryInflowText, { color: cat.color }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
                   {cat.type === 'CASH'
                     ? `ดอกเบี้ย ${formatMoney(annualInflowByCategory.CASH, 0)}/ปี`
                     : cat.type === 'STOCKS'
@@ -667,7 +676,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </View>
                     <View style={styles.radarItemRight}>
                       <Text style={styles.radarDaysText}>{daysText}</Text>
-                      <Text style={styles.radarAmount}>{formatMoney(item.amount)}</Text>
+                      <Text style={styles.radarAmount} numberOfLines={1}>
+                        {formatMoney(item.amount)}
+                      </Text>
                     </View>
                   </View>
                 );
@@ -821,7 +832,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <Text style={styles.goalTitle}>
                   {currentGoalPreset ? currentGoalPreset.label : 'เป้าหมายกระแสเงินสด'}
                 </Text>
-                <Text style={styles.goalSubtitle}>
+                <Text style={styles.goalSubtitle} numberOfLines={1} ellipsizeMode="tail">
                   ทำได้ {formatMoney(monthlyAvgInflow, 0)} จากเป้า {formatMoney(monthlyGoal, 0)} / เดือน
                 </Text>
               </View>
@@ -850,7 +861,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <Text style={styles.goalPercentText}>
               {goalProgressPercent.toFixed(1)}% สำเร็จ
             </Text>
-            <Text style={styles.goalRemainingText}>
+            <Text style={styles.goalRemainingText} numberOfLines={1} ellipsizeMode="tail">
               {goalProgressPercent >= 100
                 ? '🎉 พิชิตเป้าหมายแล้ว!'
                 : `ขาดอีก ${formatMoney(goalRemaining, 0)}/ด. จะถึงเป้าหมาย`}
@@ -1097,18 +1108,34 @@ const styles = StyleSheet.create({
   heroTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  heroLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   heroLabel: {
     fontSize: 13,
+    lineHeight: 18,
     color: '#94A3B8',
     fontWeight: '500',
   },
+  heroEyeBtn: {
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroValueRow: {
+    minHeight: 40,
+    justifyContent: 'center',
+  },
   heroValue: {
     fontSize: 32,
+    lineHeight: 38,
     fontWeight: '800',
     color: '#FFFFFF',
-    marginTop: 4,
   },
   plBadge: {
     flexDirection: 'row',
@@ -1117,6 +1144,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 20,
     gap: 4,
+    height: 28,
   },
   plBadgeProfit: {
     backgroundColor: '#DCFCE7',
@@ -1126,6 +1154,7 @@ const styles = StyleSheet.create({
   },
   plBadgeText: {
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: '700',
   },
   profitText: {
@@ -1166,14 +1195,17 @@ const styles = StyleSheet.create({
   },
   dividendHighlightLabel: {
     fontSize: 12,
+    lineHeight: 16,
     color: '#94A3B8',
     fontWeight: '500',
   },
   dividendHighlightValue: {
     fontSize: 20,
+    lineHeight: 26,
     fontWeight: '800',
     color: '#34D399',
     marginTop: 2,
+    minHeight: 26,
   },
   dualYieldRow: {
     flexDirection: 'row',
@@ -1181,15 +1213,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: '#0F172A',
     borderRadius: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 10,
     marginTop: 12,
     borderWidth: 1,
     borderColor: '#334155',
+    minHeight: 52,
   },
   dualYieldItem: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   dualYieldDivider: {
     width: 1,
@@ -1198,19 +1232,24 @@ const styles = StyleSheet.create({
   },
   dualYieldSublabel: {
     fontSize: 10,
+    lineHeight: 14,
     color: '#94A3B8',
   },
   dualYieldSubval: {
     fontSize: 12,
+    lineHeight: 16,
     fontWeight: '700',
     color: '#F8FAFC',
     marginTop: 2,
+    minHeight: 16,
   },
   dualYieldYoCVal: {
     fontSize: 12,
+    lineHeight: 16,
     fontWeight: '800',
     color: '#34D399',
     marginTop: 2,
+    minHeight: 16,
   },
   heroBottomRow: {
     flexDirection: 'row',
@@ -1232,13 +1271,16 @@ const styles = StyleSheet.create({
   },
   heroStatLabel: {
     fontSize: 12,
+    lineHeight: 16,
     color: '#94A3B8',
   },
   heroStatValue: {
     fontSize: 15,
+    lineHeight: 20,
     fontWeight: '700',
     color: '#F8FAFC',
     marginTop: 2,
+    minHeight: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1317,10 +1359,12 @@ const styles = StyleSheet.create({
   },
   categoryValue: {
     fontSize: 20,
+    lineHeight: 26,
     fontWeight: '800',
     color: '#0F172A',
     marginTop: 2,
     marginBottom: 8,
+    minHeight: 26,
   },
   categoryFooter: {
     flexDirection: 'row',
@@ -1837,10 +1881,13 @@ const styles = StyleSheet.create({
     gap: 5,
     marginTop: 4,
     marginBottom: 8,
+    minHeight: 18,
   },
   categoryInflowText: {
     fontSize: 11,
+    lineHeight: 15,
     fontWeight: '600',
+    flex: 1,
   },
   radarCard: {
     backgroundColor: '#FFFFFF',
@@ -1895,6 +1942,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     gap: 12,
+    minWidth: 145,
+    height: 44,
   },
   radarItemLeft: {
     flexDirection: 'row',
@@ -1914,6 +1963,7 @@ const styles = StyleSheet.create({
   },
   radarSymbol: {
     fontSize: 12,
+    lineHeight: 16,
     fontWeight: '700',
     color: '#0F172A',
   },
@@ -1930,11 +1980,13 @@ const styles = StyleSheet.create({
   },
   radarDaysText: {
     fontSize: 10,
+    lineHeight: 14,
     fontWeight: '600',
     color: '#059669',
   },
   radarAmount: {
     fontSize: 11,
+    lineHeight: 15,
     fontWeight: '700',
     color: '#0F172A',
   },
@@ -1998,8 +2050,10 @@ const styles = StyleSheet.create({
   },
   goalSubtitle: {
     fontSize: 12,
+    lineHeight: 16,
     color: '#64748B',
     marginTop: 1,
+    minHeight: 16,
   },
   goalSettingsBtn: {
     padding: 6,
@@ -2027,12 +2081,15 @@ const styles = StyleSheet.create({
   },
   goalPercentText: {
     fontSize: 12,
+    lineHeight: 16,
     fontWeight: '700',
     color: '#059669',
   },
   goalRemainingText: {
     fontSize: 12,
+    lineHeight: 16,
     color: '#64748B',
+    minHeight: 16,
   },
   topAssetRightSub: {
     flexDirection: 'row',

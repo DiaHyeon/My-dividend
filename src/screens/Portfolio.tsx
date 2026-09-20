@@ -22,6 +22,7 @@ import { getAllAssetCurrencies, getCachedExchangeRate, isKnownUSSymbol } from '.
 import { getSectorsForType, getAssetSector, SectorDefinition } from '../services/sectorService';
 import { THAI_SAVINGS_TAX_FREE_LIMIT } from '../services/taxService';
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
+import { usePrivacyMode } from '../services/privacyService';
 import {
   BenchmarkType,
   TimeframeType,
@@ -53,6 +54,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
   const [currencyMap, setCurrencyMap] = useState<Record<string, 'THB' | 'USD'>>({});
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<'ALL' | AssetType>(initialCategoryFilter);
   const [portfolioView, setPortfolioView] = useState<'ALLOCATION' | 'PERFORMANCE'>('ALLOCATION');
+  const { isPrivate: isPrivateMode } = usePrivacyMode();
   const [timeframe, setTimeframe] = useState<TimeframeType>('1Y');
   const [selectedBenchmark, setSelectedBenchmark] = useState<BenchmarkType>('SP500');
   const [isBenchmarkPickerVisible, setIsBenchmarkPickerVisible] = useState(false);
@@ -603,9 +605,11 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                       {activeCategoryFilter === 'ALL' ? 'ทั้งพอร์ต' : activeCategoryFilter}
                     </Text>
                     <Text style={styles.centerLabelAmount}>
-                      ฿{((activeCategoryFilter === 'ALL'
-                        ? totalMarketValue
-                        : (activeCategoryFilter === 'STOCKS' ? stocksTotal : (activeCategoryFilter === 'FUNDS' ? fundsTotal : cashTotal))) / 1000).toFixed(0)}k
+                      {isPrivateMode
+                        ? '฿••••••'
+                        : `฿${((activeCategoryFilter === 'ALL'
+                            ? totalMarketValue
+                            : (activeCategoryFilter === 'STOCKS' ? stocksTotal : (activeCategoryFilter === 'FUNDS' ? fundsTotal : cashTotal))) / 1000).toFixed(0)}k`}
                     </Text>
                   </View>
                 )}
@@ -620,7 +624,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                       {item.label}
                     </Text>
                     <Text style={styles.legendVal}>
-                      ฿{item.val.toLocaleString('th-TH', { maximumFractionDigits: 0 })}
+                      {isPrivateMode ? '฿••••••' : `฿${item.val.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`}
                     </Text>
                   </View>
                 ))}
@@ -734,7 +738,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                     </View>
                     <View style={styles.assetValueCol}>
                       <Text style={styles.assetMarketValue}>
-                        ฿{Number(item.market_value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {isPrivateMode
+                          ? '฿••••••'
+                          : `฿${Number(item.market_value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       </Text>
                       <Text
                         style={[
@@ -742,9 +748,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                           Number(item.unrealized_pl) >= 0 ? styles.profitColor : styles.lossColor,
                         ]}
                       >
-                        {Number(item.unrealized_pl) >= 0 ? '+' : ''}
-                        {Number(item.unrealized_pl).toLocaleString('th-TH', { minimumFractionDigits: 2 })} (
-                        {Number(item.unrealized_pl_percent).toFixed(2)}%)
+                        {isPrivateMode
+                          ? `(${Number(item.unrealized_pl) >= 0 ? '+' : ''}${Number(item.unrealized_pl_percent).toFixed(2)}%)`
+                          : `${Number(item.unrealized_pl) >= 0 ? '+' : ''}${Number(item.unrealized_pl).toLocaleString('th-TH', { minimumFractionDigits: 2 })} (${Number(item.unrealized_pl_percent).toFixed(2)}%)`}
                       </Text>
                     </View>
                   </View>
@@ -816,19 +822,19 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                     ]}
                   >
                     {totalUnrealizedPL >= 0 ? 'กำไร ' : 'ขาดทุน '}
-                    {totalUnrealizedPL >= 0 ? '+' : ''}฿
-                    {Math.abs(totalUnrealizedPL).toLocaleString('th-TH', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                    {isPrivateMode
+                      ? '฿••••••'
+                      : `${totalUnrealizedPL >= 0 ? '+' : ''}฿${Math.abs(totalUnrealizedPL).toLocaleString('th-TH', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}`}
                   </Text>
                 </View>
                 <Text style={styles.perfHeroCostText}>
-                  เทียบกับเงินต้นสะสม ฿
-                  {totalCost.toLocaleString('th-TH', {
+                  เทียบกับเงินต้นสะสม {isPrivateMode ? '฿••••••' : `฿${totalCost.toLocaleString('th-TH', {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
-                  })}
+                  })}`}
                 </Text>
               </View>
             </View>
@@ -1041,7 +1047,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                             <Text style={styles.rankingTypeTag}>{item.asset_type}</Text>
                           </View>
                           <Text style={styles.rankingValue}>
-                            มูลค่า ฿{mVal.toLocaleString('th-TH', { maximumFractionDigits: 0 })}
+                            มูลค่า {isPrivateMode ? '฿••••••' : `฿${mVal.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`}
                           </Text>
                         </View>
                       </View>
@@ -1074,11 +1080,12 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                             isProfit ? styles.profitColor : styles.lossColor,
                           ]}
                         >
-                          {isProfit ? '+' : ''}฿
-                          {plAmount.toLocaleString('th-TH', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
+                          {isPrivateMode
+                            ? '฿••••••'
+                            : `${isProfit ? '+' : ''}฿${plAmount.toLocaleString('th-TH', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}`}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -1734,8 +1741,10 @@ const styles = StyleSheet.create({
   },
   centerLabelAmount: {
     fontSize: 15,
+    lineHeight: 20,
     fontWeight: '800',
     color: '#FFFFFF',
+    minHeight: 20,
   },
   legendContainer: {
     width: '100%',
@@ -1749,6 +1758,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: 20,
   },
   legendDot: {
     width: 10,
@@ -1758,14 +1768,17 @@ const styles = StyleSheet.create({
   },
   legendLabel: {
     fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600',
     color: '#CBD5E1',
     flex: 1,
   },
   legendVal: {
     fontSize: 12,
+    lineHeight: 16,
     fontWeight: '700',
     color: '#F8FAFC',
+    minHeight: 16,
   },
   emptyChartBox: {
     paddingVertical: 30,

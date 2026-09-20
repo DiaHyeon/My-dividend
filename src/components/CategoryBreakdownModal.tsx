@@ -19,6 +19,7 @@ import {
   SectorDefinition,
 } from '../services/sectorService';
 import { THAI_SAVINGS_TAX_FREE_LIMIT } from '../services/taxService';
+import { usePrivacyMode } from '../services/privacyService';
 
 interface CategoryBreakdownModalProps {
   visible: boolean;
@@ -80,6 +81,7 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
 }) => {
   const [segmentGroups, setSegmentGroups] = useState<SegmentGroup[]>([]);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const { isPrivate: isPrivateMode } = usePrivacyMode();
 
   // Compute portfolio-level cash tax metrics if categoryType === 'CASH'
   const portfolioTaxSummary = React.useMemo(() => {
@@ -295,7 +297,9 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>มูลค่ารวม</Text>
                 <Text style={styles.summaryValue}>
-                  ฿{totalMarketValue.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {isPrivateMode
+                    ? '฿••••••'
+                    : `฿${totalMarketValue.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 </Text>
               </View>
               <View style={styles.summaryDivider} />
@@ -672,8 +676,10 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     fontSize: 16,
+    lineHeight: 22,
     fontWeight: '800',
     color: '#0F172A',
+    minHeight: 22,
   },
   profitText: {
     color: '#059669',

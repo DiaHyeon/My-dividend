@@ -30,10 +30,10 @@ interface AddAssetModalProps {
   showFAB?: boolean;
 }
 
-const ASSET_TYPES: { label: string; value: AssetType; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { label: 'หุ้น (STOCKS)', value: 'STOCKS', icon: 'trending-up' },
-  { label: 'กองทุน (FUNDS)', value: 'FUNDS', icon: 'pie-chart' },
-  { label: 'เงินฝาก (CASH)', value: 'CASH', icon: 'wallet' },
+const ASSET_TYPES: { label: string; shortLabel: string; value: AssetType; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { label: 'หุ้น (STOCKS)', shortLabel: 'หุ้น', value: 'STOCKS', icon: 'trending-up' },
+  { label: 'กองทุน (FUNDS)', shortLabel: 'กองทุน', value: 'FUNDS', icon: 'pie-chart' },
+  { label: 'เงินฝาก (CASH)', shortLabel: 'เงินฝาก', value: 'CASH', icon: 'wallet' },
 ];
 
 export const AddAssetModal: React.FC<AddAssetModalProps> = ({
@@ -704,26 +704,24 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              {/* Asset Type Selector */}
-              <Text style={styles.label}>ประเภทสินทรัพย์</Text>
-              <View style={styles.typeSelectorContainer}>
+              {/* Minimal Segmented Asset Type Selector */}
+              <View style={styles.typeSegmentContainer}>
                 {ASSET_TYPES.map((item) => {
                   const isSelected = assetType === item.value;
                   return (
                     <TouchableOpacity
                       key={item.value}
-                      style={[styles.typeButton, isSelected && styles.typeButtonSelected]}
+                      style={[styles.typeSegmentTab, isSelected && styles.typeSegmentTabSelected]}
                       onPress={() => handleAssetTypeSelect(item.value)}
                       activeOpacity={0.7}
                     >
                       <Ionicons
                         name={item.icon}
-                        size={16}
-                        color={isSelected ? '#FFFFFF' : '#64748B'}
-                        style={styles.typeIcon}
+                        size={15}
+                        color={isSelected ? '#0F172A' : '#64748B'}
                       />
-                      <Text style={[styles.typeButtonText, isSelected && styles.typeButtonTextSelected]}>
-                        {item.label}
+                      <Text style={[styles.typeSegmentText, isSelected && styles.typeSegmentTextSelected]}>
+                        {item.shortLabel}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -1321,35 +1319,40 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     marginTop: 10,
   },
-  typeSelectorContainer: {
-    flexDirection: 'column',
-    gap: 8,
-    marginBottom: 6,
+  typeSegmentContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 3,
+    marginTop: 4,
+    marginBottom: 14,
+    gap: 4,
   },
-  typeButton: {
+  typeSegmentTab: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 9,
+    gap: 6,
   },
-  typeButtonSelected: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+  typeSegmentTabSelected: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  typeIcon: {
-    marginRight: 8,
-  },
-  typeButtonText: {
+  typeSegmentText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#475569',
+    color: '#64748B',
   },
-  typeButtonTextSelected: {
-    color: '#FFFFFF',
+  typeSegmentTextSelected: {
+    color: '#0F172A',
+    fontWeight: '700',
   },
   input: {
     backgroundColor: '#F8FAFC',

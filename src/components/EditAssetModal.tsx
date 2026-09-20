@@ -30,10 +30,10 @@ interface EditAssetModalProps {
   onSuccess: () => void;
 }
 
-const ASSET_TYPES: { label: string; value: AssetType; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { label: 'หุ้น (STOCKS)', value: 'STOCKS', icon: 'trending-up' },
-  { label: 'กองทุน (FUNDS)', value: 'FUNDS', icon: 'pie-chart' },
-  { label: 'เงินฝาก (CASH)', value: 'CASH', icon: 'wallet' },
+const ASSET_TYPES: { label: string; shortLabel: string; value: AssetType; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { label: 'หุ้น (STOCKS)', shortLabel: 'หุ้น', value: 'STOCKS', icon: 'trending-up' },
+  { label: 'กองทุน (FUNDS)', shortLabel: 'กองทุน', value: 'FUNDS', icon: 'pie-chart' },
+  { label: 'เงินฝาก (CASH)', shortLabel: 'เงินฝาก', value: 'CASH', icon: 'wallet' },
 ];
 
 export const EditAssetModal: React.FC<EditAssetModalProps> = ({
@@ -509,24 +509,24 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
               </View>
             ) : null}
 
-            {/* 1. Category Selector */}
-            <Text style={styles.fieldLabel}>หมวดหมู่สินทรัพย์</Text>
-            <View style={styles.assetTypeRow}>
+            {/* 1. Minimal Segmented Category Selector */}
+            <View style={styles.assetTypeSegmentContainer}>
               {ASSET_TYPES.map((type) => {
                 const isSelected = assetType === type.value;
                 return (
                   <TouchableOpacity
                     key={type.value}
-                    style={[styles.typeButton, isSelected && styles.typeButtonActive]}
+                    style={[styles.assetTypeSegmentTab, isSelected && styles.assetTypeSegmentTabActive]}
                     onPress={() => setAssetType(type.value)}
+                    activeOpacity={0.7}
                   >
                     <Ionicons
                       name={type.icon}
-                      size={18}
-                      color={isSelected ? '#FFFFFF' : '#64748B'}
+                      size={15}
+                      color={isSelected ? '#0F172A' : '#64748B'}
                     />
-                    <Text style={[styles.typeButtonText, isSelected && styles.typeButtonTextActive]}>
-                      {type.label.split(' ')[0]}
+                    <Text style={[styles.assetTypeSegmentText, isSelected && styles.assetTypeSegmentTextActive]}>
+                      {type.shortLabel}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -988,35 +988,40 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontWeight: '500',
   },
-  assetTypeRow: {
+  assetTypeSegmentContainer: {
     flexDirection: 'row',
-    gap: 8,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 3,
+    marginTop: 4,
     marginBottom: 16,
+    gap: 4,
   },
-  typeButton: {
+  assetTypeSegmentTab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 4,
+    paddingVertical: 9,
+    borderRadius: 9,
+    gap: 6,
   },
-  typeButtonActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+  assetTypeSegmentTabActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  typeButtonText: {
+  assetTypeSegmentText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#64748B',
   },
-  typeButtonTextActive: {
-    color: '#FFFFFF',
+  assetTypeSegmentTextActive: {
+    color: '#0F172A',
+    fontWeight: '700',
   },
   twoColumnRow: {
     flexDirection: 'row',

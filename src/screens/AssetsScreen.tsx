@@ -12,15 +12,21 @@ import {
   ActivityIndicator,
   Dimensions,
   Modal,
+  Platform,
+  Share,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { AssetSummary, AssetType, Transaction, TransactionType } from '../types/database';
 import { EditAssetModal } from '../components/EditAssetModal';
 import { AddAssetModal } from '../components/AddAssetModal';
+import { ImportCsvModal } from '../components/ImportCsvModal';
 import { AssetSparklineCard } from '../components/AssetSparklineCard';
 import { isKnownUSSymbol, getCachedExchangeRate } from '../services/currencyService';
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
+import { exportPortfolioToCsv } from '../services/csvService';
+import { usePrivacyMode } from '../services/privacyService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -81,7 +87,36 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
   // Modals
   const [selectedAssetForEdit, setSelectedAssetForEdit] = useState<AssetSummary | null>(null);
   const [isEditModalVisible, setIsEditModalVisible] = useState<boolean>(false);
+  const [isImportModalVisible, setIsImportModalVisible] = useState<boolean>(false);
   const [exchangeRate, setExchangeRate] = useState<number>(34.00);
+  const { isPrivate: isPrivateMode, toggle: togglePrivateMode } = usePrivacyMode();
+
+  const handleExportCsv = () => {
+    if (!assets || assets.length === 0) {
+      Alert.alert('ไม่มีข้อมูลพอร์ต', 'ยังไม่มีรายการสินทรัพย์ในพอร์ตให้ส่งออก');
+      return;
+    }
+
+    const csvData = exportPortfolioToCsv(assets);
+    const today = new Date().toISOString().split('T')[0];
+    const filename = `my_dividend_portfolio_${today}.csv`;
+
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      Share.share({
+        title: 'ส่งออกพอร์ต My Dividend',
+        message: csvData,
+      });
+    }
+  };
 
   // Fetch Data
   const loadData = useCallback(async () => {
@@ -291,11 +326,45 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* Top Header */}
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerTitleBox}>
           <Text style={styles.headerTitle}>สินทรัพย์ & ธุรกรรม</Text>
           <Text style={styles.headerSubtitle}>
             จัดการการถือครองและประวัติการซื้อขายย้อนหลัง
           </Text>
+        </View>
+
+        <View style={styles.headerActionsRow}>
+          <TouchableOpacity
+            style={[styles.headerActionBtnSecondary, isPrivateMode && styles.headerActionBtnActive]}
+            onPress={togglePrivateMode}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons
+              name={isPrivateMode ? 'eye-off-outline' : 'eye-outline'}
+              size={15}
+              color={isPrivateMode ? '#059669' : '#475569'}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.headerActionBtnSecondary}
+            onPress={handleExportCsv}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="download-outline" size={15} color="#475569" />
+            <Text style={styles.headerActionBtnSecondaryText}>ส่งออก</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.headerActionBtnPrimary}
+            onPress={() => setIsImportModalVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="cloud-upload-outline" size={15} color="#FFFFFF" />
+            <Text style={styles.headerActionBtnPrimaryText}>นำเข้า CSV</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -429,15 +498,17 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
               <View>
                 <Text style={styles.statsBannerLabel}>มูลค่ารวมที่แสดง ({filteredHoldings.length} รายการ)</Text>
                 <Text style={styles.statsBannerValue}>
-                  ฿{holdingsStats.totalVal.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {isPrivateMode
+                    ? '฿••••••'
+                    : `฿${holdingsStats.totalVal.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 </Text>
               </View>
               <View style={styles.statsBannerRight}>
                 <Text style={styles.statsBannerLabel}>กำไร/ขาดทุน</Text>
                 <Text style={[styles.statsBannerPL, holdingsStats.totalPL >= 0 ? styles.profitColor : styles.lossColor]}>
-                  {holdingsStats.totalPL >= 0 ? '+' : ''}฿
-                  {holdingsStats.totalPL.toLocaleString('th-TH', { maximumFractionDigits: 0 })} (
-                  {holdingsStats.plPercent.toFixed(1)}%)
+                  {isPrivateMode
+                    ? `(${holdingsStats.totalPL >= 0 ? '+' : ''}${holdingsStats.plPercent.toFixed(1)}%)`
+                    : `${holdingsStats.totalPL >= 0 ? '+' : ''}฿${holdingsStats.totalPL.toLocaleString('th-TH', { maximumFractionDigits: 0 })} (${holdingsStats.plPercent.toFixed(1)}%)`}
                 </Text>
               </View>
             </View>
@@ -668,9 +739,11 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                       <View style={styles.txAmountContainer}>
                         <Text style={styles.txAmountLabel}>มูลค่ารายการ</Text>
                         <Text style={styles.txAmountVal}>
-                          ฿{totalTHB.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {isPrivateMode
+                            ? '฿••••••'
+                            : `฿${totalTHB.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                         </Text>
-                        {isUS && <Text style={styles.txAmountSub}>${totalUSD.toFixed(2)}</Text>}
+                        {isUS && <Text style={styles.txAmountSub}>{isPrivateMode ? '$••••••' : `$${totalUSD.toFixed(2)}`}</Text>}
                       </View>
                     </View>
                   </View>
@@ -893,6 +966,13 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
         onSuccess={loadData}
       />
 
+      {/* CSV Import Modal */}
+      <ImportCsvModal
+        visible={isImportModalVisible}
+        onClose={() => setIsImportModalVisible(false)}
+        onSuccess={loadData}
+      />
+
       {/* Add Asset FAB Modal */}
       <AddAssetModal onSuccess={loadData} />
     </SafeAreaView>
@@ -920,16 +1000,64 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 8,
     backgroundColor: '#F8FAFC',
+    gap: 8,
+  },
+  headerTitleBox: {
+    flex: 1,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#0F172A',
   },
   headerSubtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748B',
     marginTop: 2,
+  },
+  headerActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  headerActionBtnPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4338CA',
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 5,
+    shadowColor: '#4338CA',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  headerActionBtnPrimaryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  headerActionBtnSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  headerActionBtnActive: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  headerActionBtnSecondaryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
   },
   viewModeSwitcher: {
     flexDirection: 'row',

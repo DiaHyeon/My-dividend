@@ -1,368 +1,400 @@
 # Project Brief: My dividend
-เอกสารข้อกำหนดทางเทคนิคและสถาปัตยกรรมระบบของแอพพลิเคชัน My dividend สำหรับใช้งานเป็น Single Source of Truth ในการพัฒนาบน ANTIGRAVITY IDE
+Technical specification and system architecture document for the My dividend application, serving as the Single Source of Truth for development on ANTIGRAVITY IDE.
 
 ---
 
 ## 1. Project Overview
-- **ชื่อโปรเจกต์**: My dividend
-- **แพลตฟอร์มเป้าหมาย**: Android Mobile (ทดสอบและพรีวิวผ่าน Expo Go) และ Web Preview
-- **แกนหลักของระบบ (Core Stack)**: Expo SDK 57 (React Native 0.86, React 19), TypeScript, Supabase (PostgreSQL, Row Level Security)
-- **เป้าหมายหลัก**: แอพติดตามพอร์ตการลงทุนที่เรียบง่าย จัดกลุ่มสินทรัพย์ 3 ประเภทหลัก (หุ้น, กองทุนรวม, เงินฝาก/ตราสารหนี้) พร้อมระบบพยากรณ์เงินปันผลสุทธิหลังหักภาษี 12 เดือน, แจ้งเตือนวัน XD ล่วงหน้า, ค้นหาหุ้นตลาดสหรัฐฯ และไทย (SET) อัตโนมัติ พร้อมดึงราคาปิดล่าสุด และรองรับการบันทึกซื้อสินทรัพย์ด้วยสกุลเงิน USD พร้อมแปลงค่าเป็น THB แบบ Real-time
+- **Project Name**: My dividend
+- **Target Platforms**: Android Mobile (tested and previewed via Expo Go) and Web Preview
+- **Core Stack**: Expo SDK 57 (React Native 0.86, React 19), TypeScript, Supabase (PostgreSQL, Row Level Security)
+- **Primary Goal**: A streamlined, minimalist portfolio tracking and dividend management application categorizing 3 primary asset classes (Stocks, Mutual Funds, Cash/Fixed Income). It features 12-month net dividend and interest forecasting after withholding tax, advance ex-dividend (XD) reminders, automated US and Thai (SET) stock lookups with latest closing prices, Thai mutual fund NAV and dividend history integration via SEC Open API v2, and dual-currency purchase recording (USD to THB real-time conversion).
 
 ---
 
 ## 2. Dependency Audit & Environment Status
-| รายการ Library | บทบาทการทำงาน | สถานะ |
+| Library | Role & Functionality | Status |
 | :--- | :--- | :--- |
-| `@supabase/supabase-js` | เชื่อมต่อ Database, Auth และ Edge Functions | [x] ติดตั้งและใช้งานแล้ว |
-| `@react-native-async-storage/async-storage` | บันทึก Auth Session ภายในเครื่อง | [x] ติดตั้งและใช้งานแล้ว |
-| `expo-notifications` | จัดการ Local Notification บน Android (แจ้งเตือนวัน XD) | [x] ติดตั้งและใช้งานแล้ว (มี patch สำหรับ Expo Go) |
-| `react-native-gifted-charts`, `react-native-svg` & `expo-linear-gradient` | แสดงผลกราฟ Bar Chart และ Donut Pie Chart | [x] ติดตั้งและใช้งานแล้ว |
-| `react-native-safe-area-context` | จัดการ Safe Area / ขอบจอ Notch สำหรับ Android & iOS | [x] ติดตั้งและใช้งานแล้ว |
-| `@expo/vector-icons` | ไอคอน UI และ Material FAB (Ionicons) | [x] ติดตั้งและใช้งานแล้ว |
-| `@expo/ngrok` | ระบบ Expo Tunnel สำหรับพรีวิวผ่าน WiFi ในสถาบัน/ออฟฟิศ | [x] ติดตั้งและใช้งานแล้ว |
+| `@supabase/supabase-js` | Database, Authentication, and Edge Functions connectivity | [x] Installed & Active |
+| `@react-native-async-storage/async-storage` | Local client storage for Auth sessions, Privacy Mode, and Goal settings | [x] Installed & Active |
+| `expo-notifications` | Local notifications on Android (XD ex-dividend reminders) | [x] Installed & Active (with Expo Go patch) |
+| `react-native-gifted-charts`, `react-native-svg` & `expo-linear-gradient` | Interactive Bar Charts, Area Sparklines, and Donut Pie Charts | [x] Installed & Active |
+| `react-native-safe-area-context` | Screen notch and Safe Area management for Android & iOS | [x] Installed & Active |
+| `@expo/vector-icons` | UI icons and Material Floating Action Button (Ionicons) | [x] Installed & Active |
+| `@expo/ngrok` | Expo Tunnel proxy for previewing over office/institutional WiFi | [x] Installed & Active |
+| `expo-document-picker` | Native file picker for CSV portfolio imports (Android & Web) | [x] Installed & Active |
+| `papaparse` & `@types/papaparse` | Lightweight pure-JavaScript CSV parser | [x] Installed & Active |
 
-### ตัวแปรสภาพแวดล้อม (.env)
+### Environment Variables (.env)
 ```bash
 EXPO_PUBLIC_SUPABASE_URL=https://ycflookcrilaujmeillt.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Open API subscription key
+EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription key
 ```
 
 ---
 
 ## 3. Database Architecture (Supabase PostgreSQL)
 ### Data Types & Constraints
-- ข้อมูลตัวเลขทางการเงิน จำนวนหุ้น และราคา ต้องกำหนดเป็น `NUMERIC(15, 4)` ห้ามใช้ FLOAT หรือ REAL เพื่อป้องกัน Floating-point precision error
-- ตาราง `transactions` ต้องมี Constraint `CHECK (shares >= 0)` ป้องกันยอดหุ้นติดลบ
-- ใช้ระบบ Soft Delete (`is_archived boolean default false`) แทนการลบข้อมูลจริง เพื่อรักษาประวัติการรับปันผลย้อนหลัง
-- ทุกตารางเปิดใช้งาน Row Level Security (RLS) โดยมี Policy รองรับทั้ง Authenticated User และ Demo Session (`demo@mydividend.app`)
+- Financial figures, share quantities, and unit prices must strictly use `NUMERIC(15, 4)`. Never use `FLOAT` or `REAL` to prevent floating-point precision inaccuracies.
+- The `transactions` table must include a `CHECK (shares >= 0)` constraint to prevent negative share balances.
+- Soft Delete (`is_archived boolean default false`) is used instead of hard deletes to preserve historical dividend payment records.
+- Every table has Row Level Security (RLS) enabled with policies supporting both Authenticated Users and Demo Sessions (`demo@mydividend.app`).
 
-### โครงสร้างตารางหลัก
-- `assets`: จัดการรายการสินทรัพย์
-  - ฟิลด์: `id` (uuid, PK), `user_id` (uuid), `symbol` (text), `asset_type` (STOCKS | FUNDS | CASH), `current_price` (numeric(15,4)), `tax_rate` (numeric(15,4), default 0.1000), `is_archived` (boolean), `created_at` (timestamptz)
-- `transactions`: ประวัติการซื้อ/ขาย
-  - ฟิลด์: `id` (uuid, PK), `asset_id` (uuid, FK), `type` (BUY | SELL), `shares` (numeric(15,4)), `price_per_share` (numeric(15,4)), `transaction_date` (date)
-- `dividend_schedules`: ตารางปันผลและการคาดการณ์
-  - ฟิลด์: `id` (uuid, PK), `asset_id` (uuid, FK), `dpu` (numeric(15,4)), `xd_date` (date), `payment_date` (date, nullable), `is_projected` (boolean)
-- `view_asset_summary` (SQL View): คำนวณสรุปยอดหุ้นคงเหลือสุทธิ (`net_shares`), ต้นทุนเฉลี่ยถ่วงน้ำหนัก (`weighted_average_cost`), มูลค่ารวม (`market_value`), ต้นทุนรวม (`total_cost`) และ Unrealized P/L อัตโนมัติจากฝั่งฐานข้อมูล
+### Core Table Schemas
+- `assets`: Manages asset master records
+  - Fields: `id` (uuid, PK), `user_id` (uuid), `symbol` (text), `asset_type` (STOCKS | FUNDS | CASH), `current_price` (numeric(15,4)), `tax_rate` (numeric(15,4), default 0.1000), `is_archived` (boolean), `created_at` (timestamptz)
+- `transactions`: Buy and deposit transaction logs
+  - Fields: `id` (uuid, PK), `asset_id` (uuid, FK), `type` (BUY | SELL), `shares` (numeric(15,4)), `price_per_share` (numeric(15,4)), `transaction_date` (date)
+- `dividend_schedules`: Dividend payment and projection schedules
+  - Fields: `id` (uuid, PK), `asset_id` (uuid, FK), `dpu` (numeric(15,4)), `xd_date` (date), `payment_date` (date, nullable), `is_projected` (boolean)
+- `view_asset_summary` (SQL View): Automatically computes net remaining shares (`net_shares`), weighted average cost (`weighted_average_cost`), total market value (`market_value`), total cost basis (`total_cost`), and Unrealized P/L directly in the database engine.
 
 ---
 
 ## 4. Key Features & Implementation Details
 
-### 4.1 Dashboard & Category Breakdown
-- **Hero Card**: สรุปยอด Net Worth ทั้งพอร์ต, ผลรวมกำไร/ขาดทุนสุทธิ (Unrealized P/L ทั้งจำนวนเงินและเปอร์เซ็นต์), ต้นทุนรวม และยอดเงินปันผลสุทธิคาดการณ์ทั้งปี (Annual Net Dividend)
-- **Category Cards**: แบ่ง 3 หมวดหมู่หลัก:
-  - หุ้น (STOCKS - สีน้ำเงิน)
-  - กองทุน (FUNDS - สีม่วง)
-  - เงินฝากดิจิทัล/ตราสารหนี้ (CASH - สีเขียว)
-  - แสดงสัดส่วนเปอร์เซ็นต์ (Allocation %), มูลค่ารวม, จำนวนรายการ, Unrealized P/L และ Progress Bar สัดส่วน
+### 4.1 Dashboard & Navigation Structure
+- **Navigation Tabs**: Standardized international naming across the bottom navigation bar:
+  - `Overview` (Dashboard screen): Net worth hero card, category summary cards, payday radar, 12-month cashflow chart, and passive income goal card.
+  - `Portfolio`: Portfolio asset allocation donut pie chart, sector breakdown, and cumulative performance benchmark comparison.
+  - `Holdings`: Dedicated dual-view screen for holdings management with sparkline charts, and transaction history timeline with minimal dropdown filters.
+- **Category Summary Cards**: Grouped into 3 distinct asset classes:
+  - Stocks (`STOCKS` - Blue theme `#3B82F6`)
+  - Mutual Funds (`FUNDS` - Purple theme `#8B5CF6`)
+  - Digital Savings & Fixed Income (`CASH` - Emerald theme `#10B981`)
+  - Each card displays allocation percentage, total market value, asset count, unrealized profit/loss, and a visual progress allocation bar.
+
+---
 
 ### 4.2 Dividend Forecasting Engine (12-Month Bar Chart)
-- แสดงกราฟแท่งปันผลรายเดือน 12 เดือน (ม.ค. - ธ.ค.)
-- **สูตรคำนวณปันผลสุทธิ**: $\text{Shares} \times \text{DPU} \times (1 - \text{tax\_rate})$ โดยหักภาษี ณ ที่จ่ายตามที่บันทึกไว้ในแต่ละสินทรัพย์ (หุ้นไทยเริ่มต้น 10% [0.1000], หุ้นสหรัฐฯ เริ่มต้น 15% [0.1500] ตามอนุสัญญา W-8BEN, หรือปรับแต่งเองได้ เช่น 0% ยกเว้นภาษี)
-- **Strict XD Cutoff Logic**: กรองเฉพาะยอดหุ้นที่เกิดจากธุรกรรมการซื้อขายที่เกิดขึ้นก่อนวัน XD (`transaction_date < xd_date`) เท่านั้น
-- สามารถแตะที่แท่งกราฟเพื่อดูรายละเอียดหุ้นที่จ่ายปันผลในเดือนนั้น ๆ ได้
+- Visualizes 12-month net passive cashflow projections (January to December).
+- **Net Dividend Formula**:
+  $$\text{Net Inflow} = \text{Shares} \times \text{DPU} \times (1 - \text{tax\_rate})$$
+  Taxes are calculated per asset (Thai stocks default to 10% `0.1000`, US stocks default to 15% `0.1500` under W-8BEN, Thai bank interest defaults to 0% or 15%, or custom user overrides).
+- **Strict XD Cutoff Logic**: Includes only share lots acquired before the ex-dividend date (`transaction_date < xd_date`).
+- Interactive monthly bar selection opens a modal detailing individual paying assets for that specific month with clear badges (`[Dividend]` vs `[Interest]`).
 
-### 4.2.1 Automated Dividend Forecasting & Non-Dividend Handling
-- **การวิเคราะห์อัตโนมัติ**: เมื่อเลือกหุ้นใน Modal เพิ่มสินทรัพย์ ระบบจะดึงข้อมูล `events.dividends` ย้อนหลังผ่าน `stockService.ts` และ Edge Function มาคำนวณ:
-  - **รอบล่าสุด (Latest DPU)**: กรอกเป็นค่าเริ่มต้น (Default DPU) ให้อัตโนมัติ
-  - **ความถี่ในการจ่าย (Frequency)**: วิเคราะห์ว่าเป็นแบบ ทุกไตรมาส (Quarterly), ปีละ 2 ครั้ง (Semi-annual), หรือ รายเดือน (Monthly)
-  - **คาดการณ์ทั้งปี (Annual Projected DPU)**: คำนวณจาก $\text{Latest DPU} \times \text{Frequency}$ พร้อมแสดงผลในการ์ดไฮไลต์
-  - **สร้างตารางปันผลอัตโนมัติ (Multi-Cycle Schedules)**: คำนวณวันขึ้นเครื่องหมาย XD รอบถัดไปล่วงหน้า 12 เดือน และบันทึกลงตาราง `dividend_schedules` อัตโนมัติ เพื่อให้ Bar Chart 12 เดือนแสดงผลได้ทันที
-- **กรณีหุ้นที่ไม่จ่ายปันผล (Non-Dividend Paying Stocks)**:
-  - กำหนดค่าเริ่มต้น DPU เป็น `0`
-  - แสดงการ์ดแจ้งเตือนสีเทา: `ℹ️ หุ้นนี้ไม่มีประวัติจ่ายปันผล (Growth/Non-dividend)`
-  - บันทึกสินทรัพย์เข้าพอร์ตเพื่อติดตามมูลค่า ต้นทุน และกำไร/ขาดทุนตามปกติ โดยไม่สร้างตารางปันผลล่วงหน้า
+---
 
-### 4.3 ระบบค้นหาหุ้นและดึงราคาอัตโนมัติ (US & Thai Stocks)
-- ไฟล์จัดการ: `src/services/stockService.ts`
-- **ตลาดที่รองรับ**: ตลาดหุ้นอเมริกา (NYSE, NASDAQ, AMEX) และตลาดหุ้นไทย (SET / BKK)
-- **ระบบ Autocomplete**:
-  - แคตตาล็อกหุ้นยอดนิยมในตัว ตอบสนองทันที 0ms (เช่น PTT, CPALL, BDMS, SCB, KBANK, AOT, ADVANC, DELTA, GULF, TSM, MCD, AAPL, MSFT, NVDA, GOOGL, META, TSLA, SCHD, SPY ฯลฯ)
-  - ค้นหาแบบ Real-time เพิ่มเติมผ่าน Supabase Edge Function `stock-proxy`
-  - แสดงชื่อย่อหุ้น, ชื่อบริษัท, และป้ายระบุตลาดด้านหลังอย่างชัดเจน เช่น `[SET]`, `[NYSE]`, `[NASDAQ]`
-- **ดึงราคาปิดล่าสุดอัตโนมัติ (Auto Closing Price)**: เมื่อเลือกหุ้นจาก Dropdown ระบบจะดึงราคาปิดล่าสุด (Regular Market Price / Previous Close) มากรอกในช่อง "ราคาปัจจุบันต่อหน่วย" ให้อัตโนมัติ
-- **รองรับหุ้นนอกตลาด**: ผู้ใช้สามารถพิมพ์ชื่อย่อหุ้นหรือสินทรัพย์อื่น ๆ นอกตลาดหลักทรัพย์ และกรอกราคาเองได้ตามต้องการ
+### 4.2.1 Automated Dividend Forecasting & Non-Dividend Stocks
+- **Automated Historical Analysis**: When selecting a stock in the Add Asset modal, `stockService.ts` queries historical dividend distributions via the Supabase Edge Function to determine:
+  - **Latest DPU**: Automatically pre-fills as the default dividend per unit.
+  - **Payment Frequency**: Analyzes whether the distribution is Quarterly (4x), Semi-annual (2x), or Monthly (12x).
+  - **Annual Projected DPU**: Calculated as $\text{Latest DPU} \times \text{Frequency}$ and displayed in an analytical highlight badge.
+  - **Multi-Cycle Schedule Creation**: Automatically projects ex-dividend dates over the next 12 months and inserts them into `dividend_schedules`.
+- **Non-Dividend Paying Stocks (Growth Stocks)**:
+  - Defaults DPU to `0.0000`.
+  - Displays a clean informational badge: `ℹ️ No dividend distribution history (Growth / Non-dividend)`.
+  - Tracks cost, current price, and unrealized gain/loss normally without generating empty dividend schedule clutter.
 
-### 4.3.1 ระบบค้นหากองทุนรวมไทยและดึง NAV อัตโนมัติ (Thai Mutual Funds - SEC Open API)
-- ไฟล์จัดการ: `src/services/fundService.ts`, `src/components/AddAssetModal.tsx`, `src/components/EditAssetModal.tsx`
-- **การเชื่อมต่อ**: เชื่อมต่อกับสำนักงานคณะกรรมการกำกับหลักทรัพย์และตลาดหลักทรัพย์ (ก.ล.ต. / SEC Thailand) ผ่าน API v2
-- **ระบบ Autocomplete & แคตตาล็อกในตัว**:
-  - มีแคตตาล็อกกองทุนยอดนิยมในตัว ตอบสนองทันที 0ms ครอบคลุม บลจ. ชั้นนำในไทย (เช่น KAsset, SCBAM, BBLAM, KSAM, UOBAM, TISCOAM, ONEAM, KTAM, Principal ฯลฯ)
-  - รองรับการค้นหาด้วยชื่อย่อกองทุน (เช่น `K-USA`, `SCBDV`, `B-INNOTECH`, `KF-GTECH`), ชื่อภาษาไทย, หรือชื่อ บลจ.
-  - แสดงป้ายระบุชื่อ บลจ. อย่างชัดเจน เช่น `[KAsset]`, `[SCBAM]`, `[BBLAM]`, `[KSAM]`
-- **ดึง NAV ล่าสุดอัตโนมัติ (Auto NAV Fetching)**:
-  - เมื่อเลือกกองทุน ระบบจะดึงมูลค่าหน่วยลงทุนล่าสุด (NAV) จาก ก.ล.ต. มากรอกในช่อง "NAV ล่าสุดต่อหน่วย" ให้อัตโนมัติ
-  - ปรับป้ายกำกับในฟอร์มเป็นภาษาเฉพาะของกองทุน: *"จำนวนหน่วยลงทุน (Units)"*, *"NAV ต้นทุนต่อหน่วย"*, และ *"NAV ล่าสุดต่อหน่วย"*
-  - คำนวณมูลค่าตลาดรวม (Market Value) และ กำไร/ขาดทุนสุทธิ (Unrealized P/L) ผ่าน SQL View `view_asset_summary` อัตโนมัติ
-- **ประวัติการจ่ายปันผลกองทุน (Fund Dividends)**:
-  - ดึงข้อมูลประวัติการจ่ายเงินปันผลต่อหน่วย (DPU) และวันปิดสมุดทะเบียน (XD) จาก ก.ล.ต. เพื่อสร้างรอบคาดการณ์ปันผล 12 เดือนใน `dividend_schedules` อัตโนมัติ พร้อมระบบกรอง Exact Symbol Matching ป้องกันการดึงคลาสย่อยอื่น
-- **จำแนกประเภทกองทุนอัตโนมัติ (Fund Category Auto-Detection)**:
-  - วิเคราะห์นโยบายการลงทุน (`policy_desc`) จาก ก.ล.ต. เพื่อเลือกกลุ่ม Sector (ตราสารทุน, ตราสารหนี้, FIF ฯลฯ) ให้โดยอัตโนมัติทันทีที่เลือกกองทุน
-- **ระบบล้างฟอร์มเมื่อเปลี่ยนสินทรัพย์ (Clean State Switcher)**:
-  - เมื่อสลับระหว่าง หุ้น (STOCKS), กองทุน (FUNDS) และเงินฝาก (CASH) ระบบจะเคลียร์ค่าที่กรอกค้างไว้ทั้งหมด ป้องกันข้อมูลปนกันอย่างเด็ดขาด
+---
 
-### 4.4 รองรับการซื้อด้วยสกุลเงินดอลลาร์ (USD Currency Support สำหรับหุ้น)
-- มีปุ่มสวิตช์เลือกสกุลเงิน **THB / USD** ใน Modal เพิ่มและแก้ไขสินทรัพย์ (แสดงผลเฉพาะเมื่อเลือกประเภทสินทรัพย์เป็น **หุ้น (STOCKS)** เท่านั้น สำหรับกองทุนรวมไทย [FUNDS] จะล็อกสกุลเงินเป็น **THB (฿)** โดยอัตโนมัติ เนื่องจากซื้อขายผ่าน บลจ. ไทยในรูปเงินบาท)
-- เมื่อเลือกเป็น **USD** สำหรับหุ้น:
-  - ระบบจะดึงอัตราแลกเปลี่ยน USD/THB แบบ Real-time อัตโนมัติผ่าน Edge Function (เช่น 1 USD = 34.xx บาท)
-  - ผู้ใช้กรอกต้นทุนเป็นเงิน USD ระบบจะคำนวณและแสดงยอดเงินบาทไทย (THB) ให้เห็นแบบ Real-time ทันที
-  - บันทึกลงฐานข้อมูลในสกุลเงินบาท (Base Currency) เพื่อให้คำนวณรวมในพอร์ตได้อย่างแม่นยำ
+### 4.3 Automated Stock Lookup & Closing Prices (US & Thai Stocks)
+- Handled by: `src/services/stockService.ts`
+- **Supported Markets**: US Exchanges (NYSE, NASDAQ, AMEX) and Stock Exchange of Thailand (SET / BKK).
+- **Dual-Engine Autocomplete**:
+  - Instant 0ms built-in catalog for top traded stocks (PTT, CPALL, BDMS, SCB, KBANK, AOT, ADVANC, DELTA, GULF, TSM, MCD, AAPL, MSFT, NVDA, GOOGL, META, TSLA, SCHD, SPY, etc.).
+  - Real-time search query via Supabase Edge Function `stock-proxy`.
+  - Clearly displays ticker symbols, company names, and market badges: `[SET]`, `[NYSE]`, `[NASDAQ]`.
+- **Auto Closing Price**: Automatically populates the current market price upon selecting a stock.
+- **Unlisted & Custom Assets**: Users can freely enter custom ticker symbols and manual prices.
+
+---
+
+### 4.3.1 Thai Mutual Funds Engine (SEC Open API v2)
+- Handled by: `src/services/fundService.ts`, `src/components/AddAssetModal.tsx`, `src/components/EditAssetModal.tsx`
+- **Direct Integration**: Connected to the Securities and Exchange Commission of Thailand (SEC Thailand) via API v2.
+- **0ms Catalog & Search**:
+  - Pre-cached catalog of prominent Thai mutual funds across leading Asset Management Companies (KAsset, SCBAM, BBLAM, KSAM, UOBAM, TISCOAM, ONEAM, KTAM, Principal, etc.).
+  - Full-text search by fund abbreviation (`K-USA`, `SCBDV`, `B-INNOTECH`, `KF-GTECH`), Thai name, or AMC name.
+  - Distinct AMC badges: `[KAsset]`, `[SCBAM]`, `[BBLAM]`, `[KSAM]`.
+- **Auto NAV Fetching**:
+  - Automatically fetches the latest Net Asset Value per unit from the SEC API.
+  - Dynamically updates form labels to mutual fund terminology: *"Units"*, *"Cost NAV"*, and *"Latest NAV"*.
+  - Calculates market value and unrealized profit/loss via SQL View `view_asset_summary`.
+- **Fund Dividend History**:
+  - Fetches historical DPU and book-closing dates from the SEC API with exact symbol matching to avoid incorrect share classes.
+- **Auto Sector Detection**:
+  - Evaluates the fund investment policy description (`policy_desc`) to assign standard sector tags (Equity, Fixed Income, Foreign/FIF, Mixed, Property, Commodity, Money Market).
+- **Clean State Switcher**:
+  - Toggling between `STOCKS`, `FUNDS`, and `CASH` resets input fields to prevent state leakage.
+
+---
+
+### 4.4 USD Currency Support for Stocks
+- Currency switch button (**THB / USD**) in Add and Edit Asset modals (exclusive to `STOCKS`; Thai Mutual Funds are locked strictly to `THB (฿)`).
+- **USD Workflow**:
+  - Real-time USD/THB exchange rate fetched via Edge Function (`USDTHB=X`).
+  - Displays live conversion into Thai Baht as the user types the USD cost per share.
+  - Stored in the database in Thai Baht (Base Currency) to maintain unified portfolio valuation.
+
+---
 
 ### 4.5 Supabase Edge Function (`stock-proxy`)
-- แก้ปัญหา Browser CORS และทำหน้าที่ Proxy สำหรับ Yahoo Finance และ SEC Open API จากอุปกรณ์มือถือ
-- Deploy อยู่บน Supabase Project: `ycflookcrilaujmeillt`
+- Resolves browser CORS limitations and acts as a lightweight proxy for Yahoo Finance and SEC Open API requests.
+- Deployed at Supabase Project: `ycflookcrilaujmeillt`
 - Endpoint: `/functions/v1/stock-proxy`
-- รองรับ Actions:
-  1. `action: "search"`: ค้นหาหุ้น US & Thai จาก Yahoo Finance
-  2. `action: "quote"`: ดึงราคาหุ้น และอัตราแลกเปลี่ยน (เช่น `USDTHB=X`)
-  3. `action: "dividends"`: ดึงประวัติเงินปันผลหุ้น
-  4. `action: "fund-nav"`: ดึงค่า NAV ล่าสุดของกองทุนรวมไทยจาก SEC API (`/v2/fund/daily-info/nav`)
-  5. `action: "fund-dividends"`: ดึงประวัติเงินปันผลกองทุนรวมไทยจาก SEC API (`/v2/fund/daily-info/dividend-history`)
-
-### 4.6 Local Notifications (แจ้งเตือนวัน XD)
-- ไฟล์จัดการ: `src/services/notificationService.ts`
-  - `services/assetConsolidationService.ts`: บริการรวมข้อมูลสินทรัพย์คงเหลือที่ซื้อซ้ำ จัดระเบียบพอร์ต และโอนย้ายประวัติธุรกรรม
-  - `services/benchmarkService.ts`: บริการคำนวณและประมวลผลจุดพล็อตเปรียบเทียบผลตอบแทนกับดัชนีตลาด (SET, S&P 500, NASDAQ) และค่า Alpha
-- ตั้งเวลาแจ้งเตือนล่วงหน้า 1 วันก่อนวันขึ้นเครื่องหมาย XD ในเวลา 08:30 น.
-- สร้าง Android Notification Channel: `xd-reminders` (High Importance, เสียง และการสั่น)
-- ข้อความแจ้งเตือน: `🔔 [Symbol] ขึ้นเครื่องหมาย XD พรุ่งนี้! ถือหุ้นไว้เพื่อรับสิทธิเงินปันผล`
-
-### 4.7 ระบบแก้ไขและลบสินทรัพย์ (Asset Edit & Deletion)
-- ไฟล์จัดการ: `src/components/EditAssetModal.tsx`
-- **การเปิดใช้งาน**: ผู้ใช้สามารถแตะที่การ์ดสินทรัพย์ใน Asset List บนหน้า Dashboard เพื่อเปิด Bottom Sheet Modal สำหรับแก้ไข
-- **สิ่งที่สามารถแก้ไขได้**:
-  - สัญลักษณ์ (Symbol) และหมวดหมู่สินทรัพย์ (STOCKS, FUNDS, CASH)
-  - ราคาปัจจุบันต่อหน่วย (Current Price) พร้อมปุ่มดึงราคาตลาดล่าสุด (Auto Refresh Price)
-  - จำนวนหุ้น/หน่วยที่ถือ (Shares) และราคาต้นทุนเฉลี่ย (Cost Price) โดยระบบจะปรับปรุงประวัติธุรกรรมเพื่อให้อัปเดตยอดคำนวณใน `view_asset_summary` อัตโนมัติ
-  - อัตราภาษีหัก ณ ที่จ่าย (Withholding Tax Rate)
-  - เงินปันผลคาดการณ์ (Projected DPU) และวันขึ้นเครื่องหมาย XD รอบถัดไป
-- **การลบสินทรัพย์ (Soft Delete)**:
-  - มีปุ่มสีแดงเด่นชัด (Red Button) พร้อมไอคอนถังขยะ: "ลบสินทรัพย์ออกจากพอร์ต"
-  - มีกล่องข้อความ Alert ยืนยันก่อนทำรายการลบ เพื่อป้องกันความผิดพลาด
-  - ทำการปรับสถานะ `is_archived = true` ในตาราง `assets` ซึ่งทำให้สินทรัพย์นั้นถูกคัดออกจาก Dashboard และกราฟ 12 เดือนทันที
-
-### 4.8 ระบบจำแนก Segment และ Pie Chart แสดงสัดส่วนหมวดหมู่ & พอร์ตโฟลิโอ (Category Breakdown & Portfolio Allocation)
-- ไฟล์จัดการ: `src/components/CategoryBreakdownModal.tsx`, `src/screens/Portfolio.tsx`, `src/services/sectorService.ts`
-- **การเปิดใช้งาน**: แตะที่การ์ดหมวดหมู่บนหน้า Dashboard หรือแตะ "เปิดดู Pie Chart" เพื่อเข้าสู่หน้าพอร์ตโฟลิโอ
-- **การแสดงผล & เส้น Callout สีขาว (White Callout Lines)**:
-  - Donut / Pie Chart แสดงผลบนการ์ดสีเข้มพรีเมียม (`#0F172A`)
-  - **White Callout Lines**: มีเส้นสีขาวชี้ออกจากแต่ละชิ้นพายไปยังป้ายตัวเลขเปอร์เซ็นต์ (%) และชื่อสินทรัพย์/หมวดหมู่ อย่างคมชัดสวยงาม ป้องกันป้ายทับกัน
-  - **ระบบรวมกลุ่มสัดส่วนย่อย Option A (Minor Items Grouping - "อื่นๆ / Others")**:
-    - สินทรัพย์หรือ Segment ที่มีสัดส่วน $\ge 6\%$ (หรือ Top Holdings หลัก) จะได้ชิ้นพายตัวเองพร้อมเส้นสีขาวชี้ระบุชื่อและ % ชัดเจน
-    - สินทรัพย์หรือ Segment ย่อยที่มีสัดส่วน $< 6\%$ จะถูกรวบเป็นชิ้นพายก้อนเดียวสีเทาสลレート (`#64748B`) ในชื่อ **"อื่นๆ (Others)"** พร้อมเส้นชี้อันเดียว เพื่อแก้ปัญหาป้ายและเส้นทับซ้อนกันบนจอมือถือ
-    - ในตาราง Legend และรายการสินทรัพย์ด้านล่างยังคงแสดงข้อมูลรายตัวครบ 100%
-- **การจำแนก Segment**:
-  - **STOCKS (10 กลุ่ม GICS)**: Technology, Energy, Financials, Healthcare, Consumer Staples, Consumer Discretionary, Industrials, Materials, Real Estate, Telecom, Other
-  - **FUNDS (7 กลุ่ม AIMC)**: Fixed Income Fund (ตราสารหนี้/พันธบัตร), Equity Fund, Mixed Fund, Property & Infra, Commodity (ทอง/น้ำมัน), Foreign (FIF), Money Market, Other
-  - **CASH (4 กลุ่มเงินฝาก)**: Digital Savings (เงินฝากดิจิทัลดอกเบี้ยสูง เช่น Dime!, Kept), Fixed Deposit (ฝากประจำ), Savings (ออมทรัพย์ทั่วไป), Other Bank Accounts
-
-### 4.9 ระบบจัดการบัญชีเงินฝากและดอกเบี้ย (Cash & Interest Engine)
-- ไฟล์จัดการ: `src/components/CashAssetForm.tsx`, `src/components/AddAssetModal.tsx`, `src/components/EditAssetModal.tsx`
-- **การแยกคอมโพเนนต์ย่อย (Modular Sub-component)**:
-  - แยกฟอร์มจัดการเงินฝากออกมาเป็น `src/components/CashAssetForm.tsx` เพื่อให้คอมโพเนนต์มีขนาดกะทัดรัด แยกการทำงานเด็ดขาดจากฟอร์มหุ้น และสามารถนำไปใช้ร่วมกันได้ทันทีทั้งในหน้าเพิ่ม (`AddAssetModal`) และหน้าแก้ไข (`EditAssetModal`)
-- **การปรับเปลี่ยนฟอร์มเฉพาะสำหรับ CASH**:
-  - เปลี่ยนชื่อย่อหุ้นเป็น **"ชื่อบัญชี / สถาบันการเงิน"**
-  - ซ่อนช่องหุ้นและราคาต้นทุน โดยแทนที่ด้วย **"จำนวนเงินฝาก (฿)"** และ **"อัตราดอกเบี้ยต่อปี (% p.a.)"**
-  - **รอบการจ่ายดอกเบี้ย**: เลือกได้ 3 รูปแบบ:
-    1. ทุกเดือน (Monthly - บัญชีดิจิทัล เช่น Dime!, Kept)
-    2. ทุก 6 เดือน (มิ.ย. และ ธ.ค. - มาตรฐานธนาคารไทย)
-    3. ปีละครั้ง (สิ้นปี / ธ.ค.)
-  - **วันที่เริ่มฝาก (Deposit Date)**: ระบุวันที่เริ่มต้นฝากเงิน (ค่าเริ่มต้นเป็นวันปัจจุบัน) เพื่อใช้คำนวณดอกเบี้ยตามวันจริง
-  - **ระบบคำนวณดอกเบี้ยตามวันจริง (Daily Accrual / Pro-Rata Engine)**:
-    - **งวดแรกที่เพิ่งฝาก**: คำนวณดอกเบี้ยรายวันสะสมตามเกณฑ์ธนาคารจริง: $(\text{เงินต้น} \times \text{ดอกเบี้ย\%} \times \text{จำนวนวันจริง}) / 365$ และแสดงจำนวนวันกำกับ เช่น `฿421.92 (77 วัน)`
-    - **งวดถัดไปในปีถัดมา**: ปรับเข้าสู่รอบปกติเต็มงวดอัตโนมัติ (เช่น 6 เดือน หรือ 1 เดือน) พร้อมป้าย `[เต็มงวด]`
-  - **ภาษีดอกเบี้ยหัก ณ ที่จ่าย**: ตัวเลือก 0% (บุคคลธรรมดาไม่เกินเกณฑ์) หรือ 15% พร้อมระบบ Auto-Calculate ตามเกณฑ์ 20,000 บาท/ปี
-- **การบันทึกฐานข้อมูล**:
-  - เงินต้น: บันทึก `current_price = 1.0000`, `shares = เงินต้น`, `price_per_share = 1.0000`, `transaction_date = วันที่เริ่มฝาก` ใน `transactions` (Unrealized P/L = 0%)
-  - ดอกเบี้ย: สร้าง `dividend_schedules` อัตโนมัติตามรอบที่เลือก เพื่อให้แสดงผลในกราฟ 12 เดือน
-
-### 4.10 ระบบตัวกรองกระแสเงินสด 3 มุมมองบนกราฟ 12 เดือน (Multi-View Inflow Toggle)
-- เพิ่มแถบสวิตช์ฟิลเตอร์ 3 โหมดเหนือแท่งกราฟคาดการณ์กระแสเงินสด 12 เดือนใน Dashboard:
-  1. **[ทั้งหมด]**: แสดงกระแสเงินสดรับรวม (เงินปันผลหุ้น/กองทุน + ดอกเบี้ยเงินฝาก)
-  2. **[เฉพาะปันผล]**: แสดงเฉพาะเงินปันผลจากหุ้นและกองทุน
-  3. **[เฉพาะดอกเบี้ย]**: แสดงเฉพาะดอกเบี้ยเงินฝากธนาคาร
-- ในกล่องรายละเอียดรายเดือนมีป้ายระบุประเภทชัดเจน: สีเขียว `[ปันผล]` และสีฟ้า `[ดอกเบี้ย]`
-
-### 4.11 ระบบคำนวณภาษีดอกเบี้ยเงินฝากอัตโนมัติ (Thai Bank Interest Tax Engine - เกณฑ์ 20,000 บาท/ปี)
-- ไฟล์จัดการ: `src/services/taxService.ts`, `src/components/CashAssetForm.tsx`, `src/components/AddAssetModal.tsx`, `src/components/EditAssetModal.tsx`, `src/components/CategoryBreakdownModal.tsx`
-- **หลักเกณฑ์ตามประมวลรัษฎากร (กรมสรรพากร)**:
-  - **เงินฝากออมทรัพย์ทั่วไป และเงินฝากดิจิทัล (Digital Savings & Savings)**:
-    - ดอกเบี้ยรับรวมจากทุกธนาคารตลอดปีภาษี $\le$ 20,000 บาท $\rightarrow$ **ยกเว้นภาษี (0%)**
-    - ดอกเบี้ยรับรวมจากทุกธนาคารตลอดปีภาษี $> 20,000$ บาท $\rightarrow$ **ถูกหักภาษี ณ ที่จ่าย 15% จากยอดดอกเบี้ยทั้งหมดตั้งแต่บาทแรก**
-  - **เงินฝากประจำ (Fixed Deposit)**: ถูกหักภาษี 15% ทันที เว้นแต่เป็นบัญชีเงินฝากประจำปลอดภาษี 24-36 เดือน (0%)
-- **ฟีเจอร์ที่พัฒนา**:
-  1. **Smart Auto-Tax Calculation ในหน้าเพิ่ม/แก้ไขสินทรัพย์**:
-     - คำนวณดอกเบี้ยรายปีทันทีเมื่อพิมพ์เงินต้นและอัตราดอกเบี้ย
-     - หากดอกเบี้ย $\le$ 20,000 บาท เลือกลดหย่อนภาษี 0% พร้อมแสดงโควตาที่เหลือ
-     - หากดอกเบี้ย $> 20,000$ บาท ปรับภาษีเป็น 15% อัตโนมัติ พร้อมแสดงแถบเตือนสีส้มและยอดภาษีที่ต้องถูกหัก
-     - ผู้ใช้สามารถกดสลับปุ่ม "กำหนดเอง (Manual)" เพื่อ Override อัตราภาษีได้ตามต้องการ
-     - กล่องสรุป Live Preview แสดงแจกแจงละเอียด 3 ยอด: ดอกเบี้ยรวมก่อนภาษี (Gross), ภาษีหัก ณ ที่จ่าย 15%, และดอกเบี้ยรับสุทธิ (Net Inflow) ทั้งรายปีและต่องวด
-  2. **Thai Tax-Free Interest Quota Meter ใน Category Breakdown Modal**:
-     - เมื่อแตะการ์ดหมวดหมู่ "เงินฝาก (CASH)" จะแสดงการ์ดติดตามโควตาดอกเบี้ย 20,000 บาท/ปี
-     - มีแถบ Progress Bar แสดงยอดดอกเบี้ยออมทรัพย์สะสมทั้งพอร์ตเทียบกับเพดาน 20,000 บาท
-     - แสดงสถานะชัดเจนว่ายังได้รับสิทธิปลอดภาษี (0%) หรือเกินเกณฑ์ที่ต้องเสียภาษี 15%
-      - มี Donut Pie Chart สัดส่วน Segment พร้อมขีดชี้สีขาว (Callout Line) แสดงประเภทสินทรัพย์และเปอร์เซ็นต์ (%) โดยสีกรอบและสีข้อความปรับตามสีของแต่ละ Segment
-
-### 4.12 ระบบจัดการกองทุนรวมไทย และเชื่อมต่อ SEC Open API (Mutual Funds & SEC Open Data Engine)
-- ไฟล์จัดการ: `src/services/fundService.ts`, `src/services/sectorService.ts`, `src/components/AddAssetModal.tsx`, `src/components/EditAssetModal.tsx`, `supabase/functions/stock-proxy/index.ts`
-- **การเชื่อมต่อ SEC Open API (ก.ล.ต.)**:
-  - ใช้ API Key ของสำนักงาน ก.ล.ต. จัดเก็บใน `.env` (`EXPO_PUBLIC_SEC_API_KEY`)
-  - เชื่อมต่อผ่าน Supabase Edge Function (`stock-proxy`) พร้อม Fallback ตรงไปยัง SEC Open API
-  - รองรับการดึง NAV ล่าสุด (`daily-info/nav`) และประวัติเงินปันผล (`daily-info/dividend-history`) ด้วย `class_abbr_name` หรือ `proj_id`
-- **ระบบวิเคราะห์และคาดการณ์ปันผลกองทุนอัตโนมัติ**:
-  - คำนวณความถี่การจ่ายเงินปันผล (ไตรมาส, ปีละ 2 ครั้ง, ปีละครั้ง)
-  - คำนวณคาดการณ์ปันผลต่อหน่วยทั้งปี (Annual Projected DPU)
-  - กรอกตัวเลข DPU รอบล่าสุด และวัน XD รอบถัดไปลงในฟอร์มให้อัตโนมัติ พร้อมการ์ดไฮไลต์สีเขียวสรุปสถิติ
-- **ระบบจำแนกประเภทกองทุนอัตโนมัติ (Auto Category / Segment Detection)**:
-  - ดึงนโยบายการลงทุน (`policy_desc`) จากฐานข้อมูล ก.ล.ต. เพื่อจัดหมวดหมู่กองทุนทันที:
-    - **ตราสารทุน (หุ้น)**: กองทุนหุ้นไทย เช่น `SCBDV`, `K-VALUE`, `TISCOHD`
-    - **ตราสารหนี้ & พันธบัตร**: กองทุนตราสารหนี้ เช่น `K-FIXED`, `K-SFPLUS`
-    - **กองทุนต่างประเทศ (FIF)**: กองทุนที่ลงทุนต่างประเทศ เช่น `K-USA-A(D)`, `SCBBLN`, `UGIS`
-    - **กองทุนรวมผสม (Mixed)**, **อสังหาฯ & โครงสร้างพื้นฐาน (Property)**, **สินค้าโภคภัณฑ์ (Commodity)**, **ตลาดเงิน (Money Market)**
-  - แสดงป้ายประเภทกองทุน (Category Badge) ในรายการแนะนำค้นหา (Dropdown), ข้อความสรุปใต้ชื่อสินทรัพย์, และป้าย `[ตรวจพบอัตโนมัติ]` เหนือตัวเลือก Segment
-  - รองรับการปรับเปลี่ยน Segment ด้วยตนเอง (Manual Override) ได้อย่างอิสระ
-
-### 4.13 ระบบจัดการสินทรัพย์คงเหลือและประวัติธุรกรรม (Assets & Transaction History Engine)
-- ไฟล์จัดการ: `src/screens/AssetsScreen.tsx`, `src/components/AssetSparklineCard.tsx`, `src/services/historyService.ts`, `App.tsx`
-- **การเข้าใช้งาน**: แตะที่แท็บที่ 3 บน Bottom Navigation Bar (`สินทรัพย์ & ธุรกรรม`), หรือแตะปุ่ม "ดูทั้งหมด" จากหน้า Dashboard หรือหน้า Portfolio
-- **การสลับมุมมอง 2 รูปแบบ (Dual View Switcher)**:
-  1. **[ 📦 สินทรัพย์คงเหลือ (Holdings View) ]**:
-     - รวบรวมสินทรัพย์ทุกตัวที่มีอยู่ในพอร์ต ย้ายออกจากหน้ากราฟเพื่อแก้ปัญหาจอยาวเลื่อนไม่รู้จบ (Endless Scrolling)
-     - **Search Bar**: ค้นหาตามชื่อย่อสินทรัพย์หรือบัญชีเงินฝากทันที
-     - **Category Filter Pills**: สลับกรองเฉพาะ หุ้น (STOCKS), กองทุน (FUNDS), เงินฝาก (CASH) หรือ ทั้งหมด
-     - **Sort Options**: จัดเรียงตาม มูลค่าสูงสุด (Market Value), กำไรสูงสุด (% Gain), ขาดทุนมากสุด (% Loss), หรือตามตัวอักษร A-Z
-     - **Live Stats Banner**: สรุปมูลค่ารวมของรายการที่กำลังแสดงผล และผลรวมกำไร/ขาดทุน
-     - **FinTech Sparkline Area Chart Cards (AssetSparklineCard.tsx & historyService.ts)**: แสดงผลการ์ดสินทรัพย์สไตล์ FinTech สุดพรีเมียม พร้อมกราฟพื้นที่มินิมอล (Sparkline Area Chart) แสดงแนวโน้มราคาปิดจริง 7 วันล่าสุด วาดด้วย `react-native-svg` แบบ Monotone Spline และไล่ระดับสี Gradient ใต้เส้นกราฟ พร้อมระบบ **Once-a-Day EOD Cache (แคชรอบวันตามเวลาปิดตลาด 16-24 ชม.)** ร่วมกับ In-Memory Cache (0ms) และระบบ On-Demand Refresh (ยิง API ใหม่เฉพาะเมื่อดึงรูดรีเฟรชหน้าจอเท่านั้น) ช่วยลดจำนวนครั้งการยิง API ภายนอกลงได้มากกว่า 95%
-   2. **[ 📜 ประวัติรายการ (Transaction History View) ]**:
-      - แสดงไทม์ไลน์ประวัติการซื้อและฝากเงินย้อนหลัง เรียงจากวันที่ล่าสุด
-      - **Minimal Dropdown Filter Bar (แถบตัวกรองแถวเดียวสไตล์มินิมอล)**: รวม 3 ตัวกรองไว้ในแถวเดียว แทนที่แถบเลื่อนแนวนอนแบบเดิม ประหยัดพื้นที่หน้าจอ เพิ่มพื้นที่แสดงข้อมูลธุรกรรม
-        - **Dropdown ปี (Year Chip)**: แตะเพื่อเปิด Bottom Sheet Modal เลือกปีจริงจากฐานข้อมูล (เช่น `ทุกปี`, `2026 (2569)`, `2025 (2568)` ฯลฯ)
-        - **Dropdown เดือน (Month Chip)**: แตะเพื่อเปิด Modal แบบ Grid ตาราง 12 เดือน (ม.ค. - ธ.ค.) หรือปุ่ม "ทุกเดือน (ตลอดทั้งปี)"
-        - **Dropdown ประเภท (Type Chip)**: กรองระหว่าง `ทุกประเภท (ทั้งหมด)`, `ซื้อหุ้น / กองทุน (BUY)`, และ `เงินฝากธนาคาร (DEPOSIT)` (ตัดตัวเลือก SELL ออกเพื่อความชัดเจน เนื่องจากแอปยังไม่มีระบบขายสินทรัพย์)
-        - **ปุ่มรีเซ็ต (Reset Chip)**: แสดงปุ่มกากบาท/ล้างตัวกรองสีแดงอัตโนมัติเมื่อมีการเลือกตัวกรองใดตัวกรองหนึ่งอยู่
-      - **Search Bar**: ค้นหาตามชื่อสินทรัพย์ในประวัติรายการ
-      - **Transaction Volume Banner**: สรุปยอดเงินรวมของธุรกรรมที่เกิดขึ้นในช่วงเวลาที่เลือก พร้อมจำนวนรายการ
+- Supported Actions:
+  1. `action: "search"`: US & Thai stock search.
+  2. `action: "quote"`: Stock prices and FX rates (`USDTHB=X`).
+  3. `action: "dividends"`: Stock dividend distribution history.
+  4. `action: "fund-nav"`: Daily mutual fund NAV from SEC API (`/v2/fund/daily-info/nav`).
+  5. `action: "fund-dividends"`: Mutual fund dividend history from SEC API (`/v2/fund/daily-info/dividend-history`).
 
 ---
 
-### 4.14 ระบบรวมสินทรัพย์ที่ซื้อซ้ำ และการซื้อเพิ่มแบบ DCA (Position Accumulation & Duplicate Consolidation Engine)
-- ไฟล์จัดการ: `src/services/assetConsolidationService.ts`, `src/components/AddAssetModal.tsx`, `src/screens/AssetsScreen.tsx`, `src/screens/Portfolio.tsx`, `src/screens/Dashboard.tsx`
-- **หลักการออกแบบพอร์ตการลงทุน (Portfolio Model Rule)**:
-  - **หน้าสินทรัพย์คงเหลือ (Holdings View)**: สินทรัพย์แต่ละตัว (Symbol เดียวกัน และ Asset Type เดียวกัน) จะต้องแสดงผลเพียง **1 รายการ / 1 การ์ดเท่านั้น** โดยระบบจะรวมจำนวนหุ้นคงเหลือทั้งหมด (`net_shares`) และคำนวณราคาต้นทุนเฉลี่ยถ่วงน้ำหนัก (`weighted_average_cost`) ให้อัตโนมัติผ่าน SQL View `view_asset_summary`
-  - **หน้าประวัติรายการ (Transaction History View)**: เป็นที่สำหรับจัดเก็บและแสดงผลประวัติการซื้อแต่ละครั้งแยกกันตามจริง (เช่น ซื้อรอบที่ 1 วันที่ X, ซื้อรอบที่ 2 วันที่ Y)
-- **Live Detection & DCA Hint Banner ใน AddAssetModal**:
-  - เมื่อผู้ใช้งานพิมพ์หรือเลือกหุ้น/กองทุน/บัญชีเงินฝาก ระบบจะตรวจเช็คพอร์ตแบบ Real-time
-  - หากพบว่ามีสินทรัพย์นี้อยู่ในพอร์ตแล้ว จะแสดงกล่องข้อความสีฟ้าแจ้งเตือนชัดเจน: `💡 มีสินทรัพย์นี้ในพอร์ตแล้ว (X หุ้น @ ฿Y) — การบันทึกครั้งนี้จะถือเป็นการซื้อเพิ่ม (DCA) ระบบจะรวมจำนวนหุ้นและเฉลี่ยต้นทุนให้อัตโนมัติ`
-  - เมื่อกดยืนยัน ระบบจะไม่สร้าง Asset แถวใหม่ แต่จะนำ `asset_id` เดิมมาใช้ในการบันทึก Transaction ซื้อเพิ่ม
-- **Auto Duplicate Consolidation (การรวมรายการซ้ำเดิมอัตโนมัติ)**:
-  - ฟังก์ชัน `consolidateDuplicateAssets()` ใน `assetConsolidationService.ts` จะสแกนค้นหา Asset ที่ซ้ำกันในฐานข้อมูล
-  - ย้าย Transactions และ Dividend Schedules ทั้งหมดของรายการซ้ำมาผูกกับ Asset หลัก แล้วทำการ Soft-delete (Archive) รายการที่ซ้ำ
-  - เรียกทำงานอัตโนมัติเมื่อโหลดหน้า Dashboard, Portfolio, และ AssetsScreen
+### 4.6 Local Notifications (XD Ex-Dividend Reminders)
+- Handled by: `src/services/notificationService.ts`
+- Automatically schedules reminders 1 day prior to the ex-dividend date at 08:30 AM.
+- Dedicated Android Notification Channel: `xd-reminders` (High Importance, audio chime, and vibration).
+- Notification message: `🔔 [Symbol] goes Ex-Dividend tomorrow! Hold your position to receive payout.`
 
 ---
 
-### 4.15 ระบบวัดผลตอบแทนพอร์ต และเปรียบเทียบดัชนีตลาด (Portfolio Performance & Benchmark Comparison Engine)
-- ไฟล์จัดการ: `src/services/benchmarkService.ts`, `src/screens/Portfolio.tsx`
-- **การสลับมุมมองพอร์ตแบบ Dual Tab Switcher**:
-  1. **[ 🥧 สัดส่วนพอร์ต (Allocation) ]**:
-     - ตัดกล่อง Hero Card ด้านบนออก เพื่อขจัดความซ้ำซ้อนกับตัวเลขรวมตรงกลางรูกลมของ Donut Pie Chart (`฿xxxk`)
-     - ชู Donut Pie Chart ขึ้นมาเด่นสง่าทันที พร้อมปุ่มตัวกรองหมวดหมู่ (หุ้น/กองทุน/เงินฝาก) และพรีวิว 3 สินทรัพย์หลักที่มีมูลค่าสูงสุดในพอร์ต
-  2. **[ 📈 ผลงานพอร์ต (Performance) ]**:
-     - **Performance Hero Card**: แสดง **% ผลตอบแทนสะสม (Cumulative Return)** เช่น `+14.8%` พร้อมยอดกำไร/ขาดทุนสุทธิ (฿) และเงินต้นสะสมเพื่อความโปร่งใส
-     - **Timeframe Selector Bar**: กรองช่วงเวลา `[ 1M | 3M | 6M | 1Y | ทั้งหมด ]`
-      - **Benchmark Selector Dropdown (กล่องเลือกดัชนีตลาดแบบ Dropdown)**:
-        - ออกแบบเป็นการ์ด Dropdown สไตล์มินิมอล แสดงไอคอน/ธง, ชื่อดัชนีที่เลือก, และลูกศร `chevron-down`
-        - แตะเพื่อเปิด **Bottom Sheet Modal Picker**: เลือกดัชนีได้อย่างรวดเร็ว ไม่เกะกะหน้าจอ
-          - `พอร์ตเดี่ยว (ไม่เปรียบเทียบ)`: แสดงกราฟเส้นเดี่ยวแบบ Area Fill
-          - `🇹🇭 SET Index`: เปรียบเทียบกับดัชนีตลาดหลักทรัพย์แห่งประเทศไทย (SET)
-          - `🇺🇸 S&P 500`: เปรียบเทียบกับดัชนี 500 บริษัทชั้นนำสหรัฐฯ
-          - `🇺🇸 NASDAQ`: เปรียบเทียบกับดัชนีหุ้นกลุ่มเทคโนโลยีสหรัฐฯ
-      - **Dual-Line Comparison Chart พร้อม Dynamic Safe Scale Bounds**:
-        - กราฟเส้นคู่แบบ Interactive จาก `react-native-gifted-charts`
-        - **ระบบคำนวณสเกลป้องกันกราฟทะลุขอบ (Overflow Prevention Engine)**:
-          - คำนวณ `maxValue`, `stepValue`, และ `noOfSections` แบบ Real-time ครอบคลุมทั้งข้อมูลพอร์ตและดัชนีอ้างอิง
-          - เพิ่ม Headroom เผื่อส่วนโค้ง Bezier อย่างน้อย 25% ป้องกันไม่ให้กราฟพุ่งทะลุขอบบนแม้ในดัชนีที่ผลตอบแทนสูงมาก (เช่น NASDAQ +31.5%)
-          - รองรับค่าติดลบด้านล่าง (`mostNegativeValue`, `noOfSectionsBelowXAxis`) อย่างแม่นยำ
-        - เส้นที่ 1: พอร์ตของคุณ (สีเขียว `#10B981`)
-        - เส้นที่ 2: ดัชนีอ้างอิงที่เลือก (สีส้ม/ม่วง/ชมพู)
-     - **Alpha / Outperformance Banner**: กล่องสรุปผลเปรียบเทียบ เช่น `🎉 พอร์ตของคุณชนะ S&P 500 อยู่ +3.5% (Outperforming)` หรือ `📊 ตามหลังดัชนี -1.2%`
-     - **Asset Return Ranking (จัดอันดับผลงานรายสินทรัพย์)**: แสดงรายชื่อหุ้น/กองทุนทั้งหมดในพอร์ต เรียงลำดับจาก % กำไรสูงสุดไปหาน้อยสุด
+### 4.7 Asset Editing & Soft Deletion
+- Handled by: `src/components/EditAssetModal.tsx`
+- Opened by tapping any holding card across the Dashboard or Holdings view.
+- **Editable Parameters**:
+  - Symbol and Asset Category (`STOCKS`, `FUNDS`, `CASH`).
+  - Current Price with one-tap market refresh.
+  - Shares held and average cost basis (adjusts transaction logs to refresh `view_asset_summary`).
+  - Withholding tax rate override.
+  - Projected DPU and upcoming ex-dividend date.
+- **Soft Deletion**:
+  - Distinct red trash icon and "Delete Asset from Portfolio" button.
+  - Confirmation alert dialog to avoid accidental removals.
+  - Updates `is_archived = true` in `assets`, removing it immediately from active views while preserving historical audit trails.
 
 ---
 
-### 4.16 ระบบ Minimal Hybrid Dashboard & Cashflow Engine (Dual Yield, Privacy Mode, Payday Radar, Goal Card)
-- ไฟล์จัดการ: `src/screens/Dashboard.tsx`, `src/components/GoalSettingsModal.tsx`
-- **Dual Yield & เฉลี่ยต่อเดือนใน Hero Card**:
+### 4.8 Segment Classification & Portfolio Allocation (Donut Pie Chart)
+- Handled by: `src/components/CategoryBreakdownModal.tsx`, `src/screens/Portfolio.tsx`, `src/services/sectorService.ts`
+- **Visual Presentation & White Callout Lines**:
+  - High-contrast Donut Pie Chart rendered on a dark card (`#0F172A`).
+  - **Crisp White Callout Lines**: Elegant directional lines linking chart slices directly to percentage and name badges, preventing overlapping labels.
+  - **Minor Items Grouping (Option A)**:
+    - Holdings or segments representing $\ge 6\%$ receive dedicated chart slices and callouts.
+    - Holdings representing $< 6\%$ are bundled into a single slate-gray (`#64748B`) slice labeled **"Others"** with a single callout line, eliminating mobile layout overcrowding.
+    - The bottom legend and asset breakdown list display 100% of individual assets.
+- **Sector Taxonomies**:
+  - **STOCKS (10 GICS Sectors)**: Technology, Energy, Financials, Healthcare, Consumer Staples, Consumer Discretionary, Industrials, Materials, Real Estate, Telecom, Other.
+  - **FUNDS (7 AIMC Categories)**: Fixed Income, Equity, Mixed, Property & Infra, Commodity, Foreign (FIF), Money Market, Other.
+  - **CASH (4 Deposit Types)**: Digital Savings, Fixed Deposit, General Savings, Other Accounts.
+
+---
+
+### 4.9 Cash & Interest Engine (Bank Deposits & Daily Accrual)
+- Handled by: `src/components/CashAssetForm.tsx`, `src/components/AddAssetModal.tsx`, `src/components/EditAssetModal.tsx`
+- **Modular Sub-component**: Extracted into `CashAssetForm.tsx` to maintain clean separation from stock forms and enable instant reuse across Add and Edit modals.
+- **Cash-Specific Fields**:
+  - Renames ticker input to **"Account Name / Financial Institution"**.
+  - Replaces share count with **"Deposit Amount (฿)"** and **"Interest Rate (% p.a.)"**.
+  - **Interest Payout Frequencies**:
+    1. Monthly (e.g., Dime!, Kept digital accounts)
+    2. Semi-Annual (June and December - standard Thai bank cycle)
+    3. Annual (December year-end)
+  - **Deposit Date**: Records start date for accurate accrual calculations.
+  - **Daily Accrual / Pro-Rata Calculation**:
+    - First deposit period: Accrues daily interest according to standard banking formulas:
+      $$\text{First Period Interest} = \frac{\text{Principal} \times \text{Rate} \times \text{Actual Days}}{365}$$
+    - Subsequent periods: Seamlessly transitions to full-period cycles.
+  - **Database Persistence**:
+    - Principal: Recorded as `current_price = 1.0000`, `shares = principal`, `price_per_share = 1.0000`, and `transaction_date = deposit_date` in `transactions` (Unrealized P/L = 0.00%).
+    - Interest: Auto-generates `dividend_schedules` records to power the 12-month projection chart.
+
+---
+
+### 4.10 Multi-View Inflow Toggle on 12-Month Chart
+- 3-way toggle filter placed above the 12-month cashflow chart on the Dashboard:
+  1. **[ All ]**: Aggregates all incoming cashflows (Stock Dividends + Fund Dividends + Bank Interest).
+  2. **[ Dividends Only ]**: Filters exclusively for stock and mutual fund distributions.
+  3. **[ Interest Only ]**: Filters exclusively for bank deposit interest.
+- Monthly itemized breakdown cards display clear badges: green `[Dividend]` and cyan `[Interest]`.
+
+---
+
+### 4.11 Thai Bank Interest Tax Engine (20,000 THB / Year Threshold)
+- Handled by: `src/services/taxService.ts`, `src/components/CashAssetForm.tsx`, `src/components/CategoryBreakdownModal.tsx`
+- **Thai Revenue Department Regulations**:
+  - **Savings & Digital Savings Accounts**:
+    - Cumulative annual interest across all banks $\le 20,000$ THB $\rightarrow$ **0% Tax Exempt**.
+    - Cumulative annual interest $> 20,000$ THB $\rightarrow$ **15% Withholding Tax applied from the first Baht**.
+  - **Fixed Deposit Accounts**: Subject to 15% withholding tax immediately (unless tax-free 24-36 month accounts).
+- **Key Capabilities**:
+  1. **Smart Auto-Tax Calculation**:
+     - Real-time annual interest projection when typing principal and rate.
+     - Auto-selects 0% if total interest $\le 20,000$ THB, displaying remaining tax-free quota.
+     - Automatically switches to 15% with a warning badge if projected interest exceeds 20,000 THB.
+     - Supports manual tax rate overrides.
+     - Live preview displays Gross Interest, 15% Tax, and Net Inflow per payout cycle.
+  2. **Tax-Free Interest Quota Meter**:
+     - Visual meter inside the CASH Category Breakdown Modal tracking portfolio-wide cumulative interest against the 20,000 THB threshold.
+
+---
+
+### 4.12 Holdings & Transaction History Engine
+- Handled by: `src/screens/AssetsScreen.tsx`, `src/components/AssetSparklineCard.tsx`, `src/services/historyService.ts`
+- Accessible via the `Holdings` tab on the bottom navigation bar, or "View All" links from Overview and Portfolio.
+- **Dual-View Switcher**:
+  1. **[ 📦 Holdings View ]**:
+     - Consolidates all current portfolio positions into a single dedicated screen, resolving endless vertical scrolling on Dashboard.
+     - **Search Bar**: Instant filtering by ticker symbol or account name.
+     - **Category Filter Pills**: Filter by `All`, `Stocks`, `Funds`, or `Cash`.
+     - **Sort Options**: By Market Value, Gain (% Gain), Loss (% Loss), or Alphabetical (A-Z).
+     - **Live Summary Banner**: Summarizes active filtered value and aggregate gain/loss.
+     - **FinTech Sparkline Area Chart Cards (`AssetSparklineCard.tsx` & `historyService.ts`)**:
+       - Premium FinTech card displaying a 7-day closing price trend line drawn with `react-native-svg` monotone splines and gradient area fill.
+       - **Once-a-Day EOD Caching (16-24 hour end-of-day market cycle)** paired with 0ms in-memory cache and on-demand refresh (only refreshes on pull-to-refresh), reducing external API requests by over 95%.
+  2. **[ 📜 Transaction History View ]**:
+     - Historical timeline of all purchases and cash deposits, sorted chronologically from newest to oldest.
+     - **Minimal Single-Row Dropdown Filter Bar**:
+       - **Year Chip**: Taps open a bottom sheet modal selecting specific transaction years from the database (e.g., `All Years`, `2026`, `2025`).
+       - **Month Chip**: Taps open a 12-month grid picker (Jan - Dec) or `All Months`.
+       - **Type Chip**: Filters between `All Types`, `Buy (STOCKS/FUNDS)`, and `Deposit (CASH)`.
+       - **Reset Chip**: Automatically appears when any filter is active for one-tap clearing.
+     - **Search Bar & Volume Banner**: Instant text search and aggregate transaction volume for the selected period.
+
+---
+
+### 4.13 Position Accumulation & DCA Consolidation Engine
+- Handled by: `src/services/assetConsolidationService.ts`, `src/components/AddAssetModal.tsx`
+- **Portfolio Model Rule**:
+  - **Holdings View**: Each unique asset `(symbol, asset_type)` is displayed as **exactly 1 consolidated card**. Total units (`net_shares`) and weighted average cost (`weighted_average_cost`) are aggregated via `view_asset_summary`.
+  - **Transaction History View**: Preserves individual buy orders and deposit dates separately.
+- **Live DCA Detection in AddAssetModal**:
+  - As the user types a symbol, the system checks for existing holdings in real time.
+  - If found, displays a cyan hint banner: `💡 Position already in portfolio (X shares @ ฿Y) — This entry will be treated as an accumulation (DCA) purchase. Shares and cost basis will be automatically combined.`
+  - Saves the entry under the existing `asset_id` as a new transaction row.
+- **Automatic Duplicate Consolidation**:
+  - `consolidateDuplicateAssets()` detects duplicate asset rows, merges transactions and dividend schedules under a primary asset, and archives duplicates. Runs automatically on screen focus.
+
+---
+
+### 4.14 Portfolio Performance & Benchmark Comparison Engine
+- Handled by: `src/services/benchmarkService.ts`, `src/screens/Portfolio.tsx`
+- **Dual Tab Switcher**:
+  1. **[ 🥧 Allocation Tab ]**:
+     - Features the high-contrast Donut Pie Chart prominently with asset filter buttons and top 3 holdings preview.
+  2. **[ 📈 Performance Tab ]**:
+     - **Performance Hero Card**: Highlights cumulative percentage return (`+14.8%`), net unrealized profit (฿), and total invested capital.
+     - **Timeframe Selector**: `[ 1M | 3M | 6M | 1Y | ALL ]`.
+     - **Benchmark Selector Dropdown**: Minimal bottom sheet picker to select:
+       - `Solo Portfolio (Area Fill)`
+       - `🇹🇭 SET Index`
+       - `🇺🇸 S&P 500`
+       - `🇺🇸 NASDAQ`
+     - **Dual-Line Comparison Chart with Dynamic Safe Scale Bounds**:
+       - Built on `react-native-gifted-charts`.
+       - Real-time dynamic calculation of `maxValue`, `stepValue`, `noOfSections`, `mostNegativeValue`, and `overflowTop` across both datasets.
+       - Guarantees at least 25% Bezier curve headroom to prevent line clipping on high-flying benchmarks (e.g., NASDAQ +31.5%).
+       - Line 1: User Portfolio (Emerald `#10B981`).
+       - Line 2: Selected Benchmark (Amber/Violet/Pink).
+     - **Alpha / Outperformance Banner**: Dynamic summary card (e.g., `🎉 Outperforming S&P 500 by +3.5%` or `📊 Trailing benchmark by -1.2%`).
+     - **Asset Return Ranking**: Ranked leaderboard of portfolio assets sorted from highest to lowest % gain.
+
+---
+
+### 4.15 Minimal Hybrid Dashboard, Zero-Jitter Hero Card & Global Privacy Mode
+- Handled by: `src/screens/Dashboard.tsx`, `src/services/privacyService.ts`, `src/components/GoalSettingsModal.tsx`
+- **Dual Yield & Monthly Average**:
   - **Current Dividend Yield**: $\frac{\text{Projected Annual Net Inflow}}{\text{Total Market Value}} \times 100$
-  - **Yield on Cost (YoC)**: $\frac{\text{Projected Annual Net Inflow}}{\text{Total Cost Basis}} \times 100$ (ชี้วัดความคุ้มค่าของเงินต้นที่ลงทุนจริง)
-  - **เฉลี่ยต่อเดือน**: แสดงตัวเลขกระแสเงินสดรับต่อเดือนโดยประมาณ (`~฿X/ด.`)
-- **Privacy Mode (ปุ่มดวงตา 👁️)**:
-  - ปุ่มสลับที่มุมบนขวาของ Header ซ่อนตัวเลขเงินบาททั้งหมดในหน้า Dashboard เป็น `฿••••••` เพื่อความปลอดภัยในที่สาธารณะ โดยยังคงแสดงสัดส่วน (%) และเปอร์เซ็นต์ผลตอบแทน (Yield, YoC)
-- **Mini Payday Radar (เรดาร์เตือนเงินเข้าสัปดาห์นี้)**:
-  - แถบเตือนมินิมอล 1 บรรทัดเหนือแท่งกราฟ 12 เดือน กรองเฉพาะรายการ XD หรือวันจ่ายเงินปันผล/ดอกเบี้ยที่จะเข้าภายใน 14 วันข้างหน้า
-  - หากไม่มีรายการ จะแสดงรายการถัดไปที่ใกล้ที่สุดให้อัตโนมัติ
-- **Minimal Passive Income Goal Card (การ์ดเป้าหมายกระแสเงินสด)**:
-  - แสดงสถานะความคืบหน้าสู่เป้าหมายรายได้ปันผล/ดอกเบี้ยต่อเดือน (เช่น Level 1: ค่ากาแฟ ฿1,000, Level 2: ค่าน้ำค่าไฟ ฿3,000, Level 3: ค่ากินอยู่ ฿10,000, Level 4: Lean FIRE ฿30,000 หรือกำหนดเอง)
-  - แถบ Progress Bar สไตล์เรียบหรู พร้อมคำนวณยอดที่ยังขาดอีกต่องวด
-  - ปรับแต่งผ่าน [GoalSettingsModal.tsx](file:///c:/Users/lenovo/Documents/My%20dividend/src/components/GoalSettingsModal.tsx) และบันทึกลง AsyncStorage
+  - **Yield on Cost (YoC)**: $\frac{\text{Projected Annual Net Inflow}}{\text{Total Cost Basis}} \times 100$
+  - **Monthly Average Inflow**: Displays estimated monthly net passive income (`~฿X/mo`).
+- **Zero-Jitter Hero Card Architecture**:
+  - Structured into 2 permanently stable rows:
+    - **Top Row**: Static label `"Total Net Worth"` paired with a frameless eye toggle icon on the left, and the profit/loss badge `[ ▲ +12.34% ]` on the right. Anchoring the eye icon beside static text guarantees **0px horizontal shift under the user's finger during toggle**.
+    - **Value Row**: 32px full-width Net Worth value with `numberOfLines={1}` and `minHeight: 40`.
+    - **Dual Yield Subvalue**: Formatted strictly as `฿••••••` under Privacy Mode with `numberOfLines={1}` and `minHeight: 52` to eliminate text wrapping into 2 rows.
+  - Replaces separate refresh buttons with standard mobile **Pull-to-Refresh**, keeping the header clean and uncluttered.
+- **Global Privacy Mode**:
+  - Persisted in AsyncStorage (`@my_dividend_privacy_mode`) and broadcasted via `privacyService.ts`.
+  - Masks monetary values into `฿••••••` across all screens simultaneously (Overview, Portfolio, Holdings, CategoryBreakdownModal).
+  - Preserves percentages, asset allocations, and Yield on Cost ratios for uninterrupted analytics.
+- **Upcoming Payday Radar**:
+  - Minimal 1-line ticker banner positioned above the 12-month chart, tracking upcoming ex-dividend or interest payouts within 14 days with days-remaining countdowns.
+- **Minimal Passive Income Goal Card**:
+  - Tracks monthly passive income progress against target levels (Level 1: Coffee ฿1,000, Level 2: Utilities ฿3,000, Level 3: Living ฿10,000, Level 4: Lean FIRE ฿30,000, or Custom).
+  - Elegant progress bar with remaining shortfall calculator, managed via `GoalSettingsModal.tsx`.
+
+---
+
+### 4.16 CSV Bulk Portfolio Import & Export Engine
+- Handled by: `src/services/csvService.ts`, `src/components/ImportCsvModal.tsx`, `src/screens/AssetsScreen.tsx`
+- **Access**: `[ 📥 Import CSV ]` and `[ 📤 Export ]` buttons in the header of the `Holdings` screen.
+- **Portfolio CSV Export**:
+  - Exports active holdings including symbol, asset type, shares, cost price, current price, market value, and gain/loss.
+  - Supports automated web file download and native mobile sharing.
+- **Portfolio CSV Bulk Import**:
+  - **Dual Import Modes**:
+    1. File Picker: Upload `.csv` or `.txt` via `expo-document-picker`.
+    2. Direct Text Paste: Paste CSV text copied from spreadsheets or notes.
+  - **Smart Column Auto-Mapper**:
+    - Flexible column name aliases (`symbol`/`หลักทรัพย์`, `shares`/`จำนวนหุ้น`, `cost_price`/`ต้นทุน`, `currency`, `transaction_date`).
+    - Auto-detects asset types (`STOCKS`, `FUNDS`, `CASH`) and currency (`THB`/`USD`).
+  - **Validation & Live Preview**:
+    - Previews parsed rows with asset badges and line-number error validation.
+  - **Automated Price & Dividend Creation**:
+    - Automatically fetches latest closing prices and NAVs for imported assets lacking current price.
+    - Automatically converts USD costs to THB.
+    - Automatically generates 12-month dividend schedules and runs duplicate DCA consolidation.
+  - **Template Download**: Sample CSV template download and copy option with clear column specifications.
 
 ---
 
 ## 5. Mobile & Network Operational Guidelines
 
-### 5.1 การแก้ปัญหา Expo Go Android Runtime Crash
-- **สาเหตุ**:
-  1. ไลบรารี `expo-notifications` มีการ `throw new Error` ภายในฟังก์ชัน `warnOfExpoGoPushUsage` เมื่อรันบน Android Expo Go (เนื่องจาก Expo SDK 53+ ยกเลิก Remote Push ใน Expo Go)
-  2. `TopicSubscriptionModule.android.js` เรียกใช้ `requireNativeModule('ExpoTopicSubscriptionModule')` โดยตรง ซึ่งโมดูล Native นี้ถูกตัดออกจาก Expo Go บน Android ทำให้เกิด Runtime Error `Cannot find native module 'ExpoTopicSubscriptionModule'`
-- **การแก้ไขที่ทำไว้**:
-  - สคริปต์ [scripts/patch-expo-notifications.js](file:///c:/Users/lenovo/Documents/My%20dividend/scripts/patch-expo-notifications.js) จะปรับ `warnOfExpoGoPushUsage` ให้เป็น `console.warn` และปรับ `TopicSubscriptionModule.android.js` ให้ใช้ `requireOptionalNativeModule` พร้อม Fallback Dummy Module
-  - ผูกเข้ากับคำสั่ง `"postinstall": "node ./scripts/patch-expo-notifications.js"` ใน `package.json`
-  - ติดตั้ง [RootErrorBoundary](file:///c:/Users/lenovo/Documents/My%20dividend/App.tsx) ใน `App.tsx` เพื่อดักจับข้อผิดพลาดและแสดงปุ่มลองใหม่อย่างสวยงาม
+### 5.1 Resolving Expo Go Android Runtime Crashes
+- **Root Cause**:
+  1. `expo-notifications` invokes `warnOfExpoGoPushUsage` which throws an uncaught error in Android Expo Go (Expo SDK 53+ removed remote push from Expo Go).
+  2. `TopicSubscriptionModule.android.js` calls `requireNativeModule('ExpoTopicSubscriptionModule')` which is absent in Expo Go Android binaries.
+- **Integrated Solution**:
+  - `scripts/patch-expo-notifications.js` automatically patches `warnOfExpoGoPushUsage` to `console.warn` and injects a fallback dummy for `TopicSubscriptionModule`.
+  - Configured as `"postinstall": "node ./scripts/patch-expo-notifications.js"` in `package.json`.
+  - Root error boundary `RootErrorBoundary` in `App.tsx` catches unexpected runtime errors gracefully.
 
 ### 5.2 Safe Area & Native UI Graphics Standards
-- **Safe Area**: เปลี่ยนจาก SafeAreaView ดั้งเดิมของ react-native ที่ถูก Deprecated มาใช้ react-native-safe-area-context ครอบทั้งใน App.tsx และ Dashboard.tsx
-- **Linear Gradient**: ติดตั้ง expo-linear-gradient สำหรับ react-native-gifted-charts
-- **Expo Go Warning Cleanup**: ตั้งค่า LogBox.ignoreLogs ใน App.tsx ปิด Warning เรื่อง Push Notifications ของ Expo Go
+- **Safe Area**: Uses `SafeAreaProvider` and `SafeAreaView` from `react-native-safe-area-context` (never deprecated React Native `SafeAreaView`).
+- **Gradients**: `expo-linear-gradient` powers charts and card overlays.
+- **LogBox Cleanup**: Configured in `App.tsx` to suppress known benign Expo Go push notifications warnings.
 
-### 5.3 สภาพแวดล้อมเครือข่ายและการรันแอพ (Expo Tunnel Mode)
-- **ข้อจำกัดเครือข่าย**: เครือข่ายสถาบัน/สำนักงาน (เช่น WiFi `CAMT`) มีการเปิดใช้งาน AP/Client Isolation ทำให้มือถือไม่สามารถเชื่อมต่อ IP Local (LAN) ของเครื่องคอมพิวเตอร์ได้โดยตรง (เกิดอาการหมุนค้าง)
-- **คำสั่งที่ต้องใช้รันเซิร์ฟเวอร์เสมอ**:
+### 5.3 Network Environment & Expo Tunnel Mode
+- **Network Constraint**: Office and institutional WiFi networks (e.g., `CAMT`) enforce AP/Client Isolation, blocking direct LAN IP connections to the dev server.
+- **Mandatory Launch Command**:
   ```bash
   node ./node_modules/expo/bin/cli start --tunnel --go --web
   ```
-  *(หรือ `npx expo start --tunnel --go --web`)*
-- การเชื่อมต่อผ่าน `--tunnel` (โดยใช้ `@expo/ngrok`) จะสร้าง URL โดเมน `.exp.direct` ทำให้มือถือสามารถสแกน QR Code และโหลด Bundle ได้จากทุกเครือข่าย
+  *(or `npx expo start --tunnel --go --web`)*
+- Tunnel mode via `@expo/ngrok` provides a public `.exp.direct` proxy enabling instant QR code scanning and bundle loading across any network.
 
 ---
 
-## 6. โครงสร้างไฟล์โปรเจกต์ (File Structure)
-- `App.tsx`: Root Component พร้อม `RootErrorBoundary`
-- `index.ts`: Entry point ลงทะเบียน Root Component กับ Expo
-- `app.json`: การตั้งค่า Expo, Permissions Android, และ Plugins
+## 6. Project File Structure
+- `App.tsx`: Root Application Component with `RootErrorBoundary` and bottom tab navigation (`Overview`, `Portfolio`, `Holdings`)
+- `index.ts`: Application entry point registering Root Component with Expo
+- `app.json`: Expo configuration, Android permissions, and plugin registry
 - `src/`
-  - `types/database.ts`: TypeScript Database Definitions สำหรับ Supabase
-  - `lib/supabase.ts`: Supabase Client Config พร้อม AsyncStorage
-  - `screens/Dashboard.tsx`: หน้าจอหลัก Dashboard พอร์ต, การ์ดหมวดหมู่, ตัวกรอง 3 มุมมอง, และ Bar Chart คาดการณ์ปันผล/ดอกเบี้ย
-  - `screens/Portfolio.tsx`: หน้าจอพอร์ตโฟลิโอรวม, Pie Chart สัดส่วนสินทรัพย์พร้อมเส้น Callout สีขาว และระบบรวมกลุ่มสัดส่วนย่อย (Option A)
-  - `screens/AssetsScreen.tsx`: หน้าจอจัดการสินทรัพย์คงเหลือและประวัติธุรกรรม (Holdings & Transactions) พร้อมระบบค้นหาและ Filter ปี/เดือน
-  - `components/AddAssetModal.tsx`: Bottom Sheet เพิ่มสินทรัพย์, Autocomplete หุ้น, Toggle USD/THB, FAB Button
-  - `components/EditAssetModal.tsx`: Bottom Sheet สำหรับแก้ไขและลบสินทรัพย์เดิมในพอร์ต
-  - `components/AssetSparklineCard.tsx`: การ์ดแสดงผลสินทรัพย์คงเหลือสไตล์ FinTech พร้อมกราฟเส้นพื้นที่มินิมอล (Sparkline Area Chart) แสดงแนวโน้มผลตอบแทนและข้อมูลการถือครอง
-  - `components/CashAssetForm.tsx`: ฟอร์มจัดการบัญชีเงินฝาก, ดอกเบี้ย และระบบคำนวณภาษีหัก ณ ที่จ่าย 20,000 บาท/ปี (Modular Component ที่ใช้ร่วมกันทั้งหน้าเพิ่มและแก้ไข)
-  - `components/CategoryBreakdownModal.tsx`: Bottom Sheet แสดง Pie Chart วงกลมสัดส่วน Segment และมิเตอร์ติดตามโควตาดอกเบี้ยปลอดภาษี 20,000 บาท/ปี
-  - `components/GoalSettingsModal.tsx`: Bottom Sheet Modal มินิมอล สำหรับตั้งค่าเป้าหมายกระแสเงินสดรายเดือน (Level Presets & Custom Target)
-  - `services/taxService.ts`: ระบบคำนวณและประเมินภาษีดอกเบี้ยเงินฝากธนาคารตามเกณฑ์ยกเว้น 20,000 บาท/ปี ของกรมสรรพากร
-  - `services/sectorService.ts`: ระบบจำแนกและจัดการ Segment มาตรฐานของหุ้น, กองทุน, และเงินฝาก
-  - `services/stockService.ts`: ระบบค้นหาหุ้น US/TH, ดึงราคาปิด และอัตราแลกเปลี่ยน
-  - `services/fundService.ts`: ระบบค้นหากองทุนรวมไทย, ดึง NAV ล่าสุด และประวัติเงินปันผลผ่าน SEC Open API
-  - `services/notificationService.ts`: ระบบตั้งเวลาแจ้งเตือนวัน XD บน Android
-  - `services/assetConsolidationService.ts`: บริการรวมข้อมูลสินทรัพย์คงเหลือที่ซื้อซ้ำ จัดระเบียบพอร์ต และโอนย้ายประวัติธุรกรรม
-  - `services/benchmarkService.ts`: บริการคำนวณและประมวลผลจุดพล็อตเปรียบเทียบผลตอบแทนกับดัชนีตลาด (SET, S&P 500, NASDAQ) และค่า Alpha
-  - `services/historyService.ts`: บริการดึงและจัดเก็บแคชข้อมูลราคาปิดย้อนหลัง 7 วัน (Historical 7-Day Prices) ของหุ้นและกองทุน เพื่อแสดงผลกราฟแนวโน้มจริงในหน้าสินทรัพย์
+  - `types/database.ts`: TypeScript Database Definitions for Supabase
+  - `lib/supabase.ts`: Supabase Client initialization with AsyncStorage persistence
+  - `screens/Dashboard.tsx`: Overview Dashboard with net worth hero card, category summary cards, payday radar, 12-month cashflow chart, and passive income goal card
+  - `screens/Portfolio.tsx`: Portfolio view with asset allocation donut pie chart, white callout lines, sector breakdown, and cumulative performance benchmark comparison
+  - `screens/AssetsScreen.tsx`: Holdings and transaction history management screen with search, sorting, sparkline cards, and single-row minimal dropdown filters
+  - `components/AddAssetModal.tsx`: Bottom sheet modal for adding assets, stock lookup autocomplete, USD/THB currency toggle, and live DCA detection
+  - `components/EditAssetModal.tsx`: Bottom sheet modal for editing asset parameters and soft deletion
+  - `components/ImportCsvModal.tsx`: Bottom sheet modal for CSV portfolio import with file picker, direct paste, smart mapping, and live validation
+  - `components/AssetSparklineCard.tsx`: FinTech asset holding card with 7-day closing price sparkline area chart and Once-a-Day EOD caching
+  - `components/CashAssetForm.tsx`: Modular form component for bank deposits, interest payout cycles, and pro-rata tax calculations
+  - `components/CategoryBreakdownModal.tsx`: Bottom sheet modal displaying segment breakdown donut chart and 20,000 THB tax-free interest quota meter
+  - `components/GoalSettingsModal.tsx`: Minimal bottom sheet modal for configuring monthly passive income goal targets and level presets
+  - `services/privacyService.ts`: Global privacy state management and cross-screen masking synchronization via AsyncStorage
+  - `services/taxService.ts`: Thai bank deposit interest tax calculation engine (20,000 THB annual exemption threshold)
+  - `services/sectorService.ts`: Standard GICS, AIMC, and deposit sector taxonomy classification service
+  - `services/stockService.ts`: US/Thai stock search, closing price quotes, and FX rate retrieval service
+  - `services/fundService.ts`: Thai mutual fund search, daily NAV quotes, and dividend history service via SEC Open API v2
+  - `services/csvService.ts`: Portfolio CSV export, import parsing, column mapping, and automated asset creation service
+  - `services/notificationService.ts`: Local ex-dividend (XD) notification scheduling service for Android
+  - `services/assetConsolidationService.ts`: Position accumulation and duplicate asset consolidation service
+  - `services/benchmarkService.ts`: Portfolio cumulative return, alpha calculation, and market benchmark comparison service (SET, S&P 500, NASDAQ)
+  - `services/historyService.ts`: 7-day historical closing price caching service with Once-a-Day EOD cache and on-demand refresh
 - `scripts/`
-  - `patch-expo-notifications.js`: สคริปต์แก้ไขปัญหา Expo Go Crash บน Android
-- `supabase/functions/stock-proxy/`: Source code ของ Supabase Edge Function
-
+  - `patch-expo-notifications.js`: Patch script resolving Expo Go Android notification crashes
+- `supabase/functions/stock-proxy/`: Supabase Edge Function source code proxying Yahoo Finance and SEC Open API requests

@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AssetSummary } from '../types/database';
 import { isKnownUSSymbol } from '../services/currencyService';
 import { fetch7DayPriceHistory, HistoryResult } from '../services/historyService';
+import { usePrivacyMode } from '../services/privacyService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -132,6 +133,7 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
   refreshTrigger = 0,
 }) => {
   const [cardWidth, setCardWidth] = useState<number>(SCREEN_WIDTH - 32);
+  const { isPrivate: isPrivateMode } = usePrivacyMode();
 
   const onLayoutCard = (event: LayoutChangeEvent) => {
     const w = event.nativeEvent.layout.width;
@@ -261,7 +263,9 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
       <View style={styles.heroRow}>
         <View style={styles.heroValueCol}>
           <Text style={styles.marketValueText}>
-            ฿{marketValue.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {isPrivateMode
+              ? '฿••••••'
+              : `฿${marketValue.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           </Text>
         </View>
 
@@ -269,8 +273,9 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
           {!isCash ? (
             <View style={styles.plContainer}>
               <Text style={[styles.plAmountText, isPositive ? styles.textPositive : styles.textNegative]}>
-                {isPositive ? '+' : ''}฿
-                {Math.abs(unrealizedPL).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {isPrivateMode
+                  ? '฿••••••'
+                  : `${isPositive ? '+' : ''}฿${Math.abs(unrealizedPL).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
               </Text>
               <Text style={[styles.plPercentText, isPositive ? styles.textPositive : styles.textNegative]}>
                 ({isPositive ? '+' : ''}{plPercent.toFixed(1)}%)
@@ -295,7 +300,7 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
           <Text style={styles.metaLabel}>จำนวนที่ถือ</Text>
           <Text style={styles.metaValue} numberOfLines={1}>
             {isCash
-              ? `เงินต้น ฿${marketValue.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`
+              ? (isPrivateMode ? 'เงินต้น ฿••••••' : `เงินต้น ฿${marketValue.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`)
               : isFund
               ? `${Number(item.net_shares).toLocaleString('th-TH', { minimumFractionDigits: 4 })} หน่วย`
               : `${Number(item.net_shares).toLocaleString('th-TH')} หุ้น`}
@@ -491,16 +496,18 @@ const styles = StyleSheet.create({
   heroRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 6,
     paddingBottom: 6,
+    minHeight: 36,
   },
   heroValueCol: {
     flexShrink: 1,
   },
   marketValueText: {
     fontSize: 19,
+    lineHeight: 24,
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: -0.3,
@@ -510,15 +517,17 @@ const styles = StyleSheet.create({
   },
   plContainer: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     gap: 4,
   },
   plAmountText: {
     fontSize: 13.5,
+    lineHeight: 18,
     fontWeight: '700',
   },
   plPercentText: {
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: '700',
   },
   textPositive: {

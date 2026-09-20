@@ -144,7 +144,7 @@ function MainNavigator() {
             />
           </View>
           <Text style={[styles.tabLabel, currentTab === 'DASHBOARD' && styles.tabLabelActive]}>
-            ภาพรวมปันผล
+            Overview
           </Text>
         </TouchableOpacity>
 
@@ -164,7 +164,7 @@ function MainNavigator() {
             />
           </View>
           <Text style={[styles.tabLabel, currentTab === 'PORTFOLIO' && styles.tabLabelActive]}>
-            สัดส่วนพอร์ต
+            Portfolio
           </Text>
         </TouchableOpacity>
 
@@ -175,13 +175,13 @@ function MainNavigator() {
         >
           <View style={[styles.iconWrapper, currentTab === 'ASSETS' && styles.iconWrapperActive]}>
             <Ionicons
-              name={currentTab === 'ASSETS' ? 'receipt' : 'receipt-outline'}
+              name={currentTab === 'ASSETS' ? 'wallet' : 'wallet-outline'}
               size={22}
               color={currentTab === 'ASSETS' ? '#059669' : '#64748B'}
             />
           </View>
           <Text style={[styles.tabLabel, currentTab === 'ASSETS' && styles.tabLabelActive]}>
-            สินทรัพย์ & ธุรกรรม
+            Holdings
           </Text>
         </TouchableOpacity>
       </View>
