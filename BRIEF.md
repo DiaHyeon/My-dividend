@@ -82,6 +82,18 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - **Payment Frequency**: Analyzes whether the distribution is Quarterly (4x), Semi-annual (2x), or Monthly (12x).
   - **Annual Projected DPU**: Calculated as $\text{Latest DPU} \times \text{Frequency}$ and displayed in an analytical highlight badge.
   - **Multi-Cycle Schedule Creation**: Automatically projects ex-dividend dates over the next 12 months and inserts them into `dividend_schedules`.
+- **Purchase Date Input & Live Dividend Estimation Preview (`AddAssetModal.tsx`)**:
+  - **Custom Purchase Date**: Explicit purchase date input (defaults to current date `YYYY-MM-DD`, freely editable) stored directly into `transactions.transaction_date`.
+  - **Compact Minimal Form Layout (~25% Height Reduction)**:
+    - **Row 1**: Shares & Cost Price in a side-by-side 50/50 split (`[จำนวนหุ้น] | [ราคาต้นทุน]`).
+    - **Row 2**: Market Price & Purchase Date side-by-side (`[ราคาตลาด] | [วันที่เข้าซื้อ 📅]`).
+    - **Row 3**: Expected DPU & Expected XD Date side-by-side (`[ปันผล/หุ้น] | [วัน XD คาดการณ์ 📅]`).
+    - **Integrated Calendar Picker Overlay**: Built-in pure React Native modal calendar with month navigation and quick presets (`วันนี้`, `เมื่อวาน`, `ต้นเดือนนี้`, `1 สัปดาห์ก่อน` for purchases; `+30 วัน`, `+60 วัน`, `+90 วัน`, `สิ้นเดือนนี้` for XD dates).
+    - **Unified Smart Dividend Card**: Merges historical analysis and forward-looking calculation into a single compact card with frequency badge, remaining payouts this year (strict XD cutoff), and full annual run-rate.
+    - **Compact Withholding Tax Selector**: Inline percentage input (`[ 10 ] %`) paired with quick preset pills (`[ 10% หุ้นไทย ]  [ 15% US ]  [ 0% กองทุน/ยกเว้น ]`).
+  - **Live Multiplier & Tax Deduction**: Multiplying total shares by DPU in real time, calculating gross and net payouts after withholding tax (10% Thai, 15% US, or custom).
+  - **Remaining Payouts This Year (Strict XD Cutoff)**: Dynamically checks remaining projected XD dates in the purchase year that occur on or after the purchase date. Payouts whose XD occurred prior to purchase are automatically excluded from the current year's expected total.
+  - **Dual Perspective**: Highlights both "Remaining Payouts This Year" (actual cashflow expected for the rest of the year) and "Full Annual Run-Rate" (for complete subsequent cycles).
 - **Non-Dividend Paying Stocks (Growth Stocks)**:
   - Defaults DPU to `0.0000`.
   - Displays a clean informational badge: `ℹ️ No dividend distribution history (Growth / Non-dividend)`.
@@ -97,6 +109,8 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - Real-time search query via Supabase Edge Function `stock-proxy`.
   - Clearly displays ticker symbols, company names, and market badges: `[SET]`, `[NYSE]`, `[NASDAQ]`.
 - **Auto Closing Price**: Automatically populates the current market price upon selecting a stock.
+- **Smart Auto Segment Badge with On-Demand Picker**: Replaced the long horizontal scrollview of 10+ sector chips with a sleek, automated badge (`[ 💻 เทคโนโลยี ▾ ]`). Sectors are auto-detected by default; tapping the badge opens a unified modal picker with checkmarks for quick overrides only when needed, saving screen space and eliminating UI clutter.
+- **Quick Search Clear & Form Reset**: Search input features an inline 'X' reset button (`close-circle`) when text is present. Tapping 'X' instantly clears the search query, suggestions, auto-filled prices, DPU, and holding state, allowing a fast, one-tap reset for the next asset without leaving the active category.
 - **Unlisted & Custom Assets**: Users can freely enter custom ticker symbols and manual prices.
 
 ---
@@ -286,7 +300,7 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
      - **Dual-Line Comparison Chart with Dynamic Safe Scale Bounds**:
        - Built on `react-native-gifted-charts`.
        - Real-time dynamic calculation of `maxValue`, `stepValue`, `noOfSections`, `mostNegativeValue`, and `overflowTop` across both datasets.
-       - Guarantees at least 25% Bezier curve headroom to prevent line clipping on high-flying benchmarks (e.g., NASDAQ +31.5%).
+       - **Balanced Headroom Scaling (~10-15%)**: Evaluates section counts (3, 4, 5) and clean step intervals (0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 15, 20, 25...) to provide tight, natural headroom (~10-15%) above peak data points. Curves never punch through the ceiling while avoiding excessive empty space above the graph.
        - Line 1: User Portfolio (Emerald `#10B981`).
        - Line 2: Selected Benchmark (Amber/Violet/Pink).
      - **Alpha / Outperformance Banner**: Dynamic summary card (e.g., `🎉 Outperforming S&P 500 by +3.5%` or `📊 Trailing benchmark by -1.2%`).

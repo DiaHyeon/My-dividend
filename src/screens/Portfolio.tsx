@@ -205,7 +205,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
     );
   }, [timeframe, selectedBenchmark, totalUnrealizedPLPercent, assets]);
 
-  // Dynamic Chart Y-Axis Scale Bounds to prevent overflow/punch-through
+  // Dynamic Chart Y-Axis Scale Bounds: tight, natural headroom (~10-15%) so curves never punch through without excessive empty space
   const chartScale = useMemo(() => {
     const pVals = comparisonResult.portfolioData.map((d) => d.value || 0);
     const bVals =
@@ -214,32 +214,53 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         : [];
     const allVals = [...pVals, ...bVals];
 
-    const maxVal = allVals.length > 0 ? Math.max(...allVals) : 10;
+    const maxVal = allVals.length > 0 ? Math.max(...allVals) : 5;
     const minVal = allVals.length > 0 ? Math.min(...allVals) : 0;
+    const absMin = Math.abs(minVal);
 
-    // Add 25% headroom above highest point so curves never touch top or punch through
-    const safePeak = Math.max(maxVal * 1.25, 4);
-    const noOfSections = 4;
+    // Target peak headroom: ~12% above highest data point (min 1.0% headroom above peak, min ceiling 2%)
+    const targetPeak = Math.max(maxVal * 1.12, maxVal + 1.0, 2);
 
-    const rawStep = safePeak / noOfSections;
-    let stepValue = 1;
-    if (rawStep <= 1) stepValue = 1;
-    else if (rawStep <= 2) stepValue = 2;
-    else if (rawStep <= 5) stepValue = 5;
-    else if (rawStep <= 10) stepValue = 10;
-    else if (rawStep <= 15) stepValue = 15;
-    else if (rawStep <= 20) stepValue = 20;
-    else if (rawStep <= 25) stepValue = 25;
-    else if (rawStep <= 50) stepValue = 50;
-    else stepValue = Math.ceil(rawStep / 25) * 25;
+    const NICE_STEPS = [
+      0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 75, 100
+    ];
 
-    const maxValue = stepValue * noOfSections;
+    // Evaluate section counts [4, 5, 3] to find the tightest, most natural headroom
+    let bestConfig = {
+      stepValue: 5,
+      noOfSections: 4,
+      maxValue: 20,
+    };
+    let minOverheadRatio = Infinity;
+
+    for (const sections of [4, 5, 3]) {
+      // Step must accommodate both targetPeak / sections, and absMin / 3 (if negative)
+      const neededForPositive = targetPeak / sections;
+      const neededForNegative = minVal < 0 ? (absMin * 1.05) / 3 : 0;
+      const neededStep = Math.max(neededForPositive, neededForNegative);
+
+      const step = NICE_STEPS.find((s) => s >= neededStep) || Math.ceil(neededStep / 25) * 25;
+      const candidateMax = step * sections;
+
+      if (candidateMax >= maxVal) {
+        const overhead = candidateMax / Math.max(maxVal, 1);
+        if (overhead < minOverheadRatio) {
+          minOverheadRatio = overhead;
+          bestConfig = {
+            stepValue: step,
+            noOfSections: sections,
+            maxValue: candidateMax,
+          };
+        }
+      }
+    }
+
+    const { stepValue, noOfSections, maxValue } = bestConfig;
 
     let mostNegativeValue = 0;
     let noOfSectionsBelowXAxis = 0;
     if (minVal < 0) {
-      const absMin = Math.abs(minVal);
-      noOfSectionsBelowXAxis = Math.max(1, Math.ceil(absMin / stepValue));
+      noOfSectionsBelowXAxis = Math.max(1, Math.ceil((absMin * 1.05) / stepValue));
       mostNegativeValue = -(noOfSectionsBelowXAxis * stepValue);
     }
 
@@ -989,7 +1010,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                           noOfSectionsBelowXAxis: chartScale.noOfSectionsBelowXAxis,
                         }
                       : {})}
-                    overflowTop={16}
+                    overflowTop={10}
                     height={185}
                     width={SCREEN_WIDTH - 84}
                     initialSpacing={15}

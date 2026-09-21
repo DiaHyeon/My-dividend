@@ -73,6 +73,11 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
   const [interestFrequency, setInterestFrequency] = useState<'MONTHLY' | 'SEMI_ANNUAL' | 'ANNUAL'>('MONTHLY');
   const [isAutoCashTax, setIsAutoCashTax] = useState(true);
   const [depositDate, setDepositDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [purchaseDate, setPurchaseDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [isCalendarVisible, setIsCalendarVisible] = useState(false);
+  const [calendarTarget, setCalendarTarget] = useState<'purchaseDate' | 'xdDate'>('purchaseDate');
+  const [calendarViewDate, setCalendarViewDate] = useState<Date>(() => new Date());
+  const [isSectorPickerVisible, setIsSectorPickerVisible] = useState(false);
 
   // Existing Asset Detection State
   const [existingHolding, setExistingHolding] = useState<{
@@ -145,14 +150,16 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     }
   };
 
-  const resetForm = () => {
+  const resetForm = (preserveAssetType: boolean = false) => {
     setSymbol('');
     setShares('');
     setCostPrice('');
     setCurrentPrice('');
     setExpectedDpu('');
     setExistingHolding(null);
-    setAssetType('STOCKS');
+    if (!preserveAssetType) {
+      setAssetType('STOCKS');
+    }
     setSuggestions([]);
     setShowSuggestions(false);
     setPriceNote('');
@@ -160,16 +167,19 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     setDividendAnalysis(null);
     setIsFetchingDividends(false);
     setIsFetchingPrice(false);
-    setTaxRatePercent('10');
-    setSelectedSector('Technology');
+    setTaxRatePercent(assetType === 'STOCKS' ? '10' : '0');
+    setSelectedSector(assetType === 'FUNDS' ? 'ThaiEquity' : 'Technology');
     setDepositAmount('');
     setInterestRate('1.5');
     setInterestFrequency('MONTHLY');
     setIsAutoCashTax(true);
     setDepositDate(new Date().toISOString().split('T')[0]);
+    setPurchaseDate(new Date().toISOString().split('T')[0]);
     const nextMonth = new Date();
     nextMonth.setDate(nextMonth.getDate() + 30);
     setXdDate(nextMonth.toISOString().split('T')[0]);
+    setIsCalendarVisible(false);
+    setIsSectorPickerVisible(false);
   };
 
   const handleAssetTypeSelect = (newType: AssetType) => {
@@ -217,6 +227,77 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     }
   };
 
+  // Live Dividend Preview Calculation
+  const dividendPreview = React.useMemo(() => {
+    const parsedS = parseFloat(shares) || 0;
+    const parsedD = parseFloat(expectedDpu) || 0;
+    const taxPct = parseFloat(taxRatePercent) || 0;
+    const taxFactor = taxPct > 0 ? 1 - taxPct / 100 : 1;
+    const currSym = currency === 'USD' ? '$' : '฿';
+
+    if (parsedS <= 0 || parsedD <= 0) {
+      return null;
+    }
+
+    // 1. Gross & Net per payout cycle
+    const grossPerCycle = parsedS * parsedD;
+    const netPerCycle = grossPerCycle * taxFactor;
+
+    // 2. Frequency & Full Annual projection
+    const freq =
+      dividendAnalysis?.frequency ||
+      dividendAnalysis?.projectedNextXdDates?.length ||
+      1;
+    const annualDpu =
+      dividendAnalysis?.annualProjectedDpu || parsedD * freq;
+    const grossAnnual = parsedS * annualDpu;
+    const netAnnual = grossAnnual * taxFactor;
+
+    // 3. Purchase date & remaining cycles this year (Cutoff calculation)
+    const effectiveDate =
+      purchaseDate && purchaseDate.trim()
+        ? purchaseDate.trim()
+        : new Date().toISOString().split('T')[0];
+    const purchaseYear = effectiveDate.substring(0, 4);
+
+    let remainingRounds = 0;
+    let remainingDates: string[] = [];
+
+    if (
+      dividendAnalysis?.hasDividends &&
+      dividendAnalysis.projectedNextXdDates?.length > 0
+    ) {
+      // Check which projected XD dates are on or after purchase date in the purchase year
+      remainingDates = dividendAnalysis.projectedNextXdDates.filter(
+        (d) => d >= effectiveDate && d.startsWith(purchaseYear)
+      );
+      remainingRounds = remainingDates.length;
+    } else if (xdDate) {
+      // Single schedule
+      const isEligible = xdDate >= effectiveDate && xdDate.startsWith(purchaseYear);
+      remainingRounds = isEligible ? 1 : 0;
+      if (isEligible) remainingDates = [xdDate];
+    }
+
+    const grossRemaining = remainingRounds * grossPerCycle;
+    const netRemaining = grossRemaining * taxFactor;
+
+    return {
+      grossPerCycle,
+      netPerCycle,
+      freq,
+      grossAnnual,
+      netAnnual,
+      remainingRounds,
+      remainingDates,
+      grossRemaining,
+      netRemaining,
+      currSym,
+      taxPct,
+      effectiveDate,
+    };
+  }, [shares, expectedDpu, taxRatePercent, currency, purchaseDate, dividendAnalysis, xdDate]);
+
   const refreshExchangeRate = async () => {
     setIsFetchingRate(true);
     const rate = await fetchExchangeRate();
@@ -235,6 +316,111 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       setTaxRatePercent('10');
     }
   };
+
+  // Calendar picker actions
+  const openCalendar = (target: 'purchaseDate' | 'xdDate') => {
+    setCalendarTarget(target);
+    const currVal = target === 'purchaseDate' ? purchaseDate : xdDate;
+    if (currVal && /^\d{4}-\d{2}-\d{2}$/.test(currVal.trim())) {
+      const parsed = new Date(currVal.trim() + 'T00:00:00');
+      if (!isNaN(parsed.getTime())) {
+        setCalendarViewDate(parsed);
+      } else {
+        setCalendarViewDate(new Date());
+      }
+    } else {
+      setCalendarViewDate(new Date());
+    }
+    setIsCalendarVisible(true);
+  };
+
+  const handleSelectCalendarDate = (isoDate: string) => {
+    if (calendarTarget === 'purchaseDate') {
+      setPurchaseDate(isoDate);
+    } else {
+      setXdDate(isoDate);
+    }
+    setIsCalendarVisible(false);
+  };
+
+  const prevCalendarMonth = () => {
+    setCalendarViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  };
+
+  const nextCalendarMonth = () => {
+    setCalendarViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+
+  const getCalendarPresets = () => {
+    const today = new Date();
+    const formatIso = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    if (calendarTarget === 'purchaseDate') {
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+
+      const oneWeekAgo = new Date(today);
+      oneWeekAgo.setDate(today.getDate() - 7);
+
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+      return [
+        { label: 'วันนี้', value: formatIso(today) },
+        { label: 'เมื่อวาน', value: formatIso(yesterday) },
+        { label: '1 สัปดาห์ก่อน', value: formatIso(oneWeekAgo) },
+        { label: 'ต้นเดือนนี้', value: formatIso(startOfMonth) },
+      ];
+    } else {
+      const plus30Days = new Date(today);
+      plus30Days.setDate(today.getDate() + 30);
+
+      const plus60Days = new Date(today);
+      plus60Days.setDate(today.getDate() + 60);
+
+      const plus90Days = new Date(today);
+      plus90Days.setDate(today.getDate() + 90);
+
+      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+      return [
+        { label: '+30 วัน', value: formatIso(plus30Days) },
+        { label: '+60 วัน', value: formatIso(plus60Days) },
+        { label: '+90 วัน', value: formatIso(plus90Days) },
+        { label: 'สิ้นเดือนนี้', value: formatIso(endOfMonth) },
+      ];
+    }
+  };
+
+  const calendarGridData = React.useMemo(() => {
+    const year = calendarViewDate.getFullYear();
+    const month = calendarViewDate.getMonth();
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+
+    const items: ({ day: number; iso: string } | null)[] = [];
+    for (let i = 0; i < firstDayIndex; i++) {
+      items.push(null);
+    }
+    for (let d = 1; d <= totalDays; d++) {
+      const mStr = String(month + 1).padStart(2, '0');
+      const dStr = String(d).padStart(2, '0');
+      items.push({
+        day: d,
+        iso: `${year}-${mStr}-${dStr}`,
+      });
+    }
+    return items;
+  }, [calendarViewDate]);
+
+  const THAI_MONTHS = [
+    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+  ];
 
   const handleSymbolChange = async (text: string) => {
     setSymbol(text);
@@ -592,12 +778,13 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
 
       // 2. Insert BUY record to transactions table
       const todayDate = new Date().toISOString().split('T')[0];
+      const effectiveTxDate = purchaseDate && purchaseDate.trim() ? purchaseDate.trim() : todayDate;
       const { error: txError } = await supabase.from('transactions').insert({
         asset_id: asset.id,
         type: 'BUY',
         shares: Number(parsedShares.toFixed(4)),
         price_per_share: Number(convertedCostPrice.toFixed(4)),
-        transaction_date: todayDate,
+        transaction_date: effectiveTxDate,
       });
 
       if (txError) {
@@ -606,7 +793,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
 
       // 3. Insert projected DPU to dividend_schedules if (STOCKS or FUNDS) and DPU > 0
       if ((assetType === 'STOCKS' || assetType === 'FUNDS') && parsedDpu > 0) {
-        const targetXdDate = xdDate || todayDate;
+        const targetXdDate = xdDate || effectiveTxDate;
 
         if (dividendAnalysis?.hasDividends && dividendAnalysis.projectedNextXdDates.length > 1) {
           // Multi-cycle projected schedule (quarterly / semi-annual)
@@ -783,54 +970,67 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                     <Text style={styles.label}>
                       {assetType === 'FUNDS' ? 'ชื่อย่อกองทุน (Fund Symbol) *' : 'ชื่อย่อ / รหัสสินทรัพย์ (Symbol) *'}
                     </Text>
-                    <TextInput
-                      style={styles.input}
-                      value={symbol}
-                      onChangeText={handleSymbolChange}
-                      onFocus={() => {
-                        if (assetType === 'STOCKS' && symbol.trim().length >= 1) {
-                          searchStocks(symbol).then((res) => {
-                            setSuggestions(res);
-                            setShowSuggestions(res.length > 0);
-                          });
-                        } else if (assetType === 'FUNDS') {
-                          searchThaiFunds(symbol).then((res) => {
-                            setSuggestions(res);
-                            setShowSuggestions(res.length > 0);
-                          });
-                        }
-                      }}
-                      onBlur={() => {
-                        const clean = symbol.trim().toUpperCase();
-                        if (clean && !isFetchingDividends && (!dividendAnalysis || !dividendAnalysis.hasDividends)) {
-                          if (assetType === 'FUNDS') {
-                            const matched = POPULAR_THAI_FUNDS.find(
-                              (f) => f.symbol.toUpperCase() === clean
-                            );
-                            handleSelectSuggestion(
-                              matched || {
-                                symbol: clean,
-                                rawSymbol: clean,
-                                name: clean,
-                                amc: 'กองทุนรวมไทย',
-                                exchange: 'SEC',
-                                market: 'TH',
-                                currency: 'THB',
-                                category: detectSector(clean, 'FUNDS'),
-                              }
-                            );
+                    <View style={styles.symbolSearchContainer}>
+                      <Ionicons name="search" size={17} color="#94A3B8" style={styles.symbolSearchIcon} />
+                      <TextInput
+                        style={styles.symbolSearchInput}
+                        value={symbol}
+                        onChangeText={handleSymbolChange}
+                        onFocus={() => {
+                          if (assetType === 'STOCKS' && symbol.trim().length >= 1) {
+                            searchStocks(symbol).then((res) => {
+                              setSuggestions(res);
+                              setShowSuggestions(res.length > 0);
+                            });
+                          } else if (assetType === 'FUNDS') {
+                            searchThaiFunds(symbol).then((res) => {
+                              setSuggestions(res);
+                              setShowSuggestions(res.length > 0);
+                            });
                           }
+                        }}
+                        onBlur={() => {
+                          const clean = symbol.trim().toUpperCase();
+                          if (clean && !isFetchingDividends && (!dividendAnalysis || !dividendAnalysis.hasDividends)) {
+                            if (assetType === 'FUNDS') {
+                              const matched = POPULAR_THAI_FUNDS.find(
+                                (f) => f.symbol.toUpperCase() === clean
+                              );
+                              handleSelectSuggestion(
+                                matched || {
+                                  symbol: clean,
+                                  rawSymbol: clean,
+                                  name: clean,
+                                  amc: 'กองทุนรวมไทย',
+                                  exchange: 'SEC',
+                                  market: 'TH',
+                                  currency: 'THB',
+                                  category: detectSector(clean, 'FUNDS'),
+                                }
+                              );
+                            }
+                          }
+                        }}
+                        placeholder={
+                          assetType === 'FUNDS'
+                            ? 'เช่น K-USA, SCBDV, B-INNOTECH, KF-GTECH'
+                            : 'เช่น PTT, MCD, AAPL หรือชื่อสินทรัพย์นอกตลาด'
                         }
-                      }}
-                      placeholder={
-                        assetType === 'FUNDS'
-                          ? 'เช่น K-USA, SCBDV, B-INNOTECH, KF-GTECH'
-                          : 'เช่น PTT, MCD, AAPL หรือชื่อสินทรัพย์นอกตลาด'
-                      }
-                      placeholderTextColor="#94A3B8"
-                      autoCapitalize="characters"
-                      autoCorrect={false}
-                    />
+                        placeholderTextColor="#94A3B8"
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                      />
+                      {symbol.length > 0 && (
+                        <TouchableOpacity
+                          style={styles.symbolClearBtn}
+                          onPress={() => resetForm(true)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                          <Ionicons name="close-circle" size={19} color="#94A3B8" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
 
                     {/* Suggestions Dropdown */}
                     {showSuggestions && suggestions.length > 0 && (
@@ -919,20 +1119,25 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                     </View>
                   )}
 
-                  {/* Segment / Category Selector for Stocks/Funds */}
+                  {/* Segment / Category Selector for Stocks/Funds (Auto by default + Clickable badge) */}
                   <View style={styles.sectorHeaderRow}>
                     <Text style={styles.labelNoMargin}>
                       {assetType === 'FUNDS' ? 'ประเภทกองทุน' : 'กลุ่มอุตสาหกรรม (Segment)'}
                     </Text>
                     {selectedSector ? (
-                      <View
+                      <TouchableOpacity
                         style={[
-                          styles.detectedSectorBadge,
+                          styles.detectedSectorBadgeBtn,
                           {
                             backgroundColor:
-                              getSectorDefinition(selectedSector, assetType).color + '1A',
+                              getSectorDefinition(selectedSector, assetType).color + '14',
+                            borderColor:
+                              getSectorDefinition(selectedSector, assetType).color + '40',
                           },
                         ]}
+                        onPress={() => setIsSectorPickerVisible(true)}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                       >
                         <Ionicons
                           name={getSectorDefinition(selectedSector, assetType).icon as any}
@@ -948,30 +1153,14 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                         >
                           {getSectorDefinition(selectedSector, assetType).label}
                         </Text>
-                      </View>
+                        <Ionicons
+                          name="chevron-down"
+                          size={12}
+                          color={getSectorDefinition(selectedSector, assetType).color}
+                        />
+                      </TouchableOpacity>
                     ) : null}
                   </View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectorChipsScroll}>
-                    {getSectorsForType(assetType).map((sec) => (
-                      <TouchableOpacity
-                        key={sec.id}
-                        style={[
-                          styles.sectorChip,
-                          selectedSector === sec.id && { backgroundColor: sec.color, borderColor: sec.color },
-                        ]}
-                        onPress={() => setSelectedSector(sec.id)}
-                      >
-                        <Text
-                          style={[
-                            styles.sectorChipText,
-                            selectedSector === sec.id && styles.sectorChipTextActive,
-                          ]}
-                        >
-                          {sec.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
 
                   {/* Currency Selector (THB vs USD) */}
                   {assetType === 'STOCKS' && (
@@ -1036,11 +1225,11 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                     </>
                   )}
 
-                  {/* Shares and Cost Price (Row) */}
+                  {/* Row 1: Shares & Cost Price */}
                   <View style={styles.row}>
                     <View style={styles.flexHalf}>
-                      <Text style={styles.label}>
-                        {assetType === 'FUNDS' ? 'จำนวนหน่วยลงทุน (Units) *' : 'จำนวนหุ้น / หน่วย *'}
+                      <Text style={styles.labelCompact}>
+                        {assetType === 'FUNDS' ? 'จำนวนหน่วย *' : 'จำนวนหุ้น *'}
                       </Text>
                       <TextInput
                         style={styles.input}
@@ -1053,10 +1242,10 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                     </View>
                     <View style={styles.flexGap} />
                     <View style={styles.flexHalf}>
-                      <Text style={styles.label}>
+                      <Text style={styles.labelCompact}>
                         {assetType === 'FUNDS'
-                          ? 'NAV ต้นทุนต่อหน่วย (฿) *'
-                          : `ราคาต้นทุน (${currency === 'USD' ? 'ดอลลาร์ $' : 'บาท ฿'}) *`}
+                          ? 'NAV ต้นทุน (฿) *'
+                          : `ราคาต้นทุน (${currency === 'USD' ? '$' : '฿'}) *`}
                       </Text>
                       <TextInput
                         style={styles.input}
@@ -1069,141 +1258,244 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                     </View>
                   </View>
 
-                  {/* Current Price */}
-                  <View style={styles.currentPriceHeaderRow}>
-                    <Text style={styles.label}>
-                      {assetType === 'FUNDS'
-                        ? 'NAV ล่าสุดต่อหน่วย (฿)'
-                        : `ราคาตลาดปัจจุบัน (${currency === 'USD' ? 'ดอลลาร์ $' : 'บาท ฿'})`}
-                    </Text>
-                    {isFetchingPrice && (
-                      <View style={styles.fetchingPriceIndicator}>
-                        <ActivityIndicator size="small" color="#059669" />
-                        <Text style={styles.fetchingPriceText}>
-                          {assetType === 'FUNDS' ? 'ดึง NAV ล่าสุด...' : 'ดึงราคาล่าสุด...'}
+                  {/* Row 2: Current Market Price & Purchase Date (with 📅 button) */}
+                  <View style={styles.row}>
+                    <View style={styles.flexHalf}>
+                      <View style={styles.labelRowCompact}>
+                        <Text style={styles.labelCompact}>
+                          {assetType === 'FUNDS'
+                            ? 'NAV ล่าสุด (฿)'
+                            : `ราคาตลาด (${currency === 'USD' ? '$' : '฿'})`}
                         </Text>
+                        {isFetchingPrice && <ActivityIndicator size="small" color="#059669" />}
                       </View>
-                    )}
+                      <TextInput
+                        style={styles.input}
+                        value={currentPrice}
+                        onChangeText={setCurrentPrice}
+                        placeholder={assetType === 'FUNDS' ? 'NAV ต้นทุน' : 'ราคาต้นทุน'}
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                    <View style={styles.flexGap} />
+                    <View style={styles.flexHalf}>
+                      <View style={styles.labelRowCompact}>
+                        <Text style={styles.labelCompact}>วันที่เข้าซื้อ</Text>
+                        <Text style={styles.dateHintMini}>สิทธิ์ XD</Text>
+                      </View>
+                      <View style={styles.datePickerInputContainer}>
+                        <TextInput
+                          style={styles.datePickerInputField}
+                          value={purchaseDate}
+                          onChangeText={setPurchaseDate}
+                          placeholder="YYYY-MM-DD"
+                          placeholderTextColor="#94A3B8"
+                        />
+                        <TouchableOpacity
+                          style={styles.datePickerIconButton}
+                          onPress={() => openCalendar('purchaseDate')}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="calendar-outline" size={17} color="#059669" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
-                  <TextInput
-                    style={styles.input}
-                    value={currentPrice}
-                    onChangeText={setCurrentPrice}
-                    placeholder={assetType === 'FUNDS' ? 'หากเว้นว่างจะใช้ NAV ต้นทุน' : 'หากเว้นว่างจะใช้ราคาต้นทุน'}
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="decimal-pad"
-                  />
+
                   {priceNote ? (
                     <View style={styles.priceNoteRow}>
-                      <Ionicons name="information-circle-outline" size={14} color="#059669" />
+                      <Ionicons name="information-circle-outline" size={13} color="#059669" />
                       <Text style={styles.priceNoteText}>{priceNote}</Text>
                     </View>
                   ) : null}
 
                   {/* Conditional DPU field - for STOCKS & FUNDS */}
                   {(assetType === 'STOCKS' || assetType === 'FUNDS') && (
-                    <View style={styles.dpuSection}>
-                      <View style={styles.dpuHeader}>
-                        <View style={styles.dpuHeaderLeft}>
-                          <Ionicons name="gift-outline" size={18} color="#059669" />
-                          <Text style={styles.dpuSectionTitle}>
-                            {assetType === 'FUNDS'
-                              ? 'ข้อมูลเงินปันผลกองทุน (Fund Dividend)'
-                              : 'ข้อมูลเงินปันผลคาดการณ์ (Dividend)'}
+                    <View style={styles.dpuSectionCompact}>
+                      {/* Row 3: Expected DPU & Expected XD Date (with 📅 button) */}
+                      <View style={styles.row}>
+                        <View style={styles.flexHalf}>
+                          <Text style={styles.labelCompact}>
+                            ปันผล/หุ้น ({currency === 'USD' ? '$' : '฿'})
                           </Text>
+                          <TextInput
+                            style={styles.input}
+                            value={expectedDpu}
+                            onChangeText={setExpectedDpu}
+                            placeholder="0.0000"
+                            placeholderTextColor="#94A3B8"
+                            keyboardType="decimal-pad"
+                          />
                         </View>
-                        {isFetchingDividends && (
-                          <View style={styles.fetchingPriceIndicator}>
-                            <ActivityIndicator size="small" color="#059669" />
-                            <Text style={styles.fetchingPriceText}>วิเคราะห์ปันผล...</Text>
+                        <View style={styles.flexGap} />
+                        <View style={styles.flexHalf}>
+                          <Text style={styles.labelCompact}>วัน XD คาดการณ์</Text>
+                          <View style={styles.datePickerInputContainer}>
+                            <TextInput
+                              style={styles.datePickerInputField}
+                              value={xdDate}
+                              onChangeText={setXdDate}
+                              placeholder="YYYY-MM-DD"
+                              placeholderTextColor="#94A3B8"
+                            />
+                            <TouchableOpacity
+                              style={styles.datePickerIconButton}
+                              onPress={() => openCalendar('xdDate')}
+                              activeOpacity={0.7}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                              <Ionicons name="calendar-outline" size={17} color="#059669" />
+                            </TouchableOpacity>
                           </View>
-                        )}
+                        </View>
                       </View>
 
-                      {/* Dividend Analysis Highlight Badge */}
-                      {dividendAnalysis && dividendAnalysis.hasDividends && (
-                        <View style={styles.divHighlightCard}>
-                          <View style={styles.divHighlightTop}>
-                            <Ionicons name="analytics-outline" size={16} color="#047857" />
-                            <Text style={styles.divHighlightTitle}>วิเคราะห์ปันผลอัตโนมัติ</Text>
-                            <View style={styles.divFreqBadge}>
-                              <Text style={styles.divFreqText}>{dividendAnalysis.frequencyLabel}</Text>
+                      {/* Unified Smart Dividend Card */}
+                      {dividendPreview ? (
+                        <View style={styles.smartDivCard}>
+                          <View style={styles.smartDivHeader}>
+                            <View style={styles.smartDivHeaderLeft}>
+                              <Ionicons name="calculator" size={14} color="#059669" />
+                              <Text style={styles.smartDivTitle}>ประมาณการเงินปันผลสุทธิ</Text>
+                            </View>
+                            <View style={styles.smartDivBadge}>
+                              <Text style={styles.smartDivBadgeText}>
+                                {dividendAnalysis?.frequencyLabel || `${dividendPreview.freq} ครั้ง/ปี`}
+                              </Text>
                             </View>
                           </View>
 
-                          <View style={styles.divStatsGrid}>
-                            <View style={styles.divStatBox}>
-                              <Text style={styles.divStatLabel}>รอบล่าสุดต่อหุ้น</Text>
-                              <Text style={styles.divStatValue}>
+                          {/* Top Remaining Banner */}
+                          <View style={styles.smartDivBanner}>
+                            {dividendPreview.remainingRounds > 0 ? (
+                              <>
+                                <View style={styles.smartDivBannerRow}>
+                                  <Text style={styles.smartDivBannerLabel}>
+                                    ปันผลปีนี้ (เหลือ {dividendPreview.remainingRounds} รอบ)
+                                  </Text>
+                                  <Text style={styles.smartDivBannerValue}>
+                                    {dividendPreview.currSym}
+                                    {dividendPreview.netRemaining.toLocaleString('th-TH', {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })}
+                                  </Text>
+                                </View>
+                                <Text style={styles.smartDivBannerSub}>
+                                  ยอดก่อนภาษี {dividendPreview.currSym}
+                                  {dividendPreview.grossRemaining.toLocaleString('th-TH', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                  {dividendPreview.taxPct > 0 ? ` • หักภาษี ${dividendPreview.taxPct}%` : ''}
+                                </Text>
+                              </>
+                            ) : (
+                              <View style={styles.smartDivPassedBox}>
+                                <Ionicons name="time-outline" size={13} color="#64748B" />
+                                <Text style={styles.smartDivPassedText}>
+                                  เข้าซื้อหลัง XD ปีนี้ • รอรับรอบถัดไปปีหน้า
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+
+                          {/* Mini Stats Strip */}
+                          <View style={styles.smartDivStatsRow}>
+                            <View style={styles.smartDivStatCol}>
+                              <Text style={styles.smartDivStatLabel}>รับต่อรอบ (สุทธิ)</Text>
+                              <Text style={styles.smartDivStatValue}>
+                                {dividendPreview.currSym}
+                                {dividendPreview.netPerCycle.toLocaleString('th-TH', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </Text>
+                            </View>
+                            <View style={styles.smartDivDivider} />
+                            <View style={styles.smartDivStatCol}>
+                              <Text style={styles.smartDivStatLabel}>
+                                คาดการณ์เต็มปี ({dividendPreview.freq} รอบ)
+                              </Text>
+                              <Text style={[styles.smartDivStatValue, { color: '#059669' }]}>
+                                {dividendPreview.currSym}
+                                {dividendPreview.netAnnual.toLocaleString('th-TH', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      ) : dividendAnalysis && dividendAnalysis.hasDividends ? (
+                        <View style={styles.smartDivCard}>
+                          <View style={styles.smartDivHeader}>
+                            <View style={styles.smartDivHeaderLeft}>
+                              <Ionicons name="analytics-outline" size={14} color="#047857" />
+                              <Text style={styles.smartDivTitle}>วิเคราะห์ปันผลอัตโนมัติ</Text>
+                            </View>
+                            <View style={styles.smartDivBadge}>
+                              <Text style={styles.smartDivBadgeText}>{dividendAnalysis.frequencyLabel}</Text>
+                            </View>
+                          </View>
+                          <View style={styles.smartDivStatsRow}>
+                            <View style={styles.smartDivStatCol}>
+                              <Text style={styles.smartDivStatLabel}>รอบล่าสุดต่อหุ้น</Text>
+                              <Text style={styles.smartDivStatValue}>
                                 {currency === 'USD' ? '$' : '฿'}{dividendAnalysis.latestDpu.toFixed(4)}
                               </Text>
                             </View>
-                            <View style={styles.divStatDivider} />
-                            <View style={styles.divStatBox}>
-                              <Text style={styles.divStatLabel}>คาดการณ์ทั้งปี (Annual)</Text>
-                              <Text style={styles.divStatValueHighlight}>
+                            <View style={styles.smartDivDivider} />
+                            <View style={styles.smartDivStatCol}>
+                              <Text style={styles.smartDivStatLabel}>คาดการณ์ทั้งปี (Annual)</Text>
+                              <Text style={[styles.smartDivStatValue, { color: '#059669' }]}>
                                 {currency === 'USD' ? '$' : '฿'}{dividendAnalysis.annualProjectedDpu.toFixed(4)}
                               </Text>
                             </View>
                           </View>
                         </View>
-                      )}
+                      ) : null}
 
-                      <Text style={styles.label}>เงินปันผลคาดการณ์ต่อหุ้น (DPU ฿)</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={expectedDpu}
-                        onChangeText={setExpectedDpu}
-                        placeholder="0.0000"
-                        placeholderTextColor="#94A3B8"
-                        keyboardType="decimal-pad"
-                      />
-
-                      <Text style={styles.label}>วันขึ้นเครื่องหมาย XD คาดการณ์ (YYYY-MM-DD)</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={xdDate}
-                        onChangeText={setXdDate}
-                        placeholder="YYYY-MM-DD"
-                        placeholderTextColor="#94A3B8"
-                      />
-
-                      {/* Withholding Tax Selector */}
-                      <View style={styles.taxSection}>
-                        <View style={styles.taxHeaderRow}>
-                          <View style={styles.taxHeaderLeft}>
-                            <Ionicons name="receipt-outline" size={16} color="#0F172A" />
-                            <Text style={styles.labelNoMargin}>
-                              ภาษีหัก ณ ที่จ่าย (Withholding Tax)
-                            </Text>
+                      {/* Compact Withholding Tax Bar */}
+                      <View style={styles.taxSectionCompact}>
+                        <View style={styles.taxHeaderRowCompact}>
+                          <View style={styles.taxHeaderLeftCompact}>
+                            <Ionicons name="receipt-outline" size={13} color="#475569" />
+                            <Text style={styles.labelCompact}>ภาษีหัก ณ ที่จ่าย (%)</Text>
                           </View>
-                          <View style={styles.taxCurrentBadge}>
-                            <Text style={styles.taxCurrentBadgeText}>
-                              {parseFloat(taxRatePercent) || 0}%
-                            </Text>
+                          <View style={styles.taxInputInlineWrapper}>
+                            <TextInput
+                              style={styles.taxInputInline}
+                              value={taxRatePercent}
+                              onChangeText={setTaxRatePercent}
+                              placeholder="10"
+                              placeholderTextColor="#94A3B8"
+                              keyboardType="decimal-pad"
+                            />
+                            <Text style={styles.taxPercentSign}>%</Text>
                           </View>
                         </View>
-
-                        {/* Quick Tax Selector Pills */}
-                        <View style={styles.taxPillRow}>
+                        <View style={styles.taxPillRowCompact}>
                           {[
-                            { label: '0% ยกเว้น', value: '0' },
                             { label: '10% หุ้นไทย', value: '10' },
-                            { label: '15% US (W-8BEN)', value: '15' },
-                            { label: '30% ทั่วไป', value: '30' },
+                            { label: '15% US (W-8)', value: '15' },
+                            { label: '0% กองทุน/ยกเว้น', value: '0' },
                           ].map((pill) => (
                             <TouchableOpacity
                               key={pill.value}
                               style={[
-                                styles.taxPill,
-                                taxRatePercent === pill.value && styles.taxPillActive,
+                                styles.taxPillCompact,
+                                taxRatePercent === pill.value && styles.taxPillCompactActive,
                               ]}
                               onPress={() => setTaxRatePercent(pill.value)}
+                              activeOpacity={0.7}
                             >
                               <Text
                                 style={[
-                                  styles.taxPillText,
-                                  taxRatePercent === pill.value && styles.taxPillTextActive,
+                                  styles.taxPillCompactText,
+                                  taxRatePercent === pill.value && styles.taxPillCompactTextActive,
                                 ]}
                               >
                                 {pill.label}
@@ -1211,18 +1503,6 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                             </TouchableOpacity>
                           ))}
                         </View>
-
-                        <TextInput
-                          style={styles.input}
-                          value={taxRatePercent}
-                          onChangeText={setTaxRatePercent}
-                          placeholder="เช่น 10 หรือ 15"
-                          placeholderTextColor="#94A3B8"
-                          keyboardType="decimal-pad"
-                        />
-                        <Text style={styles.taxHintText}>
-                          🇹🇭 หุ้นไทยมาตรฐาน 10% • 🇺🇸 หุ้นสหรัฐฯ มาตรฐาน 15% (อนุสัญญา W-8BEN)
-                        </Text>
                       </View>
                     </View>
                   )}
@@ -1247,8 +1527,195 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
           </TouchableOpacity>
         </ScrollView>
       </View>
-    </KeyboardAvoidingView >
-      </Modal >
+
+      {/* Calendar Picker Modal Overlay */}
+      {isCalendarVisible && (
+        <View style={styles.calendarOverlay}>
+          <TouchableOpacity
+            style={styles.calendarBackdrop}
+            activeOpacity={1}
+            onPress={() => setIsCalendarVisible(false)}
+          />
+          <View style={styles.calendarCard}>
+            {/* Calendar Header */}
+            <View style={styles.calendarHeader}>
+              <View style={styles.calendarHeaderTitleRow}>
+                <Ionicons name="calendar" size={18} color="#059669" />
+                <Text style={styles.calendarHeaderTitle}>
+                  {calendarTarget === 'purchaseDate' ? 'เลือกวันที่เข้าซื้อ' : 'เลือกวัน XD คาดการณ์'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.calendarCloseBtn}
+                onPress={() => setIsCalendarVisible(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick Presets Row */}
+            <View style={styles.calendarPresetRow}>
+              {getCalendarPresets().map((preset) => (
+                <TouchableOpacity
+                  key={preset.label}
+                  style={styles.calendarPresetPill}
+                  onPress={() => handleSelectCalendarDate(preset.value)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.calendarPresetText}>{preset.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Month / Year Navigator */}
+            <View style={styles.calendarNavRow}>
+              <TouchableOpacity
+                style={styles.calendarNavBtn}
+                onPress={prevCalendarMonth}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="chevron-back" size={18} color="#0F172A" />
+              </TouchableOpacity>
+              <Text style={styles.calendarMonthYearText}>
+                {THAI_MONTHS[calendarViewDate.getMonth()]} {calendarViewDate.getFullYear() + 543}
+              </Text>
+              <TouchableOpacity
+                style={styles.calendarNavBtn}
+                onPress={nextCalendarMonth}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="chevron-forward" size={18} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Weekday Header */}
+            <View style={styles.calendarWeekRow}>
+              {['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map((day, idx) => (
+                <View key={day} style={styles.calendarWeekCol}>
+                  <Text
+                    style={[
+                      styles.calendarWeekDayText,
+                      (idx === 0 || idx === 6) && styles.calendarWeekendText,
+                    ]}
+                  >
+                    {day}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Days Grid */}
+            <View style={styles.calendarDaysGrid}>
+              {calendarGridData.map((item, index) => {
+                if (!item) {
+                  return <View key={`empty-${index}`} style={styles.calendarDayCell} />;
+                }
+                const currentVal = calendarTarget === 'purchaseDate' ? purchaseDate : xdDate;
+                const isSelected = item.iso === currentVal;
+                const isToday = item.iso === new Date().toISOString().split('T')[0];
+
+                return (
+                  <TouchableOpacity
+                    key={item.iso}
+                    style={[
+                      styles.calendarDayCell,
+                      isSelected && styles.calendarDaySelected,
+                      isToday && !isSelected && styles.calendarDayToday,
+                    ]}
+                    onPress={() => handleSelectCalendarDate(item.iso)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.calendarDayText,
+                        isSelected && styles.calendarDayTextSelected,
+                        isToday && !isSelected && styles.calendarDayTextToday,
+                      ]}
+                    >
+                      {item.day}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Sector / Segment Picker Modal Overlay */}
+      {isSectorPickerVisible && (
+        <View style={styles.sectorModalOverlay}>
+          <TouchableOpacity
+            style={styles.sectorModalBackdrop}
+            activeOpacity={1}
+            onPress={() => setIsSectorPickerVisible(false)}
+          />
+          <View style={styles.sectorModalCard}>
+            {/* Header */}
+            <View style={styles.sectorModalHeader}>
+              <View style={styles.sectorModalTitleRow}>
+                <Ionicons name="apps-outline" size={18} color="#2563EB" />
+                <Text style={styles.sectorModalTitle}>
+                  {assetType === 'FUNDS' ? 'เลือกประเภทกองทุน' : 'เลือกกลุ่มอุตสาหกรรม (Segment)'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.sectorModalCloseBtn}
+                onPress={() => setIsSectorPickerVisible(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Sector Options List */}
+            <ScrollView style={styles.sectorListScroll} showsVerticalScrollIndicator={false}>
+              {getSectorsForType(assetType).map((sec) => {
+                const isSelected = selectedSector === sec.id;
+                return (
+                  <TouchableOpacity
+                    key={sec.id}
+                    style={[
+                      styles.sectorOptionItem,
+                      isSelected && styles.sectorOptionItemSelected,
+                    ]}
+                    onPress={() => {
+                      setSelectedSector(sec.id);
+                      setIsSectorPickerVisible(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.sectorOptionLeft}>
+                      <View
+                        style={[
+                          styles.sectorOptionIconBox,
+                          { backgroundColor: sec.color + '18' },
+                        ]}
+                      >
+                        <Ionicons name={sec.icon as any} size={16} color={sec.color} />
+                      </View>
+                      <Text
+                        style={[
+                          styles.sectorOptionLabel,
+                          isSelected && { color: sec.color, fontWeight: '700' },
+                        ]}
+                      >
+                        {sec.label}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <Ionicons name="checkmark-circle" size={19} color={sec.color} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      )}
+    </KeyboardAvoidingView>
+      </Modal>
     </>
   );
 };
@@ -1422,6 +1889,31 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 50,
   },
+  symbolSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 48,
+    marginBottom: 16,
+  },
+  symbolSearchIcon: {
+    marginRight: 8,
+  },
+  symbolSearchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#0F172A',
+    paddingVertical: 0,
+    height: '100%',
+  },
+  symbolClearBtn: {
+    padding: 4,
+    marginLeft: 6,
+  },
   suggestionsContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -1547,17 +2039,18 @@ const styles = StyleSheet.create({
     marginTop: 6,
     gap: 8,
   },
-  detectedSectorBadge: {
+  detectedSectorBadgeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 8,
+    borderWidth: 1,
     flexShrink: 1,
   },
   detectedSectorBadgeText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
     flexShrink: 1,
   },
@@ -2049,6 +2542,441 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#3B82F6',
     lineHeight: 16,
+  },
+  labelRowCompact: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  labelCompact: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 4,
+  },
+  dateHintMini: {
+    fontSize: 10.5,
+    color: '#059669',
+    fontWeight: '600',
+  },
+  datePickerInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    height: 42,
+  },
+  datePickerInputField: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
+    paddingVertical: 0,
+  },
+  datePickerIconButton: {
+    padding: 4,
+    marginLeft: 4,
+  },
+  dpuSectionCompact: {
+    marginTop: 4,
+  },
+  smartDivCard: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    padding: 10,
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  smartDivHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  smartDivHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  smartDivTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#065F46',
+  },
+  smartDivBadge: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  smartDivBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  smartDivBanner: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    marginBottom: 6,
+  },
+  smartDivBannerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  smartDivBannerLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#047857',
+  },
+  smartDivBannerValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#047857',
+  },
+  smartDivBannerSub: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  smartDivPassedBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 2,
+  },
+  smartDivPassedText: {
+    fontSize: 10.5,
+    color: '#64748B',
+  },
+  smartDivStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  smartDivStatCol: {
+    flex: 1,
+  },
+  smartDivStatLabel: {
+    fontSize: 9.5,
+    color: '#64748B',
+    marginBottom: 1,
+  },
+  smartDivStatValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  smartDivDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: '#CBD5E1',
+    marginHorizontal: 8,
+  },
+  taxSectionCompact: {
+    marginTop: 6,
+    marginBottom: 4,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  taxHeaderRowCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  taxHeaderLeftCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  taxInputInlineWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  taxInputInline: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    width: 32,
+    textAlign: 'center',
+    paddingVertical: 0,
+  },
+  taxPercentSign: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  taxPillRowCompact: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  taxPillCompact: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 5,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  taxPillCompactActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  taxPillCompactText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  taxPillCompactTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  calendarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  calendarBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  calendarCard: {
+    width: '92%',
+    maxWidth: 350,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  calendarHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  calendarHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  calendarCloseBtn: {
+    padding: 4,
+  },
+  calendarPresetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  calendarPresetPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  calendarPresetText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  calendarNavRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    marginBottom: 10,
+  },
+  calendarMonthYearText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  calendarNavBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  calendarWeekRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  calendarWeekCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  calendarWeekDayText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  calendarWeekendText: {
+    color: '#EF4444',
+  },
+  calendarDaysGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarDayCell: {
+    width: '14.28%',
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 1,
+    borderRadius: 18,
+  },
+  calendarDaySelected: {
+    backgroundColor: '#059669',
+  },
+  calendarDayToday: {
+    borderWidth: 1.5,
+    borderColor: '#059669',
+  },
+  calendarDayText: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    color: '#0F172A',
+  },
+  calendarDayTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  calendarDayTextToday: {
+    color: '#059669',
+    fontWeight: '700',
+  },
+  sectorModalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  sectorModalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  sectorModalCard: {
+    width: '90%',
+    maxWidth: 360,
+    maxHeight: '75%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  sectorModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  sectorModalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sectorModalTitle: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  sectorModalCloseBtn: {
+    padding: 4,
+  },
+  sectorListScroll: {
+    maxHeight: 380,
+  },
+  sectorOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginBottom: 4,
+  },
+  sectorOptionItemSelected: {
+    backgroundColor: '#F8FAFC',
+  },
+  sectorOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  sectorOptionIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sectorOptionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+    flexShrink: 1,
   },
 });
 

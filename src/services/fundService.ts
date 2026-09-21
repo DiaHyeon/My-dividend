@@ -375,16 +375,34 @@ export async function searchThaiFunds(query: string): Promise<FundSuggestion[]> 
   const clean = query.trim().toUpperCase();
   if (!clean) return POPULAR_THAI_FUNDS.slice(0, 8);
 
-  // 1. Immediate local matching from popular catalog
-  const localMatches = POPULAR_THAI_FUNDS.filter(
-    (f) =>
-      f.symbol.toUpperCase().includes(clean) ||
-      f.name.toUpperCase().includes(clean) ||
-      f.amc.toUpperCase().includes(clean) ||
-      f.exchange.toUpperCase().includes(clean)
+  // 1. Priority 1: Fund ticker symbol starts with query (e.g. typing 'K' -> K-VALUE, K-SELECT, K-CHINA)
+  const startsWithSymbol = POPULAR_THAI_FUNDS.filter((f) =>
+    f.symbol.toUpperCase().startsWith(clean)
   );
 
-  return localMatches;
+  // Sort startsWith: exact match first, then shorter symbol length, then alphabetical
+  startsWithSymbol.sort((a, b) => {
+    const aSym = a.symbol.toUpperCase();
+    const bSym = b.symbol.toUpperCase();
+    if (aSym === clean) return -1;
+    if (bSym === clean) return 1;
+    if (aSym.length !== bSym.length) return aSym.length - bSym.length;
+    return aSym.localeCompare(bSym);
+  });
+
+  // 2. Priority 2: Matches in AMC or fund name (only if query is Thai or length >= 3)
+  const isThaiScript = /[\u0E00-\u0E7F]/.test(clean);
+  const otherMatches = POPULAR_THAI_FUNDS.filter(
+    (f) =>
+      !f.symbol.toUpperCase().startsWith(clean) &&
+      (clean.length >= 3 || isThaiScript) &&
+      (f.symbol.toUpperCase().includes(clean) ||
+        f.name.toUpperCase().includes(clean) ||
+        f.amc.toUpperCase().includes(clean) ||
+        f.exchange.toUpperCase().includes(clean))
+  );
+
+  return [...startsWithSymbol, ...otherMatches].slice(0, 8);
 }
 
 /**

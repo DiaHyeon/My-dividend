@@ -143,8 +143,10 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
   };
 
   const isUS = useMemo(
-    () => item.asset_type === 'STOCKS' && isKnownUSSymbol(item.symbol),
-    [item.symbol, item.asset_type]
+    () =>
+      item.asset_type === 'STOCKS' &&
+      (isKnownUSSymbol(item.symbol) || Math.abs(Number(item.tax_rate) - 0.15) < 0.005),
+    [item.symbol, item.asset_type, item.tax_rate]
   );
   const isCash = item.asset_type === 'CASH';
   const isFund = item.asset_type === 'FUNDS';
@@ -294,7 +296,7 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
         </View>
       </View>
 
-      {/* 3. Contextual Details Strip (ข้อมูลเสริมที่มีประโยชน์สำหรับนักลงทุน) */}
+      {/* 3. Contextual Details Strip (ข้อมูลเสริม: จำนวนที่ถือ | ต้นทุน | ราคาตลาด ตามสกุลเงินจริง) */}
       <View style={styles.metaRow}>
         <View style={styles.metaItem}>
           <Text style={styles.metaLabel}>จำนวนที่ถือ</Text>
@@ -309,24 +311,36 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
 
         <View style={styles.metaDivider} />
 
+        {/* ช่องแรก: ต้นทุน (Cost) */}
         <View style={styles.metaItem}>
           <Text style={styles.metaLabel}>
-            {isFund ? 'NAV / ทุน' : isCash ? 'รอบดอกเบี้ย' : 'ราคาตลาด / ทุน'}
+            {isFund ? 'NAV ทุน' : isCash ? 'รอบดอกเบี้ย' : 'ต้นทุน'}
           </Text>
           <Text style={styles.metaValue} numberOfLines={1}>
             {isCash
               ? 'เงินฝากดิจิทัล/ประจำ'
-              : `฿${currentPriceTHB.toFixed(2)} / ฿${costPriceTHB.toFixed(2)}`}
+              : isUS
+              ? `$${costPriceUSD.toFixed(2)}`
+              : isFund
+              ? `฿${costPriceTHB.toFixed(4)}`
+              : `฿${costPriceTHB.toFixed(2)}`}
           </Text>
         </View>
 
-        {isUS && (
+        {/* ช่องต่อไป: ราคาตลาด (Market Price) */}
+        {!isCash && (
           <>
             <View style={styles.metaDivider} />
             <View style={styles.metaItem}>
-              <Text style={styles.metaLabel}>ราคา USD</Text>
+              <Text style={styles.metaLabel}>
+                {isFund ? 'NAV ตลาด' : 'ราคาตลาด'}
+              </Text>
               <Text style={styles.metaValue} numberOfLines={1}>
-                ${currentPriceUSD.toFixed(2)} (${costPriceUSD.toFixed(2)})
+                {isUS
+                  ? `$${currentPriceUSD.toFixed(2)}`
+                  : isFund
+                  ? `฿${currentPriceTHB.toFixed(4)}`
+                  : `฿${currentPriceTHB.toFixed(2)}`}
               </Text>
             </View>
           </>

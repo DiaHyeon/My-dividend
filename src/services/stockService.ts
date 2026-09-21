@@ -73,13 +73,24 @@ export async function searchStocks(query: string): Promise<StockSuggestion[]> {
   const cleanQuery = query.trim().toUpperCase();
   if (!cleanQuery) return [];
 
-  // 1. Immediate local matching
-  const localMatches = POPULAR_STOCKS.filter(
-    (item) =>
-      item.symbol.startsWith(cleanQuery) ||
-      item.symbol.includes(cleanQuery) ||
-      item.name.toUpperCase().includes(cleanQuery)
+  // 1. Immediate local matching:
+  // Priority 1: Symbol starts with cleanQuery (e.g. typing 'A' -> AAPL, ADVANC, AOT, AMD, AMZN)
+  const startsWithLocal = POPULAR_STOCKS.filter((item) =>
+    item.symbol.toUpperCase().startsWith(cleanQuery)
   );
+
+  // Priority 2: Only if query has at least 3 characters, allow substring in symbol or name
+  const containsLocal =
+    cleanQuery.length >= 3
+      ? POPULAR_STOCKS.filter(
+          (item) =>
+            !item.symbol.toUpperCase().startsWith(cleanQuery) &&
+            (item.symbol.toUpperCase().includes(cleanQuery) ||
+              item.name.toUpperCase().includes(cleanQuery))
+        )
+      : [];
+
+  const localMatches = [...startsWithLocal, ...containsLocal];
 
   // 2. Fetch live suggestions from Supabase Edge Function (CORS-friendly on web & mobile)
   let liveMatches: StockSuggestion[] = [];
@@ -147,17 +158,37 @@ export async function searchStocks(query: string): Promise<StockSuggestion[]> {
     }
   }
 
-  // Merge and deduplicate by rawSymbol
+  // 3. Deduplicate and separate into Priority Tiers:
+  // Tier 1: symbol starts with cleanQuery
+  // Tier 2: symbol or name contains cleanQuery (only if cleanQuery length >= 3)
   const seen = new Set<string>();
-  const combined: StockSuggestion[] = [];
+  const tier1StartsWith: StockSuggestion[] = [];
+  const tier2Contains: StockSuggestion[] = [];
 
   for (const item of [...localMatches, ...liveMatches]) {
     if (!seen.has(item.rawSymbol)) {
       seen.add(item.rawSymbol);
-      combined.push(item);
+      if (item.symbol.toUpperCase().startsWith(cleanQuery)) {
+        tier1StartsWith.push(item);
+      } else if (cleanQuery.length >= 3) {
+        tier2Contains.push(item);
+      }
     }
   }
 
+  // Sort Tier 1: exact match first, then shorter symbol length, then alphabetical
+  tier1StartsWith.sort((a, b) => {
+    const aSym = a.symbol.toUpperCase();
+    const bSym = b.symbol.toUpperCase();
+    if (aSym === cleanQuery) return -1;
+    if (bSym === cleanQuery) return 1;
+    if (aSym.length !== bSym.length) {
+      return aSym.length - bSym.length;
+    }
+    return aSym.localeCompare(bSym);
+  });
+
+  const combined = [...tier1StartsWith, ...tier2Contains];
   return combined.slice(0, 6);
 }
 

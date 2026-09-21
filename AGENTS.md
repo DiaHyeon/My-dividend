@@ -16,8 +16,9 @@ Read BRIEF.md before doing anything. It is the single source of truth and contai
 - Charts from `react-native-gifted-charts` require `expo-linear-gradient` and `react-native-svg`.
 - For Thai mutual funds (`FUNDS`), use SEC Open API (`fundService.ts`), denominate strictly in THB (no USD toggle), and preserve exact symbol matching.
 - For position accumulation and buy DCA, maintain unique holdings by `(symbol, asset_type)` via `assetConsolidationService.ts` and record multi-buy details in `transactions`.
-- For Portfolio Performance and Benchmark comparisons, use `benchmarkService.ts` and always calculate dynamic scale bounds (`maxValue`, `stepValue`, `noOfSections`, `mostNegativeValue`, `overflowTop`) across both primary and secondary datasets to prevent graph overflow.
+- For Portfolio Performance and Benchmark comparisons, use `benchmarkService.ts` and always calculate dynamic scale bounds (`maxValue`, `stepValue`, `noOfSections`, `mostNegativeValue`, `overflowTop`) across both primary and secondary datasets with balanced ~10-15% headroom to prevent graph overflow while avoiding excessive empty space above curves.
 - For minimal dropdowns and filter selectors, use unified bottom sheet modal pickers with checkmarks for seamless mobile and web UX.
+- For Add Asset Modal, maintain a compact minimal 2-column layout with built-in pure React Native CalendarPickerModal for dates, automated smart segment badge with modal override, and inline search clear button (`close-circle`) for fast form reset.
 - For monthly passive income goals and presets, use `GoalSettingsModal.tsx` and AsyncStorage key `@mydividend_monthly_goal`.
 - For Privacy Mode, format monetary values with masking (`฿••••••`) while keeping percentage and Yield on Cost ratios visible. Place the frameless eye toggle directly beside the net worth label in the Hero Card, and rely on pull-to-refresh without separate refresh buttons to maintain a clean, distraction-free interface.
 - For Upcoming Payday Radar, calculate schedule differences within 14 days and sort chronologically with clear days-remaining countdowns.
