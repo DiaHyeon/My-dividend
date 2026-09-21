@@ -22,6 +22,7 @@ import { getAllAssetCurrencies, getCachedExchangeRate, isKnownUSSymbol } from '.
 import { calculateScheduleCashPayout } from '../services/taxService';
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
 import { usePrivacyMode } from '../services/privacyService';
+import { ensureAuthenticated } from '../services/authService';
 
 const MONTH_NAMES = [
   'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
@@ -35,6 +36,7 @@ interface MonthlyPayoutItem {
   details: {
     symbol: string;
     dpu: number;
+    currency?: 'THB' | 'USD';
     shares: number;
     netAmount: number;
     xdDate: string;
@@ -93,16 +95,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return false;
   }, [currencyMap]);
 
-  const ensureAuthenticated = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      await supabase.auth.signInWithPassword({
-        email: 'demo@mydividend.app',
-        password: 'Password123!',
-      });
-    }
-  };
-
   const loadData = useCallback(async () => {
     try {
       await ensureAuthenticated();
@@ -116,34 +108,44 @@ export const Dashboard: React.FC<DashboardProps> = ({
         .select('*')
         .order('created_at', { ascending: false });
 
+      const loadedAssets = (summaryData as AssetSummary[]) || [];
       if (summaryError) {
         console.warn('Error fetching view_asset_summary:', summaryError.message);
       } else {
-        setAssets((summaryData as AssetSummary[]) || []);
+        setAssets(loadedAssets);
       }
 
-      // 2. Fetch all transactions for XD cutoff calculations
-      const { data: txData, error: txError } = await supabase
-        .from('transactions')
-        .select('*')
-        .order('transaction_date', { ascending: true });
+      const activeAssetIds = loadedAssets.map((a) => a.id).filter(Boolean);
 
-      if (txError) {
-        console.warn('Error fetching transactions:', txError.message);
+      if (activeAssetIds.length > 0) {
+        // 2. Fetch transactions only for active assets with essential columns for XD cutoff calculations
+        const { data: txData, error: txError } = await supabase
+          .from('transactions')
+          .select('id, asset_id, type, shares, price_per_share, transaction_date')
+          .in('asset_id', activeAssetIds)
+          .order('transaction_date', { ascending: true });
+
+        if (txError) {
+          console.warn('Error fetching transactions:', txError.message);
+        } else {
+          setTransactions((txData as Transaction[]) || []);
+        }
+
+        // 3. Fetch dividend schedules only for active assets
+        const { data: divData, error: divError } = await supabase
+          .from('dividend_schedules')
+          .select('id, asset_id, dpu, xd_date, payment_date, is_projected')
+          .in('asset_id', activeAssetIds)
+          .order('xd_date', { ascending: true });
+
+        if (divError) {
+          console.warn('Error fetching dividend_schedules:', divError.message);
+        } else {
+          setDividendSchedules((divData as DividendSchedule[]) || []);
+        }
       } else {
-        setTransactions((txData as Transaction[]) || []);
-      }
-
-      // 3. Fetch dividend schedules
-      const { data: divData, error: divError } = await supabase
-        .from('dividend_schedules')
-        .select('*')
-        .order('xd_date', { ascending: true });
-
-      if (divError) {
-        console.warn('Error fetching dividend_schedules:', divError.message);
-      } else {
-        setDividendSchedules((divData as DividendSchedule[]) || []);
+        setTransactions([]);
+        setDividendSchedules([]);
       }
 
       // 4. Fetch live exchange rate and local currency settings
@@ -298,6 +300,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     if (!parentAsset) return;
 
     const isCashAsset = parentAsset.asset_type === 'CASH';
+    const isUS = isUSStock(parentAsset);
 
     // Strict XD Cutoff: only count buy/sell transactions occurring on or before xd_date
     const eligibleTxs = transactions.filter(
@@ -312,7 +315,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     const taxRate = parentAsset.tax_rate !== undefined && parentAsset.tax_rate !== null
       ? Number(parentAsset.tax_rate)
-      : (isCashAsset ? 0 : 0.1000);
+      : (isCashAsset ? 0 : isUS ? 0.1500 : 0.1000);
     const dpu = Number(schedule.dpu) || 0;
 
     let netDividend = 0;
@@ -355,7 +358,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
       isPartialCycle = hasPartial;
       daysInfo = hasPartial ? partialLabel : 'เต็มงวด';
     } else {
-      netDividend = eligibleShares * dpu * (1 - taxRate);
+      // Live Floating FX for foreign assets: convert native DPU to current THB
+      const effectiveRate = isUS && exchangeRate > 0 ? exchangeRate : 1.0;
+      netDividend = eligibleShares * dpu * effectiveRate * (1 - taxRate);
     }
 
     if (netDividend <= 0) return;
@@ -379,6 +384,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       monthlyForecasts[targetMonth].details.push({
         symbol: parentAsset.symbol,
         dpu,
+        currency: isCashAsset ? 'THB' : isUS ? 'USD' : 'THB',
         shares: eligibleShares,
         netAmount: netDividend,
         xdDate: schedule.xd_date,
@@ -807,6 +813,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         <Text style={styles.detailInfo}>
                           {d.isInterest
                             ? `ยอดเงินฝาก ${formatMoney(d.shares, 0)} • จ่ายเข้า ${d.xdDate}`
+                            : d.currency === 'USD'
+                            ? `${d.shares.toLocaleString()} หุ้น × $${d.dpu.toFixed(4)} (~฿${(d.dpu * (exchangeRate || 34.0)).toFixed(2)}) (XD: ${d.xdDate})`
                             : `${d.shares.toLocaleString()} หุ้น × ฿${d.dpu.toFixed(4)} (XD: ${d.xdDate})`}
                         </Text>
                       </View>

@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { AssetSummary, AssetType, Transaction, TransactionType } from '../types/database';
 import { EditAssetModal } from '../components/EditAssetModal';
+import { EditTransactionModal } from '../components/EditTransactionModal';
 import { AddAssetModal } from '../components/AddAssetModal';
 import { ImportCsvModal } from '../components/ImportCsvModal';
 import { AssetSparklineCard } from '../components/AssetSparklineCard';
@@ -27,6 +28,7 @@ import { isKnownUSSymbol, getCachedExchangeRate } from '../services/currencyServ
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
 import { exportPortfolioToCsv } from '../services/csvService';
 import { usePrivacyMode } from '../services/privacyService';
+import { ensureAuthenticated } from '../services/authService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -87,6 +89,8 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
   // Modals
   const [selectedAssetForEdit, setSelectedAssetForEdit] = useState<AssetSummary | null>(null);
   const [isEditModalVisible, setIsEditModalVisible] = useState<boolean>(false);
+  const [selectedTransactionForEdit, setSelectedTransactionForEdit] = useState<EnrichedTransaction | null>(null);
+  const [isEditTxModalVisible, setIsEditTxModalVisible] = useState<boolean>(false);
   const [isImportModalVisible, setIsImportModalVisible] = useState<boolean>(false);
   const [exchangeRate, setExchangeRate] = useState<number>(34.00);
   const { isPrivate: isPrivateMode, toggle: togglePrivateMode } = usePrivacyMode();
@@ -123,6 +127,8 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
     try {
       setLoading(true);
 
+      await ensureAuthenticated();
+
       // 0. Auto-consolidate any duplicate assets if present
       await consolidateDuplicateAssets();
 
@@ -132,22 +138,30 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
         .select('*')
         .order('symbol', { ascending: true });
 
+      const loadedAssets = (summaryData as AssetSummary[]) || [];
       if (summaryError) {
         console.warn('AssetsScreen fetch assets error:', summaryError.message);
       } else {
-        setAssets((summaryData as AssetSummary[]) || []);
+        setAssets(loadedAssets);
       }
 
-      // 2. Fetch Transactions
-      const { data: txData, error: txError } = await supabase
-        .from('transactions')
-        .select('*')
-        .order('transaction_date', { ascending: false });
+      const activeAssetIds = loadedAssets.map((a) => a.id).filter(Boolean);
 
-      if (txError) {
-        console.warn('AssetsScreen fetch transactions error:', txError.message);
+      // 2. Fetch Transactions (scoped to active assets if any exist)
+      if (activeAssetIds.length > 0) {
+        const { data: txData, error: txError } = await supabase
+          .from('transactions')
+          .select('*')
+          .in('asset_id', activeAssetIds)
+          .order('transaction_date', { ascending: false });
+
+        if (txError) {
+          console.warn('AssetsScreen fetch transactions error:', txError.message);
+        } else {
+          setTransactions((txData as Transaction[]) || []);
+        }
       } else {
-        setTransactions((txData as Transaction[]) || []);
+        setTransactions([]);
       }
 
       // 3. Exchange Rate
@@ -683,35 +697,40 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                 const isDeposit = tx.asset_type === 'CASH';
 
                 return (
-                  <View key={tx.id} style={styles.txCard}>
+                  <TouchableOpacity
+                    key={tx.id}
+                    style={styles.txCard}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setSelectedTransactionForEdit(tx);
+                      setIsEditTxModalVisible(true);
+                    }}
+                  >
                     <View style={styles.txHeader}>
                       <View style={styles.txDateRow}>
                         <Ionicons name="calendar-outline" size={14} color="#64748B" />
                         <Text style={styles.txDateText}>{formatThaiDate(tx.transaction_date)}</Text>
                       </View>
 
-                      <View
-                        style={[
-                          styles.actionBadge,
-                          isDeposit
-                            ? styles.depositBadge
-                            : tx.type === 'BUY'
-                            ? styles.buyBadge
-                            : styles.sellBadge,
-                        ]}
-                      >
-                        <Text
+                      <View style={styles.txHeaderRight}>
+                        <View
                           style={[
-                            styles.actionBadgeText,
-                            isDeposit
-                              ? styles.depositBadgeText
-                              : tx.type === 'BUY'
-                              ? styles.buyBadgeText
-                              : styles.sellBadgeText,
+                            styles.actionBadge,
+                            isDeposit ? styles.depositBadge : styles.buyBadge,
                           ]}
                         >
-                          {isDeposit ? 'ฝากเงิน' : tx.type === 'BUY' ? 'ซื้อ (BUY)' : 'ขาย (SELL)'}
-                        </Text>
+                          <Text
+                            style={[
+                              styles.actionBadgeText,
+                              isDeposit ? styles.depositBadgeText : styles.buyBadgeText,
+                            ]}
+                          >
+                            {isDeposit ? 'ฝากเงิน (DEPOSIT)' : 'ซื้อ (BUY)'}
+                          </Text>
+                        </View>
+                        <View style={styles.editTxIconBox}>
+                          <Ionicons name="pencil" size={11} color="#64748B" />
+                        </View>
                       </View>
                     </View>
 
@@ -746,7 +765,7 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                         {isUS && <Text style={styles.txAmountSub}>{isPrivateMode ? '$••••••' : `$${totalUSD.toFixed(2)}`}</Text>}
                       </View>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })
             )}
@@ -955,13 +974,25 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
         </TouchableOpacity>
       </Modal>
 
-      {/* Edit Modal */}
+      {/* Edit Asset Modal */}
       <EditAssetModal
         visible={isEditModalVisible}
         asset={selectedAssetForEdit}
         onClose={() => {
           setIsEditModalVisible(false);
           setSelectedAssetForEdit(null);
+        }}
+        onSuccess={loadData}
+      />
+
+      {/* Edit Individual Transaction Modal */}
+      <EditTransactionModal
+        visible={isEditTxModalVisible}
+        transaction={selectedTransactionForEdit}
+        exchangeRate={exchangeRate}
+        onClose={() => {
+          setIsEditTxModalVisible(false);
+          setSelectedTransactionForEdit(null);
         }}
         onSuccess={loadData}
       />
@@ -1641,6 +1672,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
     paddingBottom: 6,
+  },
+  txHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  editTxIconBox: {
+    backgroundColor: '#F1F5F9',
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   txDateRow: {
     flexDirection: 'row',

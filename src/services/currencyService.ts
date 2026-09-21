@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../lib/supabase';
 import { AssetType } from '../types/database';
 import { fetchExchangeRate } from './stockService';
 
@@ -78,9 +79,11 @@ export async function getAssetCurrency(
   assetId: string,
   symbol: string,
   taxRate?: number,
-  assetType?: AssetType
+  assetType?: AssetType,
+  dbCurrency?: 'THB' | 'USD'
 ): Promise<'THB' | 'USD'> {
   if (assetType === 'CASH') return 'THB';
+  if (dbCurrency) return dbCurrency;
 
   try {
     const raw = await AsyncStorage.getItem(ASSET_CURRENCY_STORAGE_KEY);
@@ -99,7 +102,7 @@ export async function getAssetCurrency(
 }
 
 /**
- * Saves the selected currency of an asset into local storage.
+ * Saves the selected currency of an asset into local storage and database.
  */
 export async function setAssetCurrency(
   assetId: string,
@@ -110,6 +113,17 @@ export async function setAssetCurrency(
     const map: Record<string, 'THB' | 'USD'> = raw ? JSON.parse(raw) : {};
     map[assetId] = currency;
     await AsyncStorage.setItem(ASSET_CURRENCY_STORAGE_KEY, JSON.stringify(map));
+
+    if (assetId) {
+      try {
+        await supabase
+          .from('assets')
+          .update({ currency } as any)
+          .eq('id', assetId);
+      } catch {
+        // Silently fallback if remote column not yet migrated
+      }
+    }
   } catch (err: any) {
     console.warn('Error saving asset currency:', err.message);
   }

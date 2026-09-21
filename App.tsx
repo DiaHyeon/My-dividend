@@ -1,6 +1,6 @@
-import React, { Component, ReactNode, useState } from 'react';
+import React, { Component, ReactNode, useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, LogBox } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, LogBox, BackHandler } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Dashboard } from './src/screens/Dashboard';
@@ -101,6 +101,20 @@ function MainNavigator() {
   const handleNavigateToDashboard = () => {
     setCurrentTab('DASHBOARD');
   };
+
+  // ดักจับปุ่ม Back บน Android เพื่อย้อนกลับไปแท็บ Overview ก่อนปิดแอป
+  useEffect(() => {
+    const onBackPress = () => {
+      if (currentTab !== 'DASHBOARD') {
+        setCurrentTab('DASHBOARD');
+        return true;
+      }
+      return false;
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [currentTab]);
 
   return (
     <View style={styles.container}>

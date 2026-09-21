@@ -22,6 +22,8 @@ import { getSectorsForType, getAssetSector, setAssetSector, detectSector, getSec
 import { evaluateCashTax, calculateAnnualGrossInterest } from '../services/taxService';
 import { getAssetCurrency, setAssetCurrency, getCachedExchangeRate } from '../services/currencyService';
 import { CashAssetForm } from './CashAssetForm';
+import { CalendarPickerModal } from './CalendarPickerModal';
+import { SectorPickerModal } from './SectorPickerModal';
 
 interface EditAssetModalProps {
   visible: boolean;
@@ -50,8 +52,10 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
   const [taxRatePercent, setTaxRatePercent] = useState('10');
   const [expectedDpu, setExpectedDpu] = useState('');
   const [xdDate, setXdDate] = useState('');
+  const [isCalendarVisible, setIsCalendarVisible] = useState(false);
   const [existingScheduleId, setExistingScheduleId] = useState<string | null>(null);
   const [selectedSector, setSelectedSector] = useState<string>('Technology');
+  const [isSectorPickerVisible, setIsSectorPickerVisible] = useState(false);
   const [interestRate, setInterestRate] = useState<string>('1.5');
   const [interestFrequency, setInterestFrequency] = useState<'MONTHLY' | 'SEMI_ANNUAL' | 'ANNUAL'>('MONTHLY');
   const [isAutoCashTax, setIsAutoCashTax] = useState(true);
@@ -131,11 +135,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
 
         if (!error && divData && divData.length > 0) {
           const rawDpu = divData[0].dpu ? Number(divData[0].dpu) : 0;
-          if (detectedCurr === 'USD' && rate > 0) {
-            setExpectedDpu((rawDpu / rate).toFixed(4));
-          } else {
-            setExpectedDpu(rawDpu.toString());
-          }
+          setExpectedDpu(rawDpu.toString());
           setXdDate(divData[0].xd_date || '');
           setExistingScheduleId(divData[0].id);
 
@@ -317,18 +317,40 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
         .order('created_at', { ascending: true });
 
       if (!txFetchError && existingTxs && existingTxs.length > 0) {
-        // Update the primary buy transaction
-        const primaryTx = existingTxs[0];
-        const { error: txUpdateError } = await supabase
-          .from('transactions')
-          .update({
-            shares: Number(parsedShares.toFixed(4)),
-            price_per_share: Number(convertedCostPrice.toFixed(4)),
-          })
-          .eq('id', primaryTx.id);
+        if (existingTxs.length === 1) {
+          // Single transaction: update directly
+          const primaryTx = existingTxs[0];
+          const { error: txUpdateError } = await supabase
+            .from('transactions')
+            .update({
+              shares: Number(parsedShares.toFixed(4)),
+              price_per_share: Number(convertedCostPrice.toFixed(4)),
+            })
+            .eq('id', primaryTx.id);
 
-        if (txUpdateError) {
-          console.warn('Transaction update error:', txUpdateError.message);
+          if (txUpdateError) {
+            console.warn('Transaction update error:', txUpdateError.message);
+          }
+        } else {
+          // Multiple DCA transactions: consolidate cleanly into single record with new total and cost
+          const primaryTx = existingTxs[0];
+          const otherTxIds = existingTxs.slice(1).map((t) => t.id);
+
+          if (otherTxIds.length > 0) {
+            await supabase.from('transactions').delete().in('id', otherTxIds);
+          }
+
+          const { error: txUpdateError } = await supabase
+            .from('transactions')
+            .update({
+              shares: Number(parsedShares.toFixed(4)),
+              price_per_share: Number(convertedCostPrice.toFixed(4)),
+            })
+            .eq('id', primaryTx.id);
+
+          if (txUpdateError) {
+            console.warn('Transaction consolidate error:', txUpdateError.message);
+          }
         }
       } else {
         // If no existing transaction, insert one
@@ -350,14 +372,14 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
           await supabase
             .from('dividend_schedules')
             .update({
-              dpu: Number(convertedDpu.toFixed(4)),
+              dpu: Number(parsedDpu.toFixed(4)),
               xd_date: targetXdDate,
             })
             .eq('id', existingScheduleId);
         } else if (parsedDpu > 0) {
           await supabase.from('dividend_schedules').insert({
             asset_id: asset.id,
-            dpu: Number(convertedDpu.toFixed(4)),
+            dpu: Number(parsedDpu.toFixed(4)),
             xd_date: targetXdDate,
             is_projected: true,
           });
@@ -585,7 +607,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                     {assetType === 'FUNDS' ? 'ประเภทกองทุน' : 'กลุ่มอุตสาหกรรม (Segment)'}
                   </Text>
                   {selectedSector ? (
-                    <View
+                    <TouchableOpacity
                       style={[
                         styles.detectedSectorBadge,
                         {
@@ -593,6 +615,8 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                             getSectorDefinition(selectedSector, assetType).color + '1A',
                         },
                       ]}
+                      onPress={() => setIsSectorPickerVisible(true)}
+                      activeOpacity={0.7}
                     >
                       <Ionicons
                         name={getSectorDefinition(selectedSector, assetType).icon as any}
@@ -608,7 +632,12 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                       >
                         {getSectorDefinition(selectedSector, assetType).label}
                       </Text>
-                    </View>
+                      <Ionicons
+                        name="chevron-down"
+                        size={12}
+                        color={getSectorDefinition(selectedSector, assetType).color}
+                      />
+                    </TouchableOpacity>
                   ) : null}
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectorChipsScroll}>
@@ -662,22 +691,35 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                       <View style={styles.usdExchangeBox}>
                         <View style={styles.usdExchangeHeader}>
                           <Ionicons name="swap-horizontal" size={16} color="#2563EB" />
-                          <Text style={styles.usdExchangeTitle}>
-                            อัตราแลกเปลี่ยน (1 USD = {exchangeRate.toFixed(2)} บาท)
-                          </Text>
-                          {isFetchingRate ? (
-                            <ActivityIndicator size="small" color="#2563EB" />
-                          ) : (
-                            <TouchableOpacity onPress={refreshExchangeRate} hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}>
-                              <Text style={styles.fetchRateBtnText}>รีเฟรชเรท</Text>
-                            </TouchableOpacity>
-                          )}
+                          <Text style={styles.usdExchangeTitle}>อัตราแลกเปลี่ยน (1 USD = กี่บาท)</Text>
+                          {isFetchingRate && <ActivityIndicator size="small" color="#2563EB" />}
+                        </View>
+                        <View style={styles.usdExchangeInputRow}>
+                          <TextInput
+                            style={styles.usdExchangeInput}
+                            value={exchangeRate > 0 ? exchangeRate.toString() : ''}
+                            onChangeText={(val) => {
+                              const parsed = parseFloat(val);
+                              setExchangeRate(!isNaN(parsed) && parsed > 0 ? parsed : 0);
+                            }}
+                            keyboardType="decimal-pad"
+                            placeholder="34.00"
+                            placeholderTextColor="#94A3B8"
+                          />
+                          <TouchableOpacity
+                            style={styles.fetchRateBtn}
+                            onPress={refreshExchangeRate}
+                            disabled={isFetchingRate}
+                          >
+                            <Ionicons name="refresh" size={14} color="#2563EB" />
+                            <Text style={styles.fetchRateBtnText}>ดึงเรทสด</Text>
+                          </TouchableOpacity>
                         </View>
                         {costPrice.trim() && !isNaN(parseFloat(costPrice)) ? (
                           <Text style={styles.usdConvertedHint}>
-                            ต้นทุน: ${parseFloat(costPrice).toFixed(2)} ≈ ฿{(parseFloat(costPrice) * exchangeRate).toFixed(2)} บาท/หุ้น
+                            ต้นทุน: ${parseFloat(costPrice).toFixed(2)} ≈ ฿{(parseFloat(costPrice) * (exchangeRate || 34)).toFixed(2)} บาท/หุ้น
                             {shares.trim() && !isNaN(parseFloat(shares))
-                              ? ` • ยอดรวม: ฿${(parseFloat(shares) * parseFloat(costPrice) * exchangeRate).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`
+                              ? ` • ยอดรวม: ฿${(parseFloat(shares) * parseFloat(costPrice) * (exchangeRate || 34)).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`
                               : ''}
                           </Text>
                         ) : null}
@@ -826,14 +868,24 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                     />
                   </View>
                   <View style={styles.columnItem}>
-                    <Text style={styles.fieldLabel}>วันขึ้น XD (YYYY-MM-DD)</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={xdDate}
-                      onChangeText={setXdDate}
-                      placeholder="เช่น 2026-05-15"
-                      placeholderTextColor="#94A3B8"
-                    />
+                    <Text style={styles.fieldLabel}>วันขึ้น XD คาดการณ์</Text>
+                    <View style={styles.dateInputWrapper}>
+                      <TextInput
+                        style={styles.dateTextInput}
+                        value={xdDate}
+                        onChangeText={setXdDate}
+                        placeholder="เช่น 2026-05-15"
+                        placeholderTextColor="#94A3B8"
+                      />
+                      <TouchableOpacity
+                        style={styles.calendarIconBtn}
+                        onPress={() => setIsCalendarVisible(true)}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="calendar-outline" size={18} color="#059669" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
                 <Text style={styles.dividendHelpText}>
@@ -883,6 +935,23 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
+
+      <CalendarPickerModal
+        visible={isCalendarVisible}
+        target="xdDate"
+        currentDate={xdDate}
+        title="เลือกวัน XD คาดการณ์"
+        onClose={() => setIsCalendarVisible(false)}
+        onSelectDate={(isoDate) => setXdDate(isoDate)}
+      />
+
+      <SectorPickerModal
+        visible={isSectorPickerVisible}
+        assetType={assetType}
+        selectedSector={selectedSector}
+        onSelectSector={(secId) => setSelectedSector(secId)}
+        onClose={() => setIsSectorPickerVisible(false)}
+      />
     </Modal>
   );
 };
@@ -980,6 +1049,26 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#0F172A',
     marginBottom: 14,
+  },
+  dateInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  dateTextInput: {
+    flex: 1,
+    height: 42,
+    fontSize: 14,
+    color: '#0F172A',
+    fontWeight: '600',
+    paddingVertical: 0,
+  },
+  calendarIconBtn: {
+    padding: 6,
   },
   feedbackNote: {
     fontSize: 12,
@@ -1456,11 +1545,37 @@ const styles = StyleSheet.create({
     color: '#1E40AF',
     flex: 1,
   },
+  usdExchangeInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginVertical: 6,
+  },
+  usdExchangeInput: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E3A8A',
+  },
+  fetchRateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
   fetchRateBtnText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#2563EB',
-    textDecorationLine: 'underline',
   },
   usdConvertedHint: {
     fontSize: 11,

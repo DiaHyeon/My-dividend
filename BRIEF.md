@@ -94,6 +94,7 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - **Live Multiplier & Tax Deduction**: Multiplying total shares by DPU in real time, calculating gross and net payouts after withholding tax (10% Thai, 15% US, or custom).
   - **Remaining Payouts This Year (Strict XD Cutoff)**: Dynamically checks remaining projected XD dates in the purchase year that occur on or after the purchase date. Payouts whose XD occurred prior to purchase are automatically excluded from the current year's expected total.
   - **Dual Perspective**: Highlights both "Remaining Payouts This Year" (actual cashflow expected for the rest of the year) and "Full Annual Run-Rate" (for complete subsequent cycles).
+  - **Minimal Review & Confirmation Step before Saving**: Prior to executing the database write, a clean 2-second confirmation overlay displays the total investment volume (highlighted boldly), asset symbol, shares/deposit amount, price, transaction date, and projected dividend, with `[กลับไปแก้ไข]` and `[ยืนยันบันทึก]` buttons to prevent careless entry errors while maintaining a fast, frictionless flow.
 - **Non-Dividend Paying Stocks (Growth Stocks)**:
   - Defaults DPU to `0.0000`.
   - Displays a clean informational badge: `ℹ️ No dividend distribution history (Growth / Non-dividend)`.
@@ -281,6 +282,21 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - Saves the entry under the existing `asset_id` as a new transaction row.
 - **Automatic Duplicate Consolidation**:
   - `consolidateDuplicateAssets()` detects duplicate asset rows, merges transactions and dividend schedules under a primary asset, and archives duplicates. Runs automatically on screen focus.
+
+---
+
+### 4.13.1 Transaction Management, DCA Editing & Rubber Eraser Engine
+- Handled by: `src/components/EditTransactionModal.tsx`, `src/screens/AssetsScreen.tsx`, `src/components/EditAssetModal.tsx`
+- **Rationale**: While "My dividend" is intentionally designed as a Dividend & Cash Flow Holding app (not a high-frequency trading journal), investors require an intuitive "rubber eraser" to adjust DCA purchases, fix typos, modify historical buy prices/dates, and delete mistyped entries without breaking weighted average costs or dividend projections.
+- **Key Features**:
+  1. **Interactive Transaction Editing**: Tapping any transaction in the Transaction History tab opens `EditTransactionModal.tsx`.
+  2. **Dual Currency Price Input**: For US stocks, users can enter cost prices in either USD or THB; the app automatically converts and stores in THB `NUMERIC(15, 4)` using real-time/cached exchange rates.
+  3. **Built-in Pure RN Calendar**: Dates are selected via `CalendarPickerModal` with quick date presets.
+  4. **Smart Single-Transaction Deletion**:
+     - When deleting a transaction, the system checks whether other transactions exist for the parent asset.
+     - If it is the **only remaining transaction** for that asset, deleting it automatically archives the asset (`is_archived: true`) so no empty 0-share ghost card clutters the Dashboard.
+     - If multiple transactions exist, the specific transaction is deleted and `view_asset_summary` automatically recalculates `net_shares`, `total_cost`, and `weighted_average_cost`.
+  5. **Safe Multi-DCA Asset Editing**: In `EditAssetModal.tsx`, editing an asset with multiple DCA transactions consolidates all prior records into a single consolidated record with the new shares and cost basis, preventing duplicate transaction inflation.
 
 ---
 

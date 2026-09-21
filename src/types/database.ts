@@ -20,6 +20,8 @@ export interface Database {
           asset_type: AssetType;
           current_price: number;
           tax_rate: number;
+          sector?: string;
+          currency?: 'THB' | 'USD';
           is_archived: boolean;
           created_at: string;
         };
@@ -30,6 +32,8 @@ export interface Database {
           asset_type: AssetType;
           current_price?: number;
           tax_rate?: number;
+          sector?: string;
+          currency?: 'THB' | 'USD';
           is_archived?: boolean;
           created_at?: string;
         };
@@ -40,6 +44,8 @@ export interface Database {
           asset_type?: AssetType;
           current_price?: number;
           tax_rate?: number;
+          sector?: string;
+          currency?: 'THB' | 'USD';
           is_archived?: boolean;
           created_at?: string;
         };
@@ -139,6 +145,8 @@ export interface Database {
           asset_type: AssetType;
           current_price: number;
           tax_rate: number;
+          sector?: string;
+          currency?: 'THB' | 'USD';
           is_archived: boolean;
           created_at: string;
           net_shares: number;

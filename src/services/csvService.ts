@@ -7,6 +7,7 @@ import { detectSector, setAssetSector } from './sectorService';
 import { fetchStockPrice } from './stockService';
 import { fetchFundNav } from './fundService';
 import { consolidateDuplicateAssets } from './assetConsolidationService';
+import { ensureAuthenticated } from './authService';
 
 export interface CsvAssetRow {
   symbol: string;
@@ -289,19 +290,6 @@ export function parseAndValidateCsv(csvContent: string): ParseResult {
 }
 
 /**
- * ตรวจสอบ Session และล็อกอินแบบ Demo อัตโนมัติหากยังไม่ได้ล็อกอิน
- */
-async function ensureAuthenticated() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    await supabase.auth.signInWithPassword({
-      email: 'demo@mydividend.app',
-      password: 'Password123!',
-    });
-  }
-}
-
-/**
  * บันทึกรายการสินทรัพย์จาก CSV เข้าสู่ฐานข้อมูล Supabase
  */
 export async function importAssetRows(
@@ -413,12 +401,11 @@ export async function importAssetRows(
         throw new Error(txErr.message || 'ไม่สามารถบันทึกธุรกรรมได้');
       }
 
-      // 4. บันทึกตารางปันผล (dividend_schedules)
+      // 4. บันทึกตารางปันผล (dividend_schedules) ด้วย Native DPU
       if (item.expected_dpu && item.expected_dpu > 0) {
-        const convertedDpu = item.expected_dpu * rate;
         await supabase.from('dividend_schedules').insert({
           asset_id: assetId,
-          dpu: Number(convertedDpu.toFixed(4)),
+          dpu: Number(item.expected_dpu.toFixed(4)),
           xd_date: item.transaction_date,
           is_projected: true,
         });

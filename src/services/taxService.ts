@@ -186,10 +186,12 @@ export const calculateCashCycleInfo = (
   scheduleDateStr: string,
   frequency: 'MONTHLY' | 'SEMI_ANNUAL' | 'ANNUAL' = 'SEMI_ANNUAL'
 ): CashPayoutCycleInfo => {
-  const scheduleDate = new Date(scheduleDateStr);
-  const depositDate = new Date(depositDateStr);
-  const schedYear = scheduleDate.getFullYear();
-  const schedMonth = scheduleDate.getMonth(); // 0-indexed: 0=Jan, 5=Jun, 11=Dec
+  const [sY, sM, sD] = (scheduleDateStr || '').split('T')[0].split('-').map(Number);
+  const schedDate = new Date(sY, (sM || 1) - 1, sD || 1);
+  const [dY, dM, dD] = (depositDateStr || '').split('T')[0].split('-').map(Number);
+  const depDate = new Date(dY, (dM || 1) - 1, dD || 1);
+  const schedYear = schedDate.getFullYear();
+  const schedMonth = schedDate.getMonth(); // 0-indexed: 0=Jan, 5=Jun, 11=Dec
 
   let cycleStart: Date;
 
@@ -202,20 +204,24 @@ export const calculateCashCycleInfo = (
       cycleStart = new Date(schedYear, 6, 1);
     }
   } else if (frequency === 'MONTHLY') {
-    // Monthly cycle: 1st of payout month
-    cycleStart = new Date(schedYear, schedMonth, 1);
+    // Monthly cycle: begins after previous month's payout date (28th)
+    if (schedMonth === 0) {
+      cycleStart = new Date(schedYear - 1, 11, 28);
+    } else {
+      cycleStart = new Date(schedYear, schedMonth - 1, 28);
+    }
   } else {
     // Annual cycle: Jan 1 of that year
     cycleStart = new Date(schedYear, 0, 1);
   }
 
   const msPerDay = 1000 * 60 * 60 * 24;
-  const cycleDays = Math.max(1, Math.round((scheduleDate.getTime() - cycleStart.getTime()) / msPerDay) + 1);
+  const cycleDays = Math.max(1, Math.round((schedDate.getTime() - cycleStart.getTime()) / msPerDay));
 
   // If deposit happened after cycleStart, it is a partial first cycle!
-  if (depositDate > cycleStart) {
+  if (depDate > cycleStart) {
     // Number of days from deposit date to payout date
-    const diffTime = scheduleDate.getTime() - depositDate.getTime();
+    const diffTime = schedDate.getTime() - depDate.getTime();
     const daysHeld = Math.max(1, Math.round(diffTime / msPerDay));
     return {
       cycleStartDate: cycleStart.toISOString().split('T')[0],

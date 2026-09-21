@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../lib/supabase';
 import { AssetType } from '../types/database';
 
 export interface SectorDefinition {
@@ -149,8 +150,14 @@ export const getSectorDefinition = (sectorId: string, assetType: AssetType): Sec
 export const getAssetSector = async (
   assetId: string,
   symbol: string,
-  assetType: AssetType
+  assetType: AssetType,
+  dbSector?: string
 ): Promise<string> => {
+  // 1. ถ้ามี sector ส่งมาจากฐานข้อมูล Supabase โดยตรง ให้ใช้ค่านี้เป็นหลัก
+  if (dbSector && dbSector.trim() && dbSector !== 'Other') {
+    return dbSector.trim();
+  }
+
   try {
     const detected = detectSector(symbol, assetType);
     const raw = await AsyncStorage.getItem(ASSET_SECTOR_STORAGE_KEY);
@@ -175,15 +182,27 @@ export const getAssetSector = async (
   } catch (err) {
     console.warn('Error reading asset sector cache:', err);
   }
-  return detectSector(symbol, assetType);
+  return dbSector || detectSector(symbol, assetType);
 };
 
 export const setAssetSector = async (assetId: string, sectorId: string): Promise<void> => {
   try {
+    // 1. แคชลงเครื่องทันที (0ms UI response)
     const raw = await AsyncStorage.getItem(ASSET_SECTOR_STORAGE_KEY);
     const map = raw ? JSON.parse(raw) : {};
     map[assetId] = sectorId;
     await AsyncStorage.setItem(ASSET_SECTOR_STORAGE_KEY, JSON.stringify(map));
+
+    if (assetId) {
+      try {
+        await supabase
+          .from('assets')
+          .update({ sector: sectorId } as any)
+          .eq('id', assetId);
+      } catch {
+        // Silently fallback to AsyncStorage if remote column not yet migrated
+      }
+    }
   } catch (err) {
     console.warn('Error saving asset sector cache:', err);
   }

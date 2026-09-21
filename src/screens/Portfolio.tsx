@@ -23,6 +23,7 @@ import { getSectorsForType, getAssetSector, SectorDefinition } from '../services
 import { THAI_SAVINGS_TAX_FREE_LIMIT } from '../services/taxService';
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
 import { usePrivacyMode } from '../services/privacyService';
+import { ensureAuthenticated } from '../services/authService';
 import {
   BenchmarkType,
   TimeframeType,
@@ -68,16 +69,6 @@ export const Portfolio: React.FC<PortfolioProps> = ({
     return false;
   }, [currencyMap]);
 
-  const ensureAuthenticated = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      await supabase.auth.signInWithPassword({
-        email: 'demo@mydividend.app',
-        password: 'Password123!',
-      });
-    }
-  };
-
   const loadData = useCallback(async () => {
     try {
       await ensureAuthenticated();
@@ -91,18 +82,26 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         .select('*')
         .order('created_at', { ascending: false });
 
+      const loadedAssets = (summaryData as AssetSummary[]) || [];
       if (!summaryError && summaryData) {
-        setAssets(summaryData as AssetSummary[]);
+        setAssets(loadedAssets);
       }
 
-      // 2. Fetch dividend schedules
-      const { data: divData, error: divError } = await supabase
-        .from('dividend_schedules')
-        .select('*')
-        .order('xd_date', { ascending: true });
+      const activeAssetIds = loadedAssets.map((a) => a.id).filter(Boolean);
 
-      if (!divError && divData) {
-        setDividendSchedules(divData as DividendSchedule[]);
+      // 2. Fetch dividend schedules only for active assets
+      if (activeAssetIds.length > 0) {
+        const { data: divData, error: divError } = await supabase
+          .from('dividend_schedules')
+          .select('id, asset_id, dpu, xd_date, payment_date, is_projected')
+          .in('asset_id', activeAssetIds)
+          .order('xd_date', { ascending: true });
+
+        if (!divError && divData) {
+          setDividendSchedules(divData as DividendSchedule[]);
+        }
+      } else {
+        setDividendSchedules([]);
       }
 
       // 3. Fetch exchange rate & currency preferences

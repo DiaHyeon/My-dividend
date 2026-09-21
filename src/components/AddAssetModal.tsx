@@ -21,7 +21,10 @@ import { searchThaiFunds, fetchFundNav, fetchFundDividendAnalysis, FundSuggestio
 import { getSectorsForType, detectSector, setAssetSector, getSectorDefinition } from '../services/sectorService';
 import { evaluateCashTax, calculateAnnualGrossInterest } from '../services/taxService';
 import { setAssetCurrency } from '../services/currencyService';
+import { ensureAuthenticated } from '../services/authService';
 import { CashAssetForm } from './CashAssetForm';
+import { CalendarPickerModal } from './CalendarPickerModal';
+import { SectorPickerModal } from './SectorPickerModal';
 
 interface AddAssetModalProps {
   visible?: boolean;
@@ -35,6 +38,19 @@ const ASSET_TYPES: { label: string; shortLabel: string; value: AssetType; icon: 
   { label: 'กองทุน (FUNDS)', shortLabel: 'กองทุน', value: 'FUNDS', icon: 'pie-chart' },
   { label: 'เงินฝาก (CASH)', shortLabel: 'เงินฝาก', value: 'CASH', icon: 'wallet' },
 ];
+
+const formatReviewDate = (dateStr: string) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    return `${d} ${months[m] || ''} ${y + 543}`;
+  }
+  return dateStr;
+};
 
 export const AddAssetModal: React.FC<AddAssetModalProps> = ({
   visible: controlledVisible,
@@ -76,8 +92,8 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
   const [purchaseDate, setPurchaseDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [isCalendarVisible, setIsCalendarVisible] = useState(false);
   const [calendarTarget, setCalendarTarget] = useState<'purchaseDate' | 'xdDate'>('purchaseDate');
-  const [calendarViewDate, setCalendarViewDate] = useState<Date>(() => new Date());
   const [isSectorPickerVisible, setIsSectorPickerVisible] = useState(false);
+  const [isReviewVisible, setIsReviewVisible] = useState(false);
 
   // Existing Asset Detection State
   const [existingHolding, setExistingHolding] = useState<{
@@ -180,6 +196,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     setXdDate(nextMonth.toISOString().split('T')[0]);
     setIsCalendarVisible(false);
     setIsSectorPickerVisible(false);
+    setIsReviewVisible(false);
   };
 
   const handleAssetTypeSelect = (newType: AssetType) => {
@@ -320,17 +337,6 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
   // Calendar picker actions
   const openCalendar = (target: 'purchaseDate' | 'xdDate') => {
     setCalendarTarget(target);
-    const currVal = target === 'purchaseDate' ? purchaseDate : xdDate;
-    if (currVal && /^\d{4}-\d{2}-\d{2}$/.test(currVal.trim())) {
-      const parsed = new Date(currVal.trim() + 'T00:00:00');
-      if (!isNaN(parsed.getTime())) {
-        setCalendarViewDate(parsed);
-      } else {
-        setCalendarViewDate(new Date());
-      }
-    } else {
-      setCalendarViewDate(new Date());
-    }
     setIsCalendarVisible(true);
   };
 
@@ -343,84 +349,6 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     setIsCalendarVisible(false);
   };
 
-  const prevCalendarMonth = () => {
-    setCalendarViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-  };
-
-  const nextCalendarMonth = () => {
-    setCalendarViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-  };
-
-  const getCalendarPresets = () => {
-    const today = new Date();
-    const formatIso = (d: Date) => {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
-    };
-
-    if (calendarTarget === 'purchaseDate') {
-      const yesterday = new Date(today);
-      yesterday.setDate(today.getDate() - 1);
-
-      const oneWeekAgo = new Date(today);
-      oneWeekAgo.setDate(today.getDate() - 7);
-
-      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-
-      return [
-        { label: 'วันนี้', value: formatIso(today) },
-        { label: 'เมื่อวาน', value: formatIso(yesterday) },
-        { label: '1 สัปดาห์ก่อน', value: formatIso(oneWeekAgo) },
-        { label: 'ต้นเดือนนี้', value: formatIso(startOfMonth) },
-      ];
-    } else {
-      const plus30Days = new Date(today);
-      plus30Days.setDate(today.getDate() + 30);
-
-      const plus60Days = new Date(today);
-      plus60Days.setDate(today.getDate() + 60);
-
-      const plus90Days = new Date(today);
-      plus90Days.setDate(today.getDate() + 90);
-
-      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-
-      return [
-        { label: '+30 วัน', value: formatIso(plus30Days) },
-        { label: '+60 วัน', value: formatIso(plus60Days) },
-        { label: '+90 วัน', value: formatIso(plus90Days) },
-        { label: 'สิ้นเดือนนี้', value: formatIso(endOfMonth) },
-      ];
-    }
-  };
-
-  const calendarGridData = React.useMemo(() => {
-    const year = calendarViewDate.getFullYear();
-    const month = calendarViewDate.getMonth();
-    const firstDayIndex = new Date(year, month, 1).getDay();
-    const totalDays = new Date(year, month + 1, 0).getDate();
-
-    const items: ({ day: number; iso: string } | null)[] = [];
-    for (let i = 0; i < firstDayIndex; i++) {
-      items.push(null);
-    }
-    for (let d = 1; d <= totalDays; d++) {
-      const mStr = String(month + 1).padStart(2, '0');
-      const dStr = String(d).padStart(2, '0');
-      items.push({
-        day: d,
-        iso: `${year}-${mStr}-${dStr}`,
-      });
-    }
-    return items;
-  }, [calendarViewDate]);
-
-  const THAI_MONTHS = [
-    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
-  ];
 
   const handleSymbolChange = async (text: string) => {
     setSymbol(text);
@@ -542,17 +470,49 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     }
   };
 
-  const ensureAuthenticated = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: 'demo@mydividend.app',
-        password: 'Password123!',
-      });
-      if (error) {
-        console.warn('Auto sign-in fallback notice:', error.message);
+  const handleOpenReview = () => {
+    if (assetType === 'CASH') {
+      const trimmedAccount = symbol.trim();
+      const parsedDeposit = parseFloat(depositAmount);
+
+      if (!trimmedAccount) {
+        Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกชื่อบัญชี หรือสถาบันการเงิน');
+        return;
       }
+      if (isNaN(parsedDeposit) || parsedDeposit <= 0) {
+        Alert.alert('ข้อมูลไม่ถูกต้อง', 'กรุณากรอกจำนวนเงินฝากที่มากกว่า 0');
+        return;
+      }
+      setIsReviewVisible(true);
+      return;
     }
+
+    const trimmedSymbol = symbol.trim().toUpperCase();
+    const parsedShares = parseFloat(shares);
+    const parsedCostPrice = parseFloat(costPrice);
+    const parsedCurrentPrice = currentPrice.trim() ? parseFloat(currentPrice) : parsedCostPrice;
+
+    if (!trimmedSymbol) {
+      Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกชื่อย่อสินทรัพย์ (Symbol)');
+      return;
+    }
+
+    if (isNaN(parsedShares) || parsedShares <= 0) {
+      Alert.alert('ข้อมูลไม่ถูกต้อง', 'กรุณากรอกจำนวนหุ้น/หน่วยที่มากกว่า 0');
+      return;
+    }
+
+    if (isNaN(parsedCostPrice) || parsedCostPrice < 0) {
+      Alert.alert('ข้อมูลไม่ถูกต้อง', 'กรุณากรอกราคาต้นทุนให้ถูกต้อง');
+      return;
+    }
+
+    if (isNaN(parsedCurrentPrice) || parsedCurrentPrice < 0) {
+      Alert.alert('ข้อมูลไม่ถูกต้อง', 'กรุณากรอกราคาปัจจุบันให้ถูกต้อง');
+      return;
+    }
+
+    setIsReviewVisible(true);
   };
 
   const handleSubmit = async () => {
@@ -679,6 +639,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         handleClose();
         onSuccess?.();
       } catch (err: any) {
+        setIsReviewVisible(false);
         Alert.alert('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถบันทึกเงินฝากได้');
       } finally {
         setIsSubmitting(false);
@@ -791,7 +752,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         throw new Error(txError.message || 'ไม่สามารถบันทึกรายการซื้อได้');
       }
 
-      // 3. Insert projected DPU to dividend_schedules if (STOCKS or FUNDS) and DPU > 0
+      // 3. Insert projected DPU to dividend_schedules if (STOCKS or FUNDS) and DPU > 0 (store native DPU for Floating FX)
       if ((assetType === 'STOCKS' || assetType === 'FUNDS') && parsedDpu > 0) {
         const targetXdDate = xdDate || effectiveTxDate;
 
@@ -799,7 +760,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
           // Multi-cycle projected schedule (quarterly / semi-annual)
           const schedules = dividendAnalysis.projectedNextXdDates.map((dateStr) => ({
             asset_id: asset.id,
-            dpu: Number(convertedDpu.toFixed(4)),
+            dpu: Number(parsedDpu.toFixed(4)),
             xd_date: dateStr,
             is_projected: true,
           }));
@@ -814,7 +775,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
           // Single schedule
           const { error: divError } = await supabase.from('dividend_schedules').insert({
             asset_id: asset.id,
-            dpu: Number(convertedDpu.toFixed(4)),
+            dpu: Number(parsedDpu.toFixed(4)),
             xd_date: targetXdDate,
             is_projected: true,
           });
@@ -845,6 +806,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       handleClose();
       onSuccess?.();
     } catch (err: any) {
+      setIsReviewVisible(false);
       Alert.alert('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถบันทึกข้อมูลได้');
     } finally {
       setIsSubmitting(false);
@@ -1512,7 +1474,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
           {/* Submit Button */}
           <TouchableOpacity
             style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
+            onPress={handleOpenReview}
             disabled={isSubmitting}
             activeOpacity={0.8}
           >
@@ -1529,191 +1491,167 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       </View>
 
       {/* Calendar Picker Modal Overlay */}
-      {isCalendarVisible && (
-        <View style={styles.calendarOverlay}>
-          <TouchableOpacity
-            style={styles.calendarBackdrop}
-            activeOpacity={1}
-            onPress={() => setIsCalendarVisible(false)}
-          />
-          <View style={styles.calendarCard}>
-            {/* Calendar Header */}
-            <View style={styles.calendarHeader}>
-              <View style={styles.calendarHeaderTitleRow}>
-                <Ionicons name="calendar" size={18} color="#059669" />
-                <Text style={styles.calendarHeaderTitle}>
-                  {calendarTarget === 'purchaseDate' ? 'เลือกวันที่เข้าซื้อ' : 'เลือกวัน XD คาดการณ์'}
+      <CalendarPickerModal
+        visible={isCalendarVisible}
+        target={calendarTarget}
+        currentDate={calendarTarget === 'purchaseDate' ? purchaseDate : xdDate}
+        title={calendarTarget === 'purchaseDate' ? 'เลือกวันที่เข้าซื้อ' : 'เลือกวัน XD คาดการณ์'}
+        onClose={() => setIsCalendarVisible(false)}
+        onSelectDate={handleSelectCalendarDate}
+      />
+
+      {/* Sector / Segment Picker Modal */}
+      <SectorPickerModal
+        visible={isSectorPickerVisible}
+        assetType={assetType}
+        selectedSector={selectedSector}
+        onSelectSector={(secId) => setSelectedSector(secId)}
+        onClose={() => setIsSectorPickerVisible(false)}
+      />
+
+      {/* 4. Minimal Review & Confirmation Modal */}
+      <Modal
+        visible={isReviewVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => !isSubmitting && setIsReviewVisible(false)}
+      >
+        <View style={styles.reviewModalOverlay}>
+          <View style={styles.reviewCardContainer}>
+            {/* Header */}
+            <View style={styles.reviewHeader}>
+              <View style={styles.reviewHeaderLeft}>
+                <Ionicons name="shield-checkmark" size={20} color="#059669" />
+                <Text style={styles.reviewTitle}>ตรวจทานก่อนบันทึก</Text>
+              </View>
+              <View style={[
+                styles.reviewBadge,
+                assetType === 'CASH'
+                  ? styles.reviewBadgeCash
+                  : existingHolding
+                  ? styles.reviewBadgeDca
+                  : styles.reviewBadgeBuy,
+              ]}>
+                <Text style={[
+                  styles.reviewBadgeText,
+                  assetType === 'CASH'
+                    ? styles.reviewBadgeTextCash
+                    : existingHolding
+                    ? styles.reviewBadgeTextDca
+                    : styles.reviewBadgeTextBuy,
+                ]}>
+                  {assetType === 'CASH' ? 'ฝากเงิน (DEPOSIT)' : existingHolding ? 'ซื้อเพิ่ม (DCA)' : 'ซื้อใหม่ (BUY)'}
                 </Text>
               </View>
-              <TouchableOpacity
-                style={styles.calendarCloseBtn}
-                onPress={() => setIsCalendarVisible(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="close" size={20} color="#64748B" />
-              </TouchableOpacity>
             </View>
 
-            {/* Quick Presets Row */}
-            <View style={styles.calendarPresetRow}>
-              {getCalendarPresets().map((preset) => (
-                <TouchableOpacity
-                  key={preset.label}
-                  style={styles.calendarPresetPill}
-                  onPress={() => handleSelectCalendarDate(preset.value)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.calendarPresetText}>{preset.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Month / Year Navigator */}
-            <View style={styles.calendarNavRow}>
-              <TouchableOpacity
-                style={styles.calendarNavBtn}
-                onPress={prevCalendarMonth}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="chevron-back" size={18} color="#0F172A" />
-              </TouchableOpacity>
-              <Text style={styles.calendarMonthYearText}>
-                {THAI_MONTHS[calendarViewDate.getMonth()]} {calendarViewDate.getFullYear() + 543}
+            {/* Hero Value Highlight Box */}
+            <View style={styles.reviewHeroBox}>
+              <Text style={styles.reviewHeroLabel}>ยอดเงินลงทุนรวม (Total Value)</Text>
+              <Text style={styles.reviewHeroValue}>
+                ฿{(
+                  assetType === 'CASH'
+                    ? (parseFloat(depositAmount) || 0)
+                    : (parseFloat(shares) || 0) * (parseFloat(costPrice) || 0) * (currency === 'USD' ? (parseFloat(exchangeRate) || 34.0) : 1.0)
+                ).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
-              <TouchableOpacity
-                style={styles.calendarNavBtn}
-                onPress={nextCalendarMonth}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="chevron-forward" size={18} color="#0F172A" />
-              </TouchableOpacity>
+              {currency === 'USD' && assetType !== 'CASH' && (
+                <Text style={styles.reviewHeroSub}>
+                  ${((parseFloat(shares) || 0) * (parseFloat(costPrice) || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (เรท ฿{(parseFloat(exchangeRate) || 34.0).toFixed(2)}/$)
+                </Text>
+              )}
             </View>
 
-            {/* Weekday Header */}
-            <View style={styles.calendarWeekRow}>
-              {['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map((day, idx) => (
-                <View key={day} style={styles.calendarWeekCol}>
-                  <Text
-                    style={[
-                      styles.calendarWeekDayText,
-                      (idx === 0 || idx === 6) && styles.calendarWeekendText,
-                    ]}
-                  >
-                    {day}
+            {/* Minimal 4-Row Summary List */}
+            <View style={styles.reviewList}>
+              <View style={styles.reviewRow}>
+                <Text style={styles.reviewRowLabel}>สินทรัพย์</Text>
+                <Text style={styles.reviewRowValBold}>
+                  {assetType === 'CASH' ? symbol.trim() : symbol.trim().toUpperCase()}
+                  <Text style={styles.reviewRowValSub}>
+                    {' • '}{assetType === 'STOCKS' ? 'หุ้น' : assetType === 'FUNDS' ? 'กองทุน' : 'เงินฝาก'}
+                  </Text>
+                </Text>
+              </View>
+
+              <View style={styles.reviewRow}>
+                <Text style={styles.reviewRowLabel}>{assetType === 'CASH' ? 'ยอดเงินฝาก' : 'จำนวนหุ้น / หน่วย'}</Text>
+                <Text style={styles.reviewRowValBold}>
+                  {assetType === 'CASH'
+                    ? `฿${(parseFloat(depositAmount) || 0).toLocaleString()} บาท`
+                    : `${(parseFloat(shares) || 0).toLocaleString()} หุ้น`}
+                </Text>
+              </View>
+
+              {assetType !== 'CASH' && (
+                <View style={styles.reviewRow}>
+                  <Text style={styles.reviewRowLabel}>ราคาต้นทุน</Text>
+                  <Text style={styles.reviewRowValBold}>
+                    {currency === 'USD'
+                      ? `$${(parseFloat(costPrice) || 0).toFixed(2)} (~฿${((parseFloat(costPrice) || 0) * (parseFloat(exchangeRate) || 34.0)).toFixed(2)})`
+                      : `฿${(parseFloat(costPrice) || 0).toFixed(2)} / หุ้น`}
                   </Text>
                 </View>
-              ))}
-            </View>
+              )}
 
-            {/* Days Grid */}
-            <View style={styles.calendarDaysGrid}>
-              {calendarGridData.map((item, index) => {
-                if (!item) {
-                  return <View key={`empty-${index}`} style={styles.calendarDayCell} />;
-                }
-                const currentVal = calendarTarget === 'purchaseDate' ? purchaseDate : xdDate;
-                const isSelected = item.iso === currentVal;
-                const isToday = item.iso === new Date().toISOString().split('T')[0];
-
-                return (
-                  <TouchableOpacity
-                    key={item.iso}
-                    style={[
-                      styles.calendarDayCell,
-                      isSelected && styles.calendarDaySelected,
-                      isToday && !isSelected && styles.calendarDayToday,
-                    ]}
-                    onPress={() => handleSelectCalendarDate(item.iso)}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={[
-                        styles.calendarDayText,
-                        isSelected && styles.calendarDayTextSelected,
-                        isToday && !isSelected && styles.calendarDayTextToday,
-                      ]}
-                    >
-                      {item.day}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Sector / Segment Picker Modal Overlay */}
-      {isSectorPickerVisible && (
-        <View style={styles.sectorModalOverlay}>
-          <TouchableOpacity
-            style={styles.sectorModalBackdrop}
-            activeOpacity={1}
-            onPress={() => setIsSectorPickerVisible(false)}
-          />
-          <View style={styles.sectorModalCard}>
-            {/* Header */}
-            <View style={styles.sectorModalHeader}>
-              <View style={styles.sectorModalTitleRow}>
-                <Ionicons name="apps-outline" size={18} color="#2563EB" />
-                <Text style={styles.sectorModalTitle}>
-                  {assetType === 'FUNDS' ? 'เลือกประเภทกองทุน' : 'เลือกกลุ่มอุตสาหกรรม (Segment)'}
+              <View style={styles.reviewRow}>
+                <Text style={styles.reviewRowLabel}>วันที่ทำรายการ</Text>
+                <Text style={styles.reviewRowValBold}>
+                  {formatReviewDate(assetType === 'CASH' ? (depositDate || new Date().toISOString().split('T')[0]) : (purchaseDate || new Date().toISOString().split('T')[0]))}
                 </Text>
               </View>
-              <TouchableOpacity
-                style={styles.sectorModalCloseBtn}
-                onPress={() => setIsSectorPickerVisible(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="close" size={20} color="#64748B" />
-              </TouchableOpacity>
+
+              {assetType === 'CASH' && (parseFloat(interestRate) || 0) > 0 && (
+                <View style={styles.reviewRow}>
+                  <Text style={styles.reviewRowLabel}>อัตราดอกเบี้ย</Text>
+                  <Text style={styles.reviewRowValBold}>
+                    {(parseFloat(interestRate) || 0).toFixed(2)}% ต่อปี ({interestFrequency === 'MONTHLY' ? 'ทุกเดือน' : interestFrequency === 'SEMI_ANNUAL' ? 'ราย 6 เดือน' : 'รายปี'})
+                  </Text>
+                </View>
+              )}
+
+              {assetType !== 'CASH' && (parseFloat(expectedDpu) || 0) > 0 && (
+                <View style={styles.reviewRow}>
+                  <Text style={styles.reviewRowLabel}>ปันผลคาดการณ์</Text>
+                  <Text style={styles.reviewRowValBold}>
+                    {currency === 'USD'
+                      ? `$${(parseFloat(expectedDpu) || 0).toFixed(4)} (~฿${((parseFloat(expectedDpu) || 0) * (parseFloat(exchangeRate) || 34.0)).toFixed(2)})`
+                      : `฿${(parseFloat(expectedDpu) || 0).toFixed(4)} / หุ้น`}
+                  </Text>
+                </View>
+              )}
             </View>
 
-            {/* Sector Options List */}
-            <ScrollView style={styles.sectorListScroll} showsVerticalScrollIndicator={false}>
-              {getSectorsForType(assetType).map((sec) => {
-                const isSelected = selectedSector === sec.id;
-                return (
-                  <TouchableOpacity
-                    key={sec.id}
-                    style={[
-                      styles.sectorOptionItem,
-                      isSelected && styles.sectorOptionItemSelected,
-                    ]}
-                    onPress={() => {
-                      setSelectedSector(sec.id);
-                      setIsSectorPickerVisible(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.sectorOptionLeft}>
-                      <View
-                        style={[
-                          styles.sectorOptionIconBox,
-                          { backgroundColor: sec.color + '18' },
-                        ]}
-                      >
-                        <Ionicons name={sec.icon as any} size={16} color={sec.color} />
-                      </View>
-                      <Text
-                        style={[
-                          styles.sectorOptionLabel,
-                          isSelected && { color: sec.color, fontWeight: '700' },
-                        ]}
-                      >
-                        {sec.label}
-                      </Text>
-                    </View>
-                    {isSelected && (
-                      <Ionicons name="checkmark-circle" size={19} color={sec.color} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            {/* Actions: Edit (Back) vs Confirm (Save) */}
+            <View style={styles.reviewActionsRow}>
+              <TouchableOpacity
+                style={styles.reviewCancelBtn}
+                onPress={() => setIsReviewVisible(false)}
+                disabled={isSubmitting}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.reviewCancelText}>กลับไปแก้ไข</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.reviewConfirmBtn, isSubmitting && styles.reviewConfirmBtnDisabled]}
+                onPress={handleSubmit}
+                disabled={isSubmitting}
+                activeOpacity={0.8}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+                    <Text style={styles.reviewConfirmText}>ยืนยันบันทึก</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      )}
+      </Modal>
     </KeyboardAvoidingView>
       </Modal>
     </>
@@ -2753,230 +2691,169 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
   },
-  calendarOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  reviewModalOverlay: {
+    flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 9999,
+    padding: 20,
   },
-  calendarBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  calendarCard: {
-    width: '92%',
-    maxWidth: 350,
+  reviewCardContainer: {
+    width: '100%',
+    maxWidth: 380,
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 15,
-    elevation: 10,
+    borderRadius: 22,
+    padding: 20,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 12,
   },
-  calendarHeader: {
+  reviewHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-    paddingBottom: 8,
+    marginBottom: 14,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
-  calendarHeaderTitleRow: {
+  reviewHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
   },
-  calendarHeaderTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+  reviewTitle: {
+    fontSize: 16,
+    fontWeight: '800',
     color: '#0F172A',
   },
-  calendarCloseBtn: {
-    padding: 4,
-  },
-  calendarPresetRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 12,
-  },
-  calendarPresetPill: {
-    backgroundColor: '#F1F5F9',
+  reviewBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
-  calendarPresetText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#334155',
+  reviewBadgeBuy: {
+    backgroundColor: '#ECFDF5',
   },
-  calendarNavRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    marginBottom: 10,
+  reviewBadgeDca: {
+    backgroundColor: '#F5F3FF',
   },
-  calendarMonthYearText: {
-    fontSize: 13.5,
+  reviewBadgeCash: {
+    backgroundColor: '#EFF6FF',
+  },
+  reviewBadgeText: {
+    fontSize: 10.5,
     fontWeight: '700',
-    color: '#0F172A',
   },
-  calendarNavBtn: {
-    padding: 6,
-    borderRadius: 8,
+  reviewBadgeTextBuy: {
+    color: '#059669',
+  },
+  reviewBadgeTextDca: {
+    color: '#7C3AED',
+  },
+  reviewBadgeTextCash: {
+    color: '#2563EB',
+  },
+  reviewHeroBox: {
     backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  calendarWeekRow: {
-    flexDirection: 'row',
-    marginBottom: 4,
-  },
-  calendarWeekCol: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  calendarWeekDayText: {
-    fontSize: 11,
+  reviewHeroLabel: {
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#64748B',
-  },
-  calendarWeekendText: {
-    color: '#EF4444',
-  },
-  calendarDaysGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  calendarDayCell: {
-    width: '14.28%',
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: 1,
-    borderRadius: 18,
-  },
-  calendarDaySelected: {
-    backgroundColor: '#059669',
-  },
-  calendarDayToday: {
-    borderWidth: 1.5,
-    borderColor: '#059669',
-  },
-  calendarDayText: {
-    fontSize: 12.5,
-    fontWeight: '500',
-    color: '#0F172A',
-  },
-  calendarDayTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  calendarDayTextToday: {
-    color: '#059669',
-    fontWeight: '700',
-  },
-  sectorModalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 9999,
-  },
-  sectorModalBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  sectorModalCard: {
-    width: '90%',
-    maxWidth: 360,
-    maxHeight: '75%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 15,
-    elevation: 10,
-  },
-  sectorModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  sectorModalTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sectorModalTitle: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  sectorModalCloseBtn: {
-    padding: 4,
-  },
-  sectorListScroll: {
-    maxHeight: 380,
-  },
-  sectorOptionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 9,
-    paddingHorizontal: 10,
-    borderRadius: 10,
     marginBottom: 4,
   },
-  sectorOptionItemSelected: {
-    backgroundColor: '#F8FAFC',
+  reviewHeroValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0F172A',
   },
-  sectorOptionLeft: {
+  reviewHeroSub: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2563EB',
+    marginTop: 2,
+  },
+  reviewList: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: 18,
+  },
+  reviewRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  reviewRowLabel: {
+    fontSize: 12.5,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  reviewRowValBold: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  reviewRowValSub: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  reviewActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  reviewCancelBtn: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewCancelText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  reviewConfirmBtn: {
+    flex: 1.3,
+    backgroundColor: '#059669',
+    borderRadius: 12,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  sectorOptionIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
     justifyContent: 'center',
-    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  sectorOptionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
-    flexShrink: 1,
+  reviewConfirmBtnDisabled: {
+    opacity: 0.6,
+  },
+  reviewConfirmText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
 
