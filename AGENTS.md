@@ -26,3 +26,5 @@ Read BRIEF.md before doing anything. It is the single source of truth and contai
 - For CSV portfolio bulk import and export, use `csvService.ts` and `ImportCsvModal.tsx` with PapaParse, flexible auto-mapping, and NUMERIC(15, 4) sanitization.
 - For bottom navigation tabs, use standardized international names: `Overview` (Dashboard), `Portfolio`, and `Holdings` (Assets) with balanced, distraction-free icons.
 - For individual transaction editing, deletion, and DCA adjustments, use `EditTransactionModal.tsx` with automatic zero-share asset cleanup and `view_asset_summary` recalculation.
+- For automated daily market price and NAV synchronization, use `priceSyncService.ts` with Once-a-Day caching (`@my_dividend_last_price_sync_date`), pull-to-refresh force sync, and `assets.current_price` Supabase batch updates with NUMERIC(15, 4).
+- For the 12-month cashflow bar chart on Overview, highlight the current calendar month with an emerald border track, rounded month label pill, and `▲ Now` indicator badge with an explicit legend row.

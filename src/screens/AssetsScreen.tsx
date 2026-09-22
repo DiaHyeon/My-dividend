@@ -29,6 +29,7 @@ import { consolidateDuplicateAssets } from '../services/assetConsolidationServic
 import { exportPortfolioToCsv } from '../services/csvService';
 import { usePrivacyMode } from '../services/privacyService';
 import { ensureAuthenticated } from '../services/authService';
+import { syncDailyPricesIfNeeded } from '../services/priceSyncService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -123,7 +124,7 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
   };
 
   // Fetch Data
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (forceSync = false) => {
     try {
       setLoading(true);
 
@@ -138,7 +139,22 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
         .select('*')
         .order('symbol', { ascending: true });
 
-      const loadedAssets = (summaryData as AssetSummary[]) || [];
+      let loadedAssets = (summaryData as AssetSummary[]) || [];
+
+      // 1.1 Sync daily prices if new day or forced by pull-to-refresh
+      if (loadedAssets.length > 0) {
+        const pricesUpdated = await syncDailyPricesIfNeeded(loadedAssets, forceSync);
+        if (pricesUpdated) {
+          const { data: refreshedSummary, error: refreshedErr } = await supabase
+            .from('view_asset_summary')
+            .select('*')
+            .order('symbol', { ascending: true });
+          if (!refreshedErr && refreshedSummary) {
+            loadedAssets = refreshedSummary as AssetSummary[];
+          }
+        }
+      }
+
       if (summaryError) {
         console.warn('AssetsScreen fetch assets error:', summaryError.message);
       } else {
@@ -182,7 +198,7 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     setRefreshTrigger((prev) => prev + 1);
-    loadData();
+    loadData(true);
   }, [loadData]);
 
   // Asset Map for quick lookup

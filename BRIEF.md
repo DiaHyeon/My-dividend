@@ -73,6 +73,7 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   Taxes are calculated per asset (Thai stocks default to 10% `0.1000`, US stocks default to 15% `0.1500` under W-8BEN, Thai bank interest defaults to 0% or 15%, or custom user overrides).
 - **Strict XD Cutoff Logic**: Includes only share lots acquired before the ex-dividend date (`transaction_date < xd_date`).
 - Interactive monthly bar selection opens a modal detailing individual paying assets for that specific month with clear badges (`[Dividend]` vs `[Interest]`).
+- **Current Month Visual Indicator**: Highlights the current calendar month with an emerald border track (`#059669`), emerald rounded month pill, and an upward caret with 'Now' badge (`▲ Now`), paired with an explicit legend row (`▲ Now = เดือนปัจจุบัน (ก.ย.)`) for instantaneous orientation.
 
 ---
 
@@ -155,6 +156,7 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   3. `action: "dividends"`: Stock dividend distribution history.
   4. `action: "fund-nav"`: Daily mutual fund NAV from SEC API (`/v2/fund/daily-info/nav`).
   5. `action: "fund-dividends"`: Mutual fund dividend history from SEC API (`/v2/fund/daily-info/dividend-history`).
+  6. `action: "history-7d"`: 7-day historical closing prices for sparkline area charts (`range=7d&interval=1d`).
 
 ---
 
@@ -268,6 +270,22 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
        - **Type Chip**: Filters between `All Types`, `Buy (STOCKS/FUNDS)`, and `Deposit (CASH)`.
        - **Reset Chip**: Automatically appears when any filter is active for one-tap clearing.
      - **Search Bar & Volume Banner**: Instant text search and aggregate transaction volume for the selected period.
+
+---
+
+### 4.12.1 Automated Daily Market Price Sync & On-Demand Refresh Engine
+- Handled by: `src/services/priceSyncService.ts`, `src/screens/AssetsScreen.tsx`, `src/screens/Dashboard.tsx`, `src/screens/Portfolio.tsx`
+- **First Open of the Day Sync**:
+  - Automatically evaluates `@my_dividend_last_price_sync_date` in AsyncStorage.
+  - On the first app open of each calendar day, automatically fetches the latest regular market closing prices for US/Thai stocks (`fetchStockPrice`) and latest Net Asset Values for Thai mutual funds (`fetchFundNav`).
+  - Converts US stock prices to base currency THB via live exchange rate (`getCachedExchangeRate`).
+- **On-Demand Pull-to-Refresh Sync**:
+  - When the user pulls down to refresh across `Holdings`, `Overview`, or `Portfolio`, forces a complete price re-fetch (`force = true`) and invalidates sparkline caches (`clear7DayHistoryCache`).
+- **Database Persistence & Instant SQL Re-computation**:
+  - Batch writes changed prices into `assets.current_price` in Supabase using `NUMERIC(15, 4)` precision.
+  - SQL View `view_asset_summary` immediately recalculates `market_value`, `unrealized_pl`, and `unrealized_pl_percent` across the entire portfolio without requiring manual client recalculation.
+- **Concurrency Protection**:
+  - Employs an in-memory mutex lock (`isSyncInProgress`) preventing duplicate concurrent network sync executions when multiple screens load simultaneously.
 
 ---
 
@@ -425,6 +443,7 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - `services/assetConsolidationService.ts`: Position accumulation and duplicate asset consolidation service
   - `services/benchmarkService.ts`: Portfolio cumulative return, alpha calculation, and market benchmark comparison service (SET, S&P 500, NASDAQ)
   - `services/historyService.ts`: 7-day historical closing price caching service with Once-a-Day EOD cache and on-demand refresh
+  - `services/priceSyncService.ts`: Automated daily market price and NAV synchronization service updating Supabase database on first open and pull-to-refresh
 - `scripts/`
   - `patch-expo-notifications.js`: Patch script resolving Expo Go Android notification crashes
 - `supabase/functions/stock-proxy/`: Supabase Edge Function source code proxying Yahoo Finance and SEC Open API requests

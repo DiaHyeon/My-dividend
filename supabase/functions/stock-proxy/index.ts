@@ -77,6 +77,35 @@ serve(async (req: Request) => {
       });
     }
 
+    if (action === "history-7d") {
+      const cleanSymbol = (symbol || "").trim().toUpperCase();
+      if (!cleanSymbol) {
+        return new Response(JSON.stringify({ error: "Missing stock symbol" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(cleanSymbol)}?interval=1d&range=7d`;
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        },
+      });
+
+      if (!res.ok) {
+        return new Response(
+          JSON.stringify({ error: `Yahoo history error: ${res.statusText}` }),
+          { status: res.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const data = await res.json();
+      return new Response(JSON.stringify(data), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (action === "dividends") {
       const cleanSymbol = (symbol || "").trim().toUpperCase();
       if (!cleanSymbol) {
@@ -207,7 +236,7 @@ serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ error: "Invalid action. Supported actions: 'search' | 'quote' | 'dividends' | 'fund-nav' | 'fund-dividends'" }),
+      JSON.stringify({ error: "Invalid action. Supported actions: 'search' | 'quote' | 'dividends' | 'fund-nav' | 'fund-dividends' | 'history-7d'" }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {

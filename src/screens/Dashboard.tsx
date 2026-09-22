@@ -23,6 +23,7 @@ import { calculateScheduleCashPayout } from '../services/taxService';
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
 import { usePrivacyMode } from '../services/privacyService';
 import { ensureAuthenticated } from '../services/authService';
+import { syncDailyPricesIfNeeded } from '../services/priceSyncService';
 
 const MONTH_NAMES = [
   'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
@@ -95,7 +96,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return false;
   }, [currencyMap]);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (forceSync = false) => {
     try {
       await ensureAuthenticated();
 
@@ -108,7 +109,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
         .select('*')
         .order('created_at', { ascending: false });
 
-      const loadedAssets = (summaryData as AssetSummary[]) || [];
+      let loadedAssets = (summaryData as AssetSummary[]) || [];
+
+      // 1.1 Sync daily prices if new day or forced by pull-to-refresh
+      if (loadedAssets.length > 0) {
+        const pricesUpdated = await syncDailyPricesIfNeeded(loadedAssets, forceSync);
+        if (pricesUpdated) {
+          const { data: refreshedSummary, error: refreshedErr } = await supabase
+            .from('view_asset_summary')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (!refreshedErr && refreshedSummary) {
+            loadedAssets = refreshedSummary as AssetSummary[];
+          }
+        }
+      }
+
       if (summaryError) {
         console.warn('Error fetching view_asset_summary:', summaryError.message);
       } else {
@@ -185,7 +201,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadData();
+    loadData(true);
   };
 
   // --- Calculations ---
@@ -441,6 +457,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // Max value for bar chart normalization
   const maxMonthlyAmount = Math.max(...monthlyForecasts.map((m) => m.amount), 1);
+
+  // Current month index (0 = Jan, 11 = Dec)
+  const currentMonthIndex = new Date().getMonth();
 
   // Active selected month details
   const activeMonthData = selectedMonth !== null ? monthlyForecasts[selectedMonth] : null;
@@ -745,6 +764,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   const hasPayout = item.amount > 0;
                   const barHeightRatio = hasPayout ? Math.max(0.12, item.amount / maxMonthlyAmount) : 0.05;
                   const isSelected = selectedMonth === item.monthIndex;
+                  const isCurrentMonth = item.monthIndex === currentMonthIndex;
 
                   return (
                     <TouchableOpacity
@@ -763,24 +783,55 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       )}
 
                       {/* Bar Graphic */}
-                      <View style={styles.barTrack}>
+                      <View style={[styles.barTrack, isCurrentMonth && styles.barTrackCurrent]}>
                         <View
                           style={[
                             styles.barFill,
                             { height: `${barHeightRatio * 100}%` },
                             hasPayout ? styles.barFillActive : styles.barFillInactive,
                             isSelected && styles.barFillSelected,
+                            isCurrentMonth && !isSelected && styles.barFillCurrent,
                           ]}
                         />
                       </View>
 
-                      {/* Month Label */}
-                      <Text style={[styles.barMonthLabel, isSelected && styles.barMonthLabelSelected]}>
-                        {item.monthName}
-                      </Text>
+                      {/* Month Label with Current Month Indicator */}
+                      <View style={[styles.monthLabelWrapper, isCurrentMonth && styles.monthLabelWrapperCurrent]}>
+                        <Text
+                          style={[
+                            styles.barMonthLabel,
+                            isSelected && styles.barMonthLabelSelected,
+                            isCurrentMonth && styles.barMonthLabelCurrent,
+                          ]}
+                        >
+                          {item.monthName}
+                        </Text>
+                      </View>
+                      {isCurrentMonth ? (
+                        <View style={styles.nowBadge}>
+                          <Ionicons name="caret-up" size={8} color="#059669" style={{ marginBottom: -2 }} />
+                          <Text style={styles.nowBadgeText}>Now</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.nowPlaceholder} />
+                      )}
                     </TouchableOpacity>
                   );
                 })}
+              </View>
+
+              {/* Current Month Legend Row */}
+              <View style={styles.chartLegendRow}>
+                <View style={styles.chartLegendItem}>
+                  <View style={styles.nowBadgeLegend}>
+                    <Ionicons name="caret-up" size={8} color="#059669" />
+                    <Text style={styles.nowBadgeText}>Now</Text>
+                  </View>
+                  <Text style={styles.chartLegendText}>
+                    เดือนปัจจุบัน ({MONTH_NAMES[currentMonthIndex]})
+                  </Text>
+                </View>
+                <Text style={styles.chartLegendHint}>แตะแท่งกราฟเพื่อดูรายละเอียด</Text>
               </View>
 
               {/* Selected Month Detail Pop-out */}
@@ -1433,7 +1484,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    height: 160,
+    height: 168,
     paddingTop: 24,
     paddingBottom: 4,
   },
@@ -1457,6 +1508,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     overflow: 'hidden',
   },
+  barTrackCurrent: {
+    borderWidth: 1.5,
+    borderColor: '#059669',
+    backgroundColor: '#ECFDF5',
+  },
   barFill: {
     width: '100%',
     borderRadius: 7,
@@ -1470,15 +1526,89 @@ const styles = StyleSheet.create({
   barFillSelected: {
     backgroundColor: '#0F172A',
   },
+  barFillCurrent: {
+    backgroundColor: '#059669',
+  },
+  monthLabelWrapper: {
+    marginTop: 4,
+    paddingHorizontal: 2,
+    paddingVertical: 1,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthLabelWrapperCurrent: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 0.5,
+    borderColor: '#A7F3D0',
+  },
   barMonthLabel: {
     fontSize: 10,
     color: '#64748B',
-    marginTop: 6,
     fontWeight: '500',
   },
   barMonthLabelSelected: {
     color: '#0F172A',
     fontWeight: '800',
+  },
+  barMonthLabelCurrent: {
+    color: '#047857',
+    fontWeight: '800',
+  },
+  nowBadge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  nowBadgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#059669',
+    letterSpacing: -0.2,
+  },
+  nowPlaceholder: {
+    height: 16,
+    marginTop: 2,
+  },
+  nowBadgeLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: '#A7F3D0',
+    gap: 1,
+  },
+  chartLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  chartLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  chartLegendDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#059669',
+  },
+  chartLegendText: {
+    fontSize: 11,
+    color: '#059669',
+    fontWeight: '700',
+  },
+  chartLegendHint: {
+    fontSize: 11,
+    color: '#94A3B8',
   },
   selectedMonthDetails: {
     marginTop: 14,

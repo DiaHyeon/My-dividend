@@ -219,19 +219,19 @@ async function fetchYahoo7DayCloses(symbol: string): Promise<number[] | null> {
       }
     }
   } catch (err: any) {
-    // Fallback ผ่าน Edge Function
+    // Fallback ผ่าน Edge Function (สำคัญมากเมื่อเปิดบน Web Preview ที่ติด CORS หรือเครือข่ายที่มีข้อจำกัด)
     try {
       const edgeRes = await fetch(SUPABASE_FUNCTION_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'quote', symbol: targetSymbol }),
+        body: JSON.stringify({ action: 'history-7d', symbol: targetSymbol }),
       });
       if (edgeRes.ok) {
         const data = await edgeRes.json();
         const rawCloses = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
         if (Array.isArray(rawCloses) && rawCloses.length >= 2) {
           const valid = rawCloses
-            .filter((c) => c !== null && c !== undefined && !isNaN(c))
+            .filter((c) => c !== null && c !== undefined && !isNaN(c) && c > 0)
             .map((c) => Number(Number(c).toFixed(4)));
           if (valid.length >= 2) return valid;
         }
@@ -273,7 +273,28 @@ async function fetchSEC7DayNav(symbol: string): Promise<number[] | null> {
       }
     }
   } catch (err) {
-    // ignore
+    // Fallback ผ่าน Edge Function
+    try {
+      const edgeRes = await fetch(SUPABASE_FUNCTION_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'fund-nav', symbol }),
+      });
+      if (edgeRes.ok) {
+        const data = await edgeRes.json();
+        const items: any[] = data.history || data.items || [];
+        if (items.length >= 2) {
+          const sorted = [...items].sort((a, b) => (a.nav_date || '').localeCompare(b.nav_date || ''));
+          const navs = sorted
+            .slice(-7)
+            .map((it) => Number(it.last_val))
+            .filter((n) => !isNaN(n) && n > 0);
+          if (navs.length >= 2) return navs;
+        }
+      }
+    } catch {
+      // ignore
+    }
   }
 
   return null;

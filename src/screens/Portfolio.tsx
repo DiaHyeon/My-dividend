@@ -24,6 +24,7 @@ import { THAI_SAVINGS_TAX_FREE_LIMIT } from '../services/taxService';
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
 import { usePrivacyMode } from '../services/privacyService';
 import { ensureAuthenticated } from '../services/authService';
+import { syncDailyPricesIfNeeded } from '../services/priceSyncService';
 import {
   BenchmarkType,
   TimeframeType,
@@ -69,7 +70,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
     return false;
   }, [currencyMap]);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (forceSync = false) => {
     try {
       await ensureAuthenticated();
 
@@ -82,7 +83,22 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         .select('*')
         .order('created_at', { ascending: false });
 
-      const loadedAssets = (summaryData as AssetSummary[]) || [];
+      let loadedAssets = (summaryData as AssetSummary[]) || [];
+
+      // 1.1 Sync daily prices if new day or forced by pull-to-refresh
+      if (loadedAssets.length > 0) {
+        const pricesUpdated = await syncDailyPricesIfNeeded(loadedAssets, forceSync);
+        if (pricesUpdated) {
+          const { data: refreshedSummary, error: refreshedErr } = await supabase
+            .from('view_asset_summary')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (!refreshedErr && refreshedSummary) {
+            loadedAssets = refreshedSummary as AssetSummary[];
+          }
+        }
+      }
+
       if (!summaryError && summaryData) {
         setAssets(loadedAssets);
       }
@@ -125,7 +141,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadData();
+    loadData(true);
   };
 
   // Filtered assets based on active category filter tab, sorted by highest market value first
