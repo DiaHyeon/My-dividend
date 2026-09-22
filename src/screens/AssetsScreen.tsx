@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
-import { AssetSummary, AssetType, Transaction, TransactionType } from '../types/database';
+import { AssetSummary, AssetType, DividendSchedule, Transaction, TransactionType } from '../types/database';
 import { EditAssetModal } from '../components/EditAssetModal';
 import { EditTransactionModal } from '../components/EditTransactionModal';
 import { AddAssetModal } from '../components/AddAssetModal';
@@ -30,6 +30,7 @@ import { exportPortfolioToCsv } from '../services/csvService';
 import { usePrivacyMode } from '../services/privacyService';
 import { ensureAuthenticated } from '../services/authService';
 import { syncDailyPricesIfNeeded } from '../services/priceSyncService';
+import { calculatePortfolioReturns } from '../services/returnService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -72,6 +73,7 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
   const [viewMode, setViewMode] = useState<ViewMode>(initialView);
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [dividendSchedules, setDividendSchedules] = useState<DividendSchedule[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
@@ -80,6 +82,18 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | AssetType>(initialCategoryFilter);
   const [sortOption, setSortOption] = useState<SortOption>('VALUE_DESC');
+
+  useEffect(() => {
+    if (initialView) {
+      setViewMode(initialView);
+    }
+  }, [initialView]);
+
+  useEffect(() => {
+    if (initialCategoryFilter) {
+      setCategoryFilter(initialCategoryFilter);
+    }
+  }, [initialCategoryFilter]);
 
   // Transaction Filters
   const [selectedYear, setSelectedYear] = useState<string>('ALL');
@@ -96,13 +110,16 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
   const [exchangeRate, setExchangeRate] = useState<number>(34.00);
   const { isPrivate: isPrivateMode, toggle: togglePrivateMode } = usePrivacyMode();
 
-  const handleExportCsv = () => {
+  const handleExportCsv = async () => {
     if (!assets || assets.length === 0) {
       Alert.alert('ไม่มีข้อมูลพอร์ต', 'ยังไม่มีรายการสินทรัพย์ในพอร์ตให้ส่งออก');
       return;
     }
 
-    const csvData = exportPortfolioToCsv(assets);
+    const csvData = await exportPortfolioToCsv(assets, {
+      transactions,
+      schedules: dividendSchedules,
+    });
     const today = new Date().toISOString().split('T')[0];
     const filename = `my_dividend_portfolio_${today}.csv`;
 
@@ -139,7 +156,7 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
         .select('*')
         .order('symbol', { ascending: true });
 
-      let loadedAssets = (summaryData as AssetSummary[]) || [];
+      let loadedAssets = ((summaryData as AssetSummary[]) || []).filter((a) => !a.is_archived);
 
       // 1.1 Sync daily prices if new day or forced by pull-to-refresh
       if (loadedAssets.length > 0) {
@@ -150,7 +167,7 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
             .select('*')
             .order('symbol', { ascending: true });
           if (!refreshedErr && refreshedSummary) {
-            loadedAssets = refreshedSummary as AssetSummary[];
+            loadedAssets = ((refreshedSummary as AssetSummary[]) || []).filter((a) => !a.is_archived);
           }
         }
       }
@@ -163,21 +180,34 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
 
       const activeAssetIds = loadedAssets.map((a) => a.id).filter(Boolean);
 
-      // 2. Fetch Transactions (scoped to active assets if any exist)
+      // 2. Fetch Transactions & Dividend Schedules (scoped to active assets if any exist)
       if (activeAssetIds.length > 0) {
-        const { data: txData, error: txError } = await supabase
-          .from('transactions')
-          .select('*')
-          .in('asset_id', activeAssetIds)
-          .order('transaction_date', { ascending: false });
+        const [txRes, schedRes] = await Promise.all([
+          supabase
+            .from('transactions')
+            .select('*')
+            .in('asset_id', activeAssetIds)
+            .order('transaction_date', { ascending: false }),
+          supabase
+            .from('dividend_schedules')
+            .select('*')
+            .in('asset_id', activeAssetIds),
+        ]);
 
-        if (txError) {
-          console.warn('AssetsScreen fetch transactions error:', txError.message);
+        if (txRes.error) {
+          console.warn('AssetsScreen fetch transactions error:', txRes.error.message);
         } else {
-          setTransactions((txData as Transaction[]) || []);
+          setTransactions((txRes.data as Transaction[]) || []);
+        }
+
+        if (schedRes.error) {
+          console.warn('AssetsScreen fetch schedules error:', schedRes.error.message);
+        } else {
+          setDividendSchedules((schedRes.data as DividendSchedule[]) || []);
         }
       } else {
         setTransactions([]);
+        setDividendSchedules([]);
       }
 
       // 3. Exchange Rate
@@ -207,6 +237,12 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
     assets.forEach((a) => map.set(a.id, a));
     return map;
   }, [assets]);
+
+  // Return Metrics (Cumulative Dividends & Total Return)
+  const returnMetrics = useMemo(
+    () => calculatePortfolioReturns(assets, transactions, dividendSchedules, exchangeRate),
+    [assets, transactions, dividendSchedules, exchangeRate]
+  );
 
   // Enriched Transactions with Symbol & Asset Type
   const enrichedTransactions: EnrichedTransaction[] = useMemo(() => {
@@ -556,18 +592,24 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                 <Text style={styles.emptySubtitle}>ลองเปลี่ยนคำค้นหา หรือแตะปุ่ม + เพื่อบันทึกสินทรัพย์ใหม่</Text>
               </View>
             ) : (
-              filteredHoldings.map((item) => (
-                <AssetSparklineCard
-                  key={item.id}
-                  item={item}
-                  exchangeRate={exchangeRate}
-                  refreshTrigger={refreshTrigger}
-                  onPressEdit={(selected) => {
-                    setSelectedAssetForEdit(selected);
-                    setIsEditModalVisible(true);
-                  }}
-                />
-              ))
+              filteredHoldings.map((item) => {
+                const itemMetrics = returnMetrics.assetMetrics[item.id];
+                return (
+                  <AssetSparklineCard
+                    key={item.id}
+                    item={item}
+                    exchangeRate={exchangeRate}
+                    refreshTrigger={refreshTrigger}
+                    cumulativeDividends={itemMetrics?.cumulativeDividends}
+                    totalReturn={itemMetrics?.totalReturn}
+                    totalReturnPercent={itemMetrics?.totalReturnPercent}
+                    onPressEdit={(selected) => {
+                      setSelectedAssetForEdit(selected);
+                      setIsEditModalVisible(true);
+                    }}
+                  />
+                );
+              })
             )}
           </>
         )}

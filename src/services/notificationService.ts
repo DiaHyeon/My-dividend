@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Configure in-app notification behavior safely
 try {
@@ -93,10 +94,12 @@ export async function scheduleXdReminder(
     await initNotificationChannel();
     await requestNotificationPermissions();
 
-    // Trigger on reminderDate, or within 5 seconds if calculated time is in the past
-    const triggerDate = reminderDate.getTime() > Date.now()
-      ? reminderDate
-      : new Date(Date.now() + 5000);
+    // If the reminder time has already passed in the past, skip scheduling (never trigger false alerts for historical dates)
+    if (reminderDate.getTime() <= Date.now()) {
+      return null;
+    }
+
+    const triggerDate = reminderDate;
 
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
@@ -113,9 +116,131 @@ export async function scheduleXdReminder(
     });
 
     console.log(`Scheduled XD notification [${notificationId}] for ${symbol} at ${triggerDate.toISOString()}`);
+    
+    // Save to local registry for cancellation tracking
+    await saveScheduledReminder(notificationId, symbol, xdDateString);
+
     return notificationId;
   } catch (err: any) {
     console.log('[Notification notice] Local notification skipped in Expo Go:', err?.message);
     return null;
+  }
+}
+
+const SCHEDULED_REMINDERS_STORAGE_KEY = '@my_dividend_scheduled_reminders_registry';
+
+interface StoredReminder {
+  notificationId: string;
+  symbol: string;
+  xdDate: string;
+}
+
+async function getStoredReminders(): Promise<StoredReminder[]> {
+  try {
+    const raw = await AsyncStorage.getItem(SCHEDULED_REMINDERS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveScheduledReminder(notificationId: string, symbol: string, xdDate: string): Promise<void> {
+  try {
+    const list = await getStoredReminders();
+    // Remove existing for same symbol & date to prevent duplicates
+    const filtered = list.filter((r) => !(r.symbol === symbol && r.xdDate === xdDate));
+    filtered.push({ notificationId, symbol, xdDate });
+    await AsyncStorage.setItem(SCHEDULED_REMINDERS_STORAGE_KEY, JSON.stringify(filtered));
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Cancels a specific scheduled reminder by notification ID
+ */
+export async function cancelXdReminder(notificationId: string): Promise<void> {
+  if (!notificationId || Platform.OS === 'web') return;
+  try {
+    await Notifications.cancelScheduledNotificationAsync(notificationId);
+    const list = await getStoredReminders();
+    const updated = list.filter((r) => r.notificationId !== notificationId);
+    await AsyncStorage.setItem(SCHEDULED_REMINDERS_STORAGE_KEY, JSON.stringify(updated));
+    console.log(`[Notification Service] Cancelled notification [${notificationId}]`);
+  } catch (err: any) {
+    console.warn('Error cancelling notification:', err?.message);
+  }
+}
+
+/**
+ * Cancels all scheduled reminders for a specific stock symbol (e.g. when sold or deleted)
+ */
+export async function cancelRemindersForSymbol(symbol: string): Promise<void> {
+  if (!symbol || Platform.OS === 'web') return;
+  try {
+    const list = await getStoredReminders();
+    const targetReminders = list.filter((r) => r.symbol.toUpperCase() === symbol.toUpperCase());
+    for (const r of targetReminders) {
+      try {
+        await Notifications.cancelScheduledNotificationAsync(r.notificationId);
+      } catch {
+        // ignore
+      }
+    }
+    const remaining = list.filter((r) => r.symbol.toUpperCase() !== symbol.toUpperCase());
+    await AsyncStorage.setItem(SCHEDULED_REMINDERS_STORAGE_KEY, JSON.stringify(remaining));
+    console.log(`[Notification Service] Cancelled ${targetReminders.length} reminder(s) for ${symbol}`);
+  } catch (err: any) {
+    console.warn(`Error cancelling reminders for ${symbol}:`, err?.message);
+  }
+}
+
+/**
+ * Cancels all scheduled notifications across the entire app
+ */
+export async function cancelAllXdReminders(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    await AsyncStorage.removeItem(SCHEDULED_REMINDERS_STORAGE_KEY);
+    console.log('[Notification Service] Cancelled all scheduled notifications');
+  } catch (err: any) {
+    console.warn('Error cancelling all notifications:', err?.message);
+  }
+}
+
+/**
+ * Automatically cleans up orphaned notifications for symbols that are no longer held
+ */
+export async function cleanOrphanedReminders(activeHoldings: { symbol: string; net_shares?: number }[]): Promise<number> {
+  if (Platform.OS === 'web') return 0;
+  try {
+    const activeSymbols = new Set(
+      activeHoldings
+        .filter((h) => Number(h.net_shares || 0) > 0)
+        .map((h) => h.symbol.toUpperCase())
+    );
+
+    const list = await getStoredReminders();
+    const orphaned = list.filter((r) => !activeSymbols.has(r.symbol.toUpperCase()));
+
+    for (const r of orphaned) {
+      try {
+        await Notifications.cancelScheduledNotificationAsync(r.notificationId);
+      } catch {
+        // ignore
+      }
+    }
+
+    const remaining = list.filter((r) => activeSymbols.has(r.symbol.toUpperCase()));
+    await AsyncStorage.setItem(SCHEDULED_REMINDERS_STORAGE_KEY, JSON.stringify(remaining));
+    
+    if (orphaned.length > 0) {
+      console.log(`[Notification Service] Cleaned up ${orphaned.length} orphaned notification(s)`);
+    }
+    return orphaned.length;
+  } catch (err: any) {
+    console.warn('Error cleaning orphaned notifications:', err?.message);
+    return 0;
   }
 }

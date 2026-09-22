@@ -1,8 +1,7 @@
-// บริการนำเข้าและส่งออกข้อมูลพอร์ตสินทรัพย์และประวัติรายการผ่านไฟล์ CSV พร้อมระบบตรวจสอบความถูกต้องและดึงราคาอัตโนมัติ
 import Papa from 'papaparse';
 import { supabase } from '../lib/supabase';
-import { AssetSummary, AssetType } from '../types/database';
-import { isKnownUSSymbol, getCachedExchangeRate, setAssetCurrency } from './currencyService';
+import { AssetSummary, AssetType, Transaction, DividendSchedule } from '../types/database';
+import { isKnownUSSymbol, getCachedExchangeRate, setAssetCurrency, getAllTransactionCurrencyMeta } from './currencyService';
 import { detectSector, setAssetSector } from './sectorService';
 import { fetchStockPrice } from './stockService';
 import { fetchFundNav } from './fundService';
@@ -447,33 +446,111 @@ export function generateCsvTemplate(): string {
   ].join('\n');
 }
 
+export interface ExportCsvOptions {
+  transactions?: Transaction[];
+  schedules?: DividendSchedule[];
+  currencyMap?: Record<string, 'THB' | 'USD'>;
+}
+
 /**
- * ส่งออกข้อมูลพอร์ตสินทรัพย์ปัจจุบันเป็น CSV
+ * ส่งออกข้อมูลพอร์ตสินทรัพย์และประวัติธุรกรรมแบบ Full Backup เป็น CSV
+ * ครอบคลุมประวัติการซื้อทุกไม้ ต้นทุนสกุลเงินจริง (USD/THB) และรอบปันผล เพื่อให้กู้คืนพอร์ตได้ 100%
  */
-export function exportPortfolioToCsv(assets: AssetSummary[]): string {
+export async function exportPortfolioToCsv(
+  assets: AssetSummary[],
+  options?: ExportCsvOptions
+): Promise<string> {
+  const txMetas = await getAllTransactionCurrencyMeta();
+  const txList = options?.transactions || [];
+  const scheduleMap = new Map<string, number>();
+
+  if (options?.schedules) {
+    options.schedules.forEach((s) => {
+      if (s.dpu !== undefined && s.dpu !== null) {
+        scheduleMap.set(s.asset_id, Number(s.dpu));
+      }
+    });
+  }
+
+  // Schema แม่แบบที่ตรงกับ parseAndValidateCsv() สำหรับ Import กู้คืนได้ 100%
   const headers = [
     'symbol',
     'asset_type',
-    'net_shares',
-    'weighted_average_cost',
-    'current_price',
-    'market_value',
-    'total_cost',
-    'unrealized_pl',
-    'unrealized_pl_percent',
+    'shares',
+    'cost_price',
+    'currency',
+    'transaction_date',
+    'expected_dpu',
+    'tax_rate',
   ];
 
-  const rows = assets.map((a) => [
-    `"${a.symbol}"`,
-    a.asset_type,
-    Number(a.net_shares || 0).toFixed(4),
-    Number(a.weighted_average_cost || 0).toFixed(4),
-    Number(a.current_price || 0).toFixed(4),
-    Number(a.market_value || 0).toFixed(2),
-    Number(a.total_cost || 0).toFixed(2),
-    Number(a.unrealized_pl || 0).toFixed(2),
-    Number(a.unrealized_pl_percent || 0).toFixed(2),
-  ]);
+  // ถ้ามีรายการธุรกรรมย่อย (Transactions) ให้ส่งออกทุกไม้เพื่อรักษาวันที่และต้นทุนแต่ละรอบ
+  if (txList.length > 0) {
+    const assetById = new Map<string, AssetSummary>();
+    assets.forEach((a) => assetById.set(a.id, a));
+
+    const rows = txList.map((tx) => {
+      const asset = assetById.get(tx.asset_id);
+      const symbol = asset?.symbol || 'UNKNOWN';
+      const assetType = asset?.asset_type || 'STOCKS';
+      const meta = txMetas[tx.id];
+
+      const currency =
+        meta?.currency ||
+        options?.currencyMap?.[tx.asset_id] ||
+        (asset?.asset_type === 'STOCKS' && isKnownUSSymbol(symbol) ? 'USD' : 'THB');
+      const costPrice = meta?.originalPrice ?? Number(tx.price_per_share || 0);
+      const dpu = scheduleMap.get(tx.asset_id) ?? (asset?.asset_type === 'CASH' ? 0.015 : 0);
+      const taxRate =
+        asset?.tax_rate !== undefined
+          ? Number(asset.tax_rate)
+          : assetType === 'CASH'
+          ? 0
+          : currency === 'USD'
+          ? 0.15
+          : 0.1;
+
+      return [
+        `"${symbol.replace(/"/g, '""')}"`,
+        assetType,
+        Number(tx.shares || 0).toFixed(4),
+        Number(costPrice || 0).toFixed(4),
+        currency,
+        tx.transaction_date || new Date().toISOString().split('T')[0],
+        Number(dpu || 0).toFixed(6),
+        Number(taxRate || 0).toFixed(4),
+      ];
+    });
+
+    return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+  }
+
+  // กรณีไม่มีธุรกรรมย่อย ส่งออกรายการสินทรัพย์คงเหลือรวมตามมาตรฐาน
+  const rows = assets.map((a) => {
+    const currency =
+      options?.currencyMap?.[a.id] ||
+      (a.asset_type === 'STOCKS' && isKnownUSSymbol(a.symbol) ? 'USD' : 'THB');
+    const dpu = scheduleMap.get(a.id) ?? 0;
+    const taxRate =
+      a.tax_rate !== undefined
+        ? Number(a.tax_rate)
+        : a.asset_type === 'CASH'
+        ? 0
+        : currency === 'USD'
+        ? 0.15
+        : 0.1;
+
+    return [
+      `"${a.symbol.replace(/"/g, '""')}"`,
+      a.asset_type,
+      Number(a.net_shares || 0).toFixed(4),
+      Number(a.weighted_average_cost || 0).toFixed(4),
+      currency,
+      new Date().toISOString().split('T')[0],
+      Number(dpu || 0).toFixed(6),
+      Number(taxRate || 0).toFixed(4),
+    ];
+  });
 
   return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
 }

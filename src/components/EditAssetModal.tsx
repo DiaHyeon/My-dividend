@@ -14,10 +14,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
-import { AssetSummary, AssetType } from '../types/database';
+import { AssetSummary, AssetType, Transaction } from '../types/database';
 import { fetchStockPrice, fetchExchangeRate } from '../services/stockService';
 import { fetchFundNav } from '../services/fundService';
-import { scheduleXdReminder } from '../services/notificationService';
+import { scheduleXdReminder, cancelRemindersForSymbol } from '../services/notificationService';
+import { detectPendingSplits, applySplitAdjustment, SplitDetectionResult } from '../services/splitService';
 import { getSectorsForType, getAssetSector, setAssetSector, detectSector, getSectorDefinition } from '../services/sectorService';
 import { evaluateCashTax, calculateAnnualGrossInterest } from '../services/taxService';
 import { getAssetCurrency, setAssetCurrency, getCachedExchangeRate } from '../services/currencyService';
@@ -80,6 +81,11 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
   const [priceFeedback, setPriceFeedback] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Stock Split Detection State
+  const [splitDetection, setSplitDetection] = useState<SplitDetectionResult | null>(null);
+  const [isCheckingSplit, setIsCheckingSplit] = useState(false);
+  const [isApplyingSplit, setIsApplyingSplit] = useState(false);
 
   // Initialize values when asset changes or modal becomes visible
   useEffect(() => {
@@ -159,6 +165,34 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
     };
 
     loadSchedules();
+
+    // Check for pending stock splits (only applicable for STOCKS)
+    const checkSplits = async () => {
+      if (asset.asset_type !== 'STOCKS') {
+        setSplitDetection(null);
+        return;
+      }
+      setIsCheckingSplit(true);
+      try {
+        const { data: txs, error: txErr } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('asset_id', asset.id);
+
+        if (!txErr && txs && txs.length > 0) {
+          const result = await detectPendingSplits(asset.id, asset.symbol, txs as Transaction[]);
+          setSplitDetection(result);
+        } else {
+          setSplitDetection(null);
+        }
+      } catch (e) {
+        console.warn('Error checking pending splits:', e);
+      } finally {
+        setIsCheckingSplit(false);
+      }
+    };
+
+    checkSplits();
   }, [asset, visible]);
 
   // Handle switching currency toggle in Edit Modal
@@ -455,6 +489,43 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
     }
   };
 
+  // Handle One-Click Automatic Stock Split Adjustment
+  const handleApplySplit = async () => {
+    if (!splitDetection?.latestSplit || !asset) return;
+    const split = splitDetection.latestSplit;
+    Alert.alert(
+      `ยืนยันปรับการแตกพาร์ (${split.splitRatioStr})`,
+      `ระบบจะปรับจำนวนหุ้น x${split.ratio} และหารต้นทุนต่อหุ้นสำหรับ ${splitDetection.eligibleTransactions.length} รายการที่ซื้อก่อน ${split.date} อัตโนมัติ เพื่อให้พอร์ตและปันผลตรงกับความเป็นจริง`,
+      [
+        { text: 'ยกเลิก', style: 'cancel' },
+        {
+          text: 'ยืนยันปรับพาร์',
+          onPress: async () => {
+            setIsApplyingSplit(true);
+            try {
+              const res = await applySplitAdjustment(
+                asset,
+                split,
+                splitDetection.eligibleTransactions
+              );
+              Alert.alert(
+                'สำเร็จ',
+                `ปรับสัดส่วนการแตกพาร์ ${split.splitRatioStr} เรียบร้อยแล้ว (${res.updatedCount} รายการ) จำนวนหุ้นใหม่: ${res.newShares.toFixed(2)} หุ้น`
+              );
+              setSplitDetection(null);
+              onSuccess();
+              onClose();
+            } catch (err: any) {
+              Alert.alert('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถปรับสัดส่วนได้');
+            } finally {
+              setIsApplyingSplit(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Handle Delete (Prominent Red Button with Confirmation)
   const handleDelete = () => {
     if (!asset) return;
@@ -479,6 +550,9 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
               if (error) {
                 throw new Error(error.message || 'ไม่สามารถลบสินทรัพย์ได้');
               }
+
+              // Clean scheduled XD reminders for this symbol so no orphaned reminders pop up
+              await cancelRemindersForSymbol(asset.symbol);
 
               Alert.alert('สำเร็จ', `ลบ ${asset.symbol} ออกจากพอร์ตแล้ว`);
               onSuccess();
@@ -591,6 +665,43 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
             ) : (
               /* STOCKS / FUNDS FIELDS */
               <View>
+                {/* Stock Split Detection Notice Banner */}
+                {splitDetection?.hasSplit && splitDetection.latestSplit && (
+                  <View style={styles.splitBanner}>
+                    <View style={styles.splitBannerHeader}>
+                      <View style={styles.splitIconBox}>
+                        <Ionicons name="git-branch" size={18} color="#D97706" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.splitTitle}>ตรวจพบการแตกพาร์</Text>
+                          <View style={styles.splitBadge}>
+                            <Text style={styles.splitBadgeText}>{splitDetection.latestSplit.splitRatioStr}</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.splitSubtitle}>
+                          มีผล {splitDetection.latestSplit.date} • พบรายการซื้อก่อนแตกพาร์ {splitDetection.eligibleTransactions.length} รายการ
+                        </Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.applySplitButton}
+                      disabled={isApplyingSplit}
+                      onPress={handleApplySplit}
+                      activeOpacity={0.8}
+                    >
+                      {isApplyingSplit ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <Ionicons name="flash" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                          <Text style={styles.applySplitButtonText}>ปรับจำนวนหุ้น & ต้นทุนให้อัตโนมัติ (1-Click)</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
+
                 {/* 2. Symbol Field */}
                 <Text style={styles.fieldLabel}>ชื่อย่อสินทรัพย์ (Symbol)</Text>
                 <TextInput
@@ -1583,6 +1694,64 @@ const styles = StyleSheet.create({
     color: '#1E40AF',
     marginTop: 2,
     lineHeight: 16,
+  },
+  splitBanner: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+  },
+  splitBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 10,
+  },
+  splitIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  splitTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  splitBadge: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  splitBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  splitSubtitle: {
+    fontSize: 12,
+    color: '#B45309',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  applySplitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D97706',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  applySplitButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
 

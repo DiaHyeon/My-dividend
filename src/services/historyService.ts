@@ -4,7 +4,8 @@ import { AssetSummary } from '../types/database';
 
 const CACHE_PREFIX = '@sparkline_7d_';
 const SEC_API_KEY = process.env.EXPO_PUBLIC_SEC_API_KEY || '';
-const SUPABASE_FUNCTION_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://ycflookcrilaujmeillt.supabase.co'}/functions/v1/stock-proxy`;
+import { invokeStockProxy } from './proxyClient';
+import { isKnownUSSymbol } from './currencyService';
 
 // In-memory cache สำหรับความเร็ว 0ms ใน Session ปัจจุบัน
 const MEMORY_CACHE = new Map<string, { dateKey: string; timestamp: number; result: HistoryResult }>();
@@ -177,68 +178,73 @@ export async function clear7DayHistoryCache(): Promise<void> {
 }
 
 /**
- * ดึงราคาปิด 7 วันย้อนหลังจาก Yahoo Finance สำหรับหุ้น (US & SET)
+ * ดึงราคาปิด 7 วันย้อนหลังจาก Yahoo Finance สำหรับหุ้น (US & SET/mai/REITs)
  */
 async function fetchYahoo7DayCloses(symbol: string): Promise<number[] | null> {
-  let targetSymbol = symbol;
+  const cleanSym = (symbol || '').trim().toUpperCase();
+  if (!cleanSym) return null;
 
-  const isThaiStock =
-    targetSymbol.endsWith('.BK') ||
-    [
-      'PTT', 'CPALL', 'BDMS', 'SCB', 'KBANK', 'AOT', 'ADVANC', 'DELTA', 'GULF', 'TRUE',
-      'BBL', 'KTB', 'SCC', 'BH', 'INTUCH', 'OR', 'CPN', 'MINT', 'HANA', 'KCE', 'EA',
-      'SPRC', 'IRPC', 'BANPU', 'RATCH', 'EGCO', 'TTB', 'TISCO', 'KKP', 'BCH', 'PR9',
-      'CHG', 'VIBHA', 'CPF', 'CBG', 'OSP', 'CRC', 'HMPRO', 'GLOBAL', 'DOHOME', 'BEM',
-      'BTS', 'AAV', 'IVL', 'TU', 'CCET'
-    ].includes(targetSymbol);
+  let targetSymbol = cleanSym;
+  const isUS = isKnownUSSymbol(cleanSym);
 
-  if (isThaiStock && !targetSymbol.endsWith('.BK')) {
+  // หุ้นไทยใน SET, mai, กองรีท และกองทุนโครงสร้างพื้นฐานจะต่อท้ายด้วย .BK
+  if (!isUS && !targetSymbol.endsWith('.BK') && !targetSymbol.includes('=')) {
     targetSymbol = `${targetSymbol}.BK`;
   }
 
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(targetSymbol)}?interval=1d&range=7d`;
-
-  try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      const rawCloses = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
-      if (Array.isArray(rawCloses)) {
-        const validCloses = rawCloses
-          .filter((c) => c !== null && c !== undefined && !isNaN(c) && c > 0)
-          .map((c) => Number(Number(c).toFixed(4)));
-
-        if (validCloses.length >= 2) {
-          return validCloses;
-        }
-      }
-    }
-  } catch (err: any) {
-    // Fallback ผ่าน Edge Function (สำคัญมากเมื่อเปิดบน Web Preview ที่ติด CORS หรือเครือข่ายที่มีข้อจำกัด)
+  const tryFetchCloses = async (sym: string): Promise<number[] | null> => {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=7d`;
     try {
-      const edgeRes = await fetch(SUPABASE_FUNCTION_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'history-7d', symbol: targetSymbol }),
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
       });
-      if (edgeRes.ok) {
-        const data = await edgeRes.json();
+
+      if (res.ok) {
+        const data = await res.json();
         const rawCloses = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
-        if (Array.isArray(rawCloses) && rawCloses.length >= 2) {
-          const valid = rawCloses
+        if (Array.isArray(rawCloses)) {
+          const validCloses = rawCloses
             .filter((c) => c !== null && c !== undefined && !isNaN(c) && c > 0)
             .map((c) => Number(Number(c).toFixed(4)));
-          if (valid.length >= 2) return valid;
+
+          if (validCloses.length >= 2) {
+            return validCloses;
+          }
         }
       }
     } catch {
-      // ignore
+      // Fallback ผ่าน Edge Function (เมื่อเปิดบน Web Preview ติด CORS หรือเครือข่ายจำกัด)
+      try {
+        const { data } = await invokeStockProxy({ action: 'history-7d', symbol: sym });
+        if (data) {
+          const rawCloses = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
+          if (Array.isArray(rawCloses) && rawCloses.length >= 2) {
+            const valid = rawCloses
+              .filter((c: any) => c !== null && c !== undefined && !isNaN(c) && c > 0)
+              .map((c: any) => Number(Number(c).toFixed(4)));
+            if (valid.length >= 2) return valid;
+          }
+        }
+      } catch {
+        // ignore
+      }
     }
+    return null;
+  };
+
+  // 1. ลองดึงจาก targetSymbol หลักก่อน
+  const primaryResult = await tryFetchCloses(targetSymbol);
+  if (primaryResult) return primaryResult;
+
+  // 2. สำรอง: ถ้าลองมี .BK แล้วยังไม่เจอ ให้ลองแบบไม่มี .BK (หรือกลับกัน)
+  if (targetSymbol.endsWith('.BK')) {
+    const fallbackNoBk = await tryFetchCloses(cleanSym);
+    if (fallbackNoBk) return fallbackNoBk;
+  } else {
+    const fallbackBk = await tryFetchCloses(`${cleanSym}.BK`);
+    if (fallbackBk) return fallbackBk;
   }
 
   return null;
@@ -275,13 +281,8 @@ async function fetchSEC7DayNav(symbol: string): Promise<number[] | null> {
   } catch (err) {
     // Fallback ผ่าน Edge Function
     try {
-      const edgeRes = await fetch(SUPABASE_FUNCTION_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'fund-nav', symbol }),
-      });
-      if (edgeRes.ok) {
-        const data = await edgeRes.json();
+      const { data } = await invokeStockProxy({ action: 'fund-nav', symbol });
+      if (data) {
         const items: any[] = data.history || data.items || [];
         if (items.length >= 2) {
           const sorted = [...items].sort((a, b) => (a.nav_date || '').localeCompare(b.nav_date || ''));

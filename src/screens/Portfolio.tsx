@@ -31,6 +31,7 @@ import {
   BENCHMARKS,
   TIMEFRAMES,
   getBenchmarkComparison,
+  syncBenchmarkReturns,
 } from '../services/benchmarkService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -61,6 +62,12 @@ export const Portfolio: React.FC<PortfolioProps> = ({
   const [selectedBenchmark, setSelectedBenchmark] = useState<BenchmarkType>('SP500');
   const [isBenchmarkPickerVisible, setIsBenchmarkPickerVisible] = useState(false);
 
+  useEffect(() => {
+    if (initialCategoryFilter) {
+      setActiveCategoryFilter(initialCategoryFilter);
+    }
+  }, [initialCategoryFilter]);
+
   const isUSStock = useCallback((item: AssetSummary): boolean => {
     if (item.asset_type !== 'STOCKS') return false;
     if (currencyMap[item.id] === 'USD') return true;
@@ -83,7 +90,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         .select('*')
         .order('created_at', { ascending: false });
 
-      let loadedAssets = (summaryData as AssetSummary[]) || [];
+      let loadedAssets = ((summaryData as AssetSummary[]) || []).filter((a) => !a.is_archived);
 
       // 1.1 Sync daily prices if new day or forced by pull-to-refresh
       if (loadedAssets.length > 0) {
@@ -94,7 +101,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
             .select('*')
             .order('created_at', { ascending: false });
           if (!refreshedErr && refreshedSummary) {
-            loadedAssets = refreshedSummary as AssetSummary[];
+            loadedAssets = ((refreshedSummary as AssetSummary[]) || []).filter((a) => !a.is_archived);
           }
         }
       }
@@ -102,6 +109,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({
       if (!summaryError && summaryData) {
         setAssets(loadedAssets);
       }
+
+      // Background sync benchmark indices (SET, S&P 500, NASDAQ) without blocking UI
+      syncBenchmarkReturns(forceSync).catch(() => {});
 
       const activeAssetIds = loadedAssets.map((a) => a.id).filter(Boolean);
 

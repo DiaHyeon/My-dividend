@@ -10,7 +10,7 @@ import {
 import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { AssetSummary } from '../types/database';
-import { isKnownUSSymbol } from '../services/currencyService';
+import { isKnownUSSymbol, getAssetAverageCostUSD } from '../services/currencyService';
 import { fetch7DayPriceHistory, HistoryResult } from '../services/historyService';
 import { usePrivacyMode } from '../services/privacyService';
 
@@ -21,6 +21,9 @@ interface AssetSparklineCardProps {
   exchangeRate?: number;
   onPressEdit: (item: AssetSummary) => void;
   refreshTrigger?: number;
+  cumulativeDividends?: number;
+  totalReturn?: number;
+  totalReturnPercent?: number;
 }
 
 /**
@@ -43,34 +46,12 @@ function generateSparklineData(item: AssetSummary): number[] {
     return points;
   }
 
-  // สร้าง Seed จากตัวอักษรของ Symbol เพื่อให้กราฟของหุ้นตัวนั้นๆ นิ่ง ไม่เปลี่ยนไปมาทุก Render
-  let seed = 0;
-  for (let i = 0; i < item.symbol.length; i++) {
-    seed += item.symbol.charCodeAt(i) * (i + 1);
-  }
-
-  const pseudoRandom = (step: number) => {
-    const x = Math.sin(seed + step * 997) * 10000;
-    return x - Math.floor(x);
-  };
-
-  const numPoints = 14;
+  // สำหรับหุ้นและกองทุน: เมื่อยังไม่มีข้อมูลประวัติราคา 7 วันจริง ให้แสดงเส้นตรงระดับราคาปัจจุบันอย่างซื่อตรง ไม่สร้างคลื่นสุ่มหลอกตา
+  const numPoints = 8;
   const points: number[] = [];
-  const startVal = costPrice > 0 ? costPrice : currentPrice * 0.9;
-  const endVal = currentPrice;
-
   for (let i = 0; i < numPoints; i++) {
-    const progress = i / (numPoints - 1);
-    // Interpolate จากต้นทุนไปสู่ราคาปัจจุบัน
-    const trend = startVal + (endVal - startVal) * progress;
-    // เพิ่มความผันผวนตามธรรมชาติของตลาด แต่ปลายทางเข้าสู่ราคาปัจจุบัน
-    const dampening = Math.sin(progress * Math.PI); // ปลายสุดสองข้างความผันผวนต่ำ
-    const wave = (pseudoRandom(i) - 0.48) * (Math.abs(endVal - startVal) * 0.4 + 2) * dampening;
-    points.push(trend + wave);
+    points.push(currentPrice);
   }
-
-  // จุดสุดท้ายคือราคาปัจจุบันอย่างแน่นอน
-  points[numPoints - 1] = endVal;
   return points;
 }
 
@@ -131,6 +112,9 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
   exchangeRate = 34.0,
   onPressEdit,
   refreshTrigger = 0,
+  cumulativeDividends,
+  totalReturn,
+  totalReturnPercent,
 }) => {
   const [cardWidth, setCardWidth] = useState<number>(SCREEN_WIDTH - 32);
   const { isPrivate: isPrivateMode } = usePrivacyMode();
@@ -151,11 +135,26 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
   const isCash = item.asset_type === 'CASH';
   const isFund = item.asset_type === 'FUNDS';
 
+  const [exactUsdCost, setExactUsdCost] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isUS || !item.id) return;
+    let isMounted = true;
+    getAssetAverageCostUSD(item.id).then((val) => {
+      if (isMounted && val !== null && val > 0) {
+        setExactUsdCost(val);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [isUS, item.id]);
+
   const rate = exchangeRate > 0 ? exchangeRate : 34.0;
   const currentPriceTHB = Number(item.current_price) || 0;
   const costPriceTHB = Number(item.weighted_average_cost) || 0;
   const currentPriceUSD = isUS ? currentPriceTHB / rate : 0;
-  const costPriceUSD = isUS ? costPriceTHB / rate : 0;
+  const costPriceUSD = isUS ? (exactUsdCost ?? (costPriceTHB / rate)) : 0;
 
   const marketValue = Number(item.market_value) || 0;
   const unrealizedPL = Number(item.unrealized_pl) || 0;
@@ -186,9 +185,9 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
     return generateSparklineData(item);
   }, [history, item]);
 
-  // ผลตอบแทนในรอบ 7 วัน
-  const change7d = history ? history.change7dPct : (isPositive ? 1.2 : -1.2);
-  const is7dPositive = change7d >= 0;
+  // ผลตอบแทนในรอบ 7 วัน (แสดงค่าจริงเท่านั้น หากไม่มีข้อมูลให้เป็น null ไม่สร้างตัวเลขสมมุติ)
+  const change7d = history ? history.change7dPct : null;
+  const is7dPositive = change7d !== null ? change7d >= 0 : isPositive;
 
   // กำหนดสีกราฟตามผลงาน 7 วันล่าสุด
   const color = isCash
@@ -347,6 +346,26 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
         )}
       </View>
 
+      {/* 3.4 Minimal Total Return Strip (เมื่อเคยมีเงินปันผล/ดอกเบี้ยรับสะสม) */}
+      {cumulativeDividends !== undefined && cumulativeDividends > 0 && (
+        <View style={styles.totalReturnStrip}>
+          <View style={styles.totalReturnLeft}>
+            <Ionicons name="sparkles" size={11} color="#D97706" />
+            <Text style={styles.totalReturnLabel}>
+              ปันผลสะสม {isPrivateMode ? '฿••••' : `฿${cumulativeDividends.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`}
+            </Text>
+          </View>
+          <Text
+            style={[
+              styles.totalReturnPercent,
+              (totalReturnPercent ?? 0) >= 0 ? styles.textPositive : styles.textNegative,
+            ]}
+          >
+            Total Return: {(totalReturnPercent ?? 0) >= 0 ? '+' : ''}{(totalReturnPercent ?? 0).toFixed(1)}%
+          </Text>
+        </View>
+      )}
+
       {/* 3.5 7-Day Trend Header Tag */}
       <View style={styles.chartTagRow}>
         <View style={styles.chartTagBadge}>
@@ -364,10 +383,10 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
         <Text
           style={[
             styles.chartChangeText,
-            isCash ? styles.textCash : is7dPositive ? styles.textPositive : styles.textNegative,
+            isCash ? styles.textCash : change7d === null ? styles.metaLabel : is7dPositive ? styles.textPositive : styles.textNegative,
           ]}
         >
-          {isCash ? 'สะสมดอกเบี้ย' : `${is7dPositive ? '+' : ''}${change7d.toFixed(2)}%`}
+          {isCash ? 'สะสมดอกเบี้ย' : change7d !== null ? `${is7dPositive ? '+' : ''}${change7d.toFixed(2)}%` : '--'}
         </Text>
       </View>
 
@@ -628,5 +647,33 @@ const styles = StyleSheet.create({
   },
   textCash: {
     color: '#0D9488',
+  },
+  totalReturnStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 2,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  totalReturnLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  totalReturnLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  totalReturnPercent: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

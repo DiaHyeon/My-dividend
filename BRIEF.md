@@ -146,8 +146,10 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
 
 ---
 
-### 4.5 Supabase Edge Function (`stock-proxy`)
-- Resolves browser CORS limitations and acts as a lightweight proxy for Yahoo Finance and SEC Open API requests.
+### 4.5 Supabase Edge Function (`stock-proxy`) & Secure Proxy Client
+- Resolves browser CORS limitations and acts as a hardened proxy for Yahoo Finance and SEC Open API requests.
+- **Security Auth Guard**: Enforces API key / Bearer token validation on all incoming requests to reject unauthorized scrapers (HTTP 401).
+- **Client Helper (`proxyClient.ts`)**: Centralized service invoking `stock-proxy` with automatic `apikey` & `Authorization: Bearer <key>` header injection, strict 8-second request timeouts, and SDK fallback.
 - Deployed at Supabase Project: `ycflookcrilaujmeillt`
 - Endpoint: `/functions/v1/stock-proxy`
 - Supported Actions:
@@ -366,12 +368,14 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
 
 ---
 
-### 4.16 CSV Bulk Portfolio Import & Export Engine
+### 4.16 CSV Bulk Portfolio Import & Full Backup Export Engine
 - Handled by: `src/services/csvService.ts`, `src/components/ImportCsvModal.tsx`, `src/screens/AssetsScreen.tsx`
 - **Access**: `[ 📥 Import CSV ]` and `[ 📤 Export ]` buttons in the header of the `Holdings` screen.
-- **Portfolio CSV Export**:
-  - Exports active holdings including symbol, asset type, shares, cost price, current price, market value, and gain/loss.
-  - Supports automated web file download and native mobile sharing.
+- **Portfolio CSV Full Backup & Restore Export**:
+  - Exports portfolio at granular transaction level (`transactions`) preserving individual DCA purchase batches, transaction dates, and original native currency purchase prices (USD for US stocks, THB for Thai assets).
+  - Preserves projected or adjusted `expected_dpu` and `tax_rate` per asset.
+  - Symmetrical CSV format matching `parseAndValidateCsv` schema (`symbol,asset_type,shares,cost_price,currency,transaction_date,expected_dpu,tax_rate`), guaranteeing 100% full portfolio restoration via `ImportCsvModal`.
+  - Supports automated web file download (`Blob` + auto-click) and native mobile sharing (`Share.share`).
 - **Portfolio CSV Bulk Import**:
   - **Dual Import Modes**:
     1. File Picker: Upload `.csv` or `.txt` via `expo-document-picker`.
@@ -386,6 +390,13 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
     - Automatically converts USD costs to THB.
     - Automatically generates 12-month dividend schedules and runs duplicate DCA consolidation.
   - **Template Download**: Sample CSV template download and copy option with clear column specifications.
+
+---
+
+### 4.17 Defensive Soft Delete & Data Safety Architecture
+- Handled by: `src/screens/Dashboard.tsx`, `src/screens/Portfolio.tsx`, `src/screens/AssetsScreen.tsx`
+- **Zero Data Leakage**: In addition to backend SQL view filtering, all client-side queries against `view_asset_summary` strictly enforce `.filter((a) => !a.is_archived)`.
+- Prevents soft-deleted or archived assets and their historical records from inadvertently influencing net worth calculations, dividend projections, or visual listings.
 
 ---
 
@@ -414,6 +425,10 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   *(or `npx expo start --tunnel --go --web`)*
 - Tunnel mode via `@expo/ngrok` provides a public `.exp.direct` proxy enabling instant QR code scanning and bundle loading across any network.
 
+### 5.4 Agent Operation & Scope Discipline (กฎเหล็กการทำงานของ AI Agent)
+- **Explicit Declaration (ต้องบอกก่อนทำ)**: ก่อนลงมือแก้ไขโค้ดหรือดำเนินการใดๆ ต้องอธิบายให้ผู้ใช้ทราบล่วงหน้าอย่างชัดเจนเสมอ
+- **Strict Scope Boundaries (ห้ามทำเกินกว่าที่บอก)**: ต้องปฏิบัติตามขอบเขตที่ได้แจ้งและที่ได้รับมอบหมายเท่านั้น ห้ามแก้ไข เพิ่มเติม หรือดัดแปลงส่วนอื่นนอกเหนือจากที่บอกไว้โดยเด็ดขาด
+
 ---
 
 ## 6. Project File Structure
@@ -433,6 +448,9 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - `components/CashAssetForm.tsx`: Modular form component for bank deposits, interest payout cycles, and pro-rata tax calculations
   - `components/CategoryBreakdownModal.tsx`: Bottom sheet modal displaying segment breakdown donut chart and 20,000 THB tax-free interest quota meter
   - `components/GoalSettingsModal.tsx`: Minimal bottom sheet modal for configuring monthly passive income goal targets and level presets
+  - `components/HeroNetWorthCard.tsx`: Zero-jitter hero card displaying total portfolio net worth, unrealized P/L, dual dividend yields (Current & YoC), and privacy masking
+  - `components/UpcomingPaydayRadar.tsx`: Compact radar ticker displaying upcoming ex-dividend dates and bank interest payout events within 14 days
+  - `components/AdjustDividendModal.tsx`: Minimal bottom sheet modal for manual dividend payout adjustments, actual received verification, and DPU overrides
   - `services/privacyService.ts`: Global privacy state management and cross-screen masking synchronization via AsyncStorage
   - `services/taxService.ts`: Thai bank deposit interest tax calculation engine (20,000 THB annual exemption threshold)
   - `services/sectorService.ts`: Standard GICS, AIMC, and deposit sector taxonomy classification service
@@ -443,7 +461,10 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - `services/assetConsolidationService.ts`: Position accumulation and duplicate asset consolidation service
   - `services/benchmarkService.ts`: Portfolio cumulative return, alpha calculation, and market benchmark comparison service (SET, S&P 500, NASDAQ)
   - `services/historyService.ts`: 7-day historical closing price caching service with Once-a-Day EOD cache and on-demand refresh
-  - `services/priceSyncService.ts`: Automated daily market price and NAV synchronization service updating Supabase database on first open and pull-to-refresh
+  - `services/priceSyncService.ts`: Automated daily market price and NAV synchronization service updating Supabase database with batch throttling (HTTP 429 protection)
+  - `services/proxyClient.ts`: Centralized client helper for securely invoking the stock-proxy Supabase Edge Function with automatic authentication headers and timeout control
+  - `services/splitService.ts`: Automated stock split detection, market event fetching, and 1-click share & cost adjustments engine
+  - `services/returnService.ts`: Realized dividend income calculation and Total Return engine (Capital Gain + Dividends)
 - `scripts/`
   - `patch-expo-notifications.js`: Patch script resolving Expo Go Android notification crashes
 - `supabase/functions/stock-proxy/`: Supabase Edge Function source code proxying Yahoo Finance and SEC Open API requests

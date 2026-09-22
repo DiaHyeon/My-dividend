@@ -3,6 +3,7 @@
 Read BRIEF.md before doing anything. It is the single source of truth and contains all latest specifications, architecture, and features.
 
 ## Rules
+- **Scope & Communication Protocol**: Always state clearly and explicitly what you are going to do before doing it, and strictly NEVER exceed or do more than what was requested or stated (ห้ามทำเกินกว่าที่บอกโดยเด็ดขาด).
 - Stack is Expo + TypeScript (Expo SDK 57).
 - Read the exact versioned Expo docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
 - All monetary and share counts must be NUMERIC(15, 4) (never use FLOAT or REAL).
@@ -28,3 +29,13 @@ Read BRIEF.md before doing anything. It is the single source of truth and contai
 - For individual transaction editing, deletion, and DCA adjustments, use `EditTransactionModal.tsx` with automatic zero-share asset cleanup and `view_asset_summary` recalculation.
 - For automated daily market price and NAV synchronization, use `priceSyncService.ts` with Once-a-Day caching (`@my_dividend_last_price_sync_date`), pull-to-refresh force sync, and `assets.current_price` Supabase batch updates with NUMERIC(15, 4).
 - For the 12-month cashflow bar chart on Overview, highlight the current calendar month with an emerald border track, rounded month label pill, and `▲ Now` indicator badge with an explicit legend row.
+- For Supabase Edge Function proxy calls, use `proxyClient.ts` with automatic `apikey`/`Authorization` headers, strict timeout control, and resilient fallback.
+- For tab navigation and screen state preservation, keep `Dashboard`, `Portfolio`, and `AssetsScreen` continuously mounted in `App.tsx` using `styles.screenWrapper` with `display: 'flex' | 'none'`, ensuring zero-latency tab switching, scroll position retention, and elimination of redundant database queries on switch.
+- For Hero Net Worth and Upcoming Payday Radar on Overview, use dedicated modular subcomponents `HeroNetWorthCard.tsx` and `UpcomingPaydayRadar.tsx`.
+- For manual dividend payout adjustments, actual received verification, and DPU overrides, use `AdjustDividendModal.tsx` with dual-sync DPU/Net calculation and NUMERIC(15, 4) precision.
+- For client-side data safety and soft deletes, always apply defensive filtering (`.filter((a) => !a.is_archived)`) across all views and screens to prevent archived records from affecting portfolio totals.
+- For stock split detection and one-click share/cost adjustments, use `splitService.ts` and `EditAssetModal.tsx` with `NUMERIC(15, 4)` precision and date-based purchase filtering (`transaction_date < split.date`).
+- For notification hygiene, prune scheduled XD reminders on asset deletion and run `cleanOrphanedReminders` on dashboard load.
+- For Total Return and cumulative dividends, use `returnService.ts` to separate Capital Gain from cumulative cash dividends, displaying both metrics cleanly on `HeroNetWorthCard.tsx` and `AssetSparklineCard.tsx`.
+
+

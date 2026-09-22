@@ -93,56 +93,66 @@ export async function syncDailyPricesIfNeeded(
       return false;
     }
 
-    // 2. Fetch latest quotes in parallel with individual error protection
+    // 2. Fetch latest quotes in small batches with gentle throttling to protect upstream APIs against rate limits (HTTP 429)
     const priceUpdates: { id: string; symbol: string; newPriceTHB: number }[] = [];
+    const BATCH_SIZE = 3;
 
-    await Promise.all(
-      eligibleAssets.map(async (asset) => {
-        try {
-          const rawSymbol = asset.symbol.trim().toUpperCase();
+    for (let i = 0; i < eligibleAssets.length; i += BATCH_SIZE) {
+      const batch = eligibleAssets.slice(i, i + BATCH_SIZE);
 
-          if (asset.asset_type === 'STOCKS') {
-            const rawMarketPrice = await fetchStockPrice(rawSymbol);
-            if (rawMarketPrice !== null && !isNaN(rawMarketPrice) && rawMarketPrice > 0) {
-              const currency = await getAssetCurrency(
-                asset.id,
-                asset.symbol,
-                asset.tax_rate,
-                asset.asset_type
-              );
-              const priceTHB = currency === 'USD' ? rawMarketPrice * fxRate : rawMarketPrice;
-              const roundedTHB = Number(priceTHB.toFixed(4));
+      await Promise.all(
+        batch.map(async (asset) => {
+          try {
+            const rawSymbol = asset.symbol.trim().toUpperCase();
 
-              const oldPrice = Number(asset.current_price) || 0;
-              // Check if price changed by more than 0.0001
-              if (Math.abs(roundedTHB - oldPrice) > 0.0001) {
-                priceUpdates.push({
-                  id: asset.id,
-                  symbol: rawSymbol,
-                  newPriceTHB: roundedTHB,
-                });
+            if (asset.asset_type === 'STOCKS') {
+              const rawMarketPrice = await fetchStockPrice(rawSymbol);
+              if (rawMarketPrice !== null && !isNaN(rawMarketPrice) && rawMarketPrice > 0) {
+                const currency = await getAssetCurrency(
+                  asset.id,
+                  asset.symbol,
+                  asset.tax_rate,
+                  asset.asset_type
+                );
+                const priceTHB = currency === 'USD' ? rawMarketPrice * fxRate : rawMarketPrice;
+                const roundedTHB = Number(priceTHB.toFixed(4));
+
+                const oldPrice = Number(asset.current_price) || 0;
+                // Check if price changed by more than 0.0001
+                if (Math.abs(roundedTHB - oldPrice) > 0.0001) {
+                  priceUpdates.push({
+                    id: asset.id,
+                    symbol: rawSymbol,
+                    newPriceTHB: roundedTHB,
+                  });
+                }
+              }
+            } else if (asset.asset_type === 'FUNDS') {
+              const navResult = await fetchFundNav(undefined, rawSymbol);
+              if (navResult && !isNaN(navResult.latestNav) && navResult.latestNav > 0) {
+                const roundedTHB = Number(navResult.latestNav.toFixed(4));
+                const oldPrice = Number(asset.current_price) || 0;
+
+                if (Math.abs(roundedTHB - oldPrice) > 0.0001) {
+                  priceUpdates.push({
+                    id: asset.id,
+                    symbol: rawSymbol,
+                    newPriceTHB: roundedTHB,
+                  });
+                }
               }
             }
-          } else if (asset.asset_type === 'FUNDS') {
-            const navResult = await fetchFundNav(undefined, rawSymbol);
-            if (navResult && !isNaN(navResult.latestNav) && navResult.latestNav > 0) {
-              const roundedTHB = Number(navResult.latestNav.toFixed(4));
-              const oldPrice = Number(asset.current_price) || 0;
-
-              if (Math.abs(roundedTHB - oldPrice) > 0.0001) {
-                priceUpdates.push({
-                  id: asset.id,
-                  symbol: rawSymbol,
-                  newPriceTHB: roundedTHB,
-                });
-              }
-            }
+          } catch (assetErr: any) {
+            console.warn(`Price sync error for ${asset.symbol}:`, assetErr?.message || assetErr);
           }
-        } catch (assetErr: any) {
-          console.warn(`Price sync error for ${asset.symbol}:`, assetErr?.message || assetErr);
-        }
-      })
-    );
+        })
+      );
+
+      // Brief delay between batches to respect upstream API rate limits
+      if (i + BATCH_SIZE < eligibleAssets.length) {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+    }
 
     // 3. Batch update changed assets in Supabase
     if (priceUpdates.length > 0) {

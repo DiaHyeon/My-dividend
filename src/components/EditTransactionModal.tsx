@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { AssetType, Transaction } from '../types/database';
 import { CalendarPickerModal } from './CalendarPickerModal';
-import { isKnownUSSymbol } from '../services/currencyService';
+import { isKnownUSSymbol, getTransactionCurrencyMeta, saveTransactionCurrencyMeta } from '../services/currencyService';
 
 export interface EnrichedTransaction extends Transaction {
   symbol: string;
@@ -54,20 +54,33 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   useEffect(() => {
     if (!transaction || !visible) return;
 
-    setCurrencyMode(isUS ? 'USD' : 'THB');
     setShares(transaction.shares ? transaction.shares.toString() : '');
     setTxDate(transaction.transaction_date || new Date().toISOString().split('T')[0]);
 
+    let isCancelled = false;
     const rate = exchangeRate > 0 ? exchangeRate : 34.00;
     const rawPrice = Number(transaction.price_per_share) || 0;
 
-    if (isDeposit) {
-      setPricePerShare('1');
-    } else if (isUS && rate > 0) {
-      setPricePerShare((rawPrice / rate).toFixed(2));
-    } else {
-      setPricePerShare(rawPrice.toString());
-    }
+    getTransactionCurrencyMeta(transaction.id).then((meta) => {
+      if (isCancelled) return;
+      if (meta && meta.originalPrice > 0) {
+        setCurrencyMode(meta.currency);
+        setPricePerShare(meta.originalPrice.toString());
+      } else {
+        setCurrencyMode(isUS ? 'USD' : 'THB');
+        if (isDeposit) {
+          setPricePerShare('1');
+        } else if (isUS && rate > 0) {
+          setPricePerShare((rawPrice / rate).toFixed(2));
+        } else {
+          setPricePerShare(rawPrice.toString());
+        }
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
   }, [transaction, visible, exchangeRate, isUS, isDeposit]);
 
   if (!transaction) return null;
@@ -115,6 +128,13 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       if (error) {
         throw new Error(error.message || 'ไม่สามารถบันทึกการแก้ไขได้');
       }
+
+      await saveTransactionCurrencyMeta(transaction.id, {
+        originalPrice: parsedPrice,
+        currency: currencyMode,
+        fxRate: rate,
+        assetId: transaction.asset_id,
+      });
 
       Alert.alert('สำเร็จ', `อัปเดตรายการ ${transaction.symbol} เรียบร้อยแล้ว`);
       onSuccess();

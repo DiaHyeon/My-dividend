@@ -20,7 +20,7 @@ import { searchStocks, fetchStockPrice, fetchExchangeRate, fetchDividendAnalysis
 import { searchThaiFunds, fetchFundNav, fetchFundDividendAnalysis, FundSuggestion, POPULAR_THAI_FUNDS, fetchFundCategory } from '../services/fundService';
 import { getSectorsForType, detectSector, setAssetSector, getSectorDefinition } from '../services/sectorService';
 import { evaluateCashTax, calculateAnnualGrossInterest } from '../services/taxService';
-import { setAssetCurrency } from '../services/currencyService';
+import { setAssetCurrency, saveTransactionCurrencyMeta } from '../services/currencyService';
 import { ensureAuthenticated } from '../services/authService';
 import { CashAssetForm } from './CashAssetForm';
 import { CalendarPickerModal } from './CalendarPickerModal';
@@ -740,16 +740,25 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       // 2. Insert BUY record to transactions table
       const todayDate = new Date().toISOString().split('T')[0];
       const effectiveTxDate = purchaseDate && purchaseDate.trim() ? purchaseDate.trim() : todayDate;
-      const { error: txError } = await supabase.from('transactions').insert({
+      const { data: insertedTx, error: txError } = await supabase.from('transactions').insert({
         asset_id: asset.id,
         type: 'BUY',
         shares: Number(parsedShares.toFixed(4)),
         price_per_share: Number(convertedCostPrice.toFixed(4)),
         transaction_date: effectiveTxDate,
-      });
+      }).select().single();
 
       if (txError) {
         throw new Error(txError.message || 'ไม่สามารถบันทึกรายการซื้อได้');
+      }
+
+      if (insertedTx && insertedTx.id) {
+        await saveTransactionCurrencyMeta(insertedTx.id, {
+          originalPrice: parsedCostPrice,
+          currency: currency,
+          fxRate: parseFloat(exchangeRate) || 34.00,
+          assetId: asset.id,
+        });
       }
 
       // 3. Insert projected DPU to dividend_schedules if (STOCKS or FUNDS) and DPU > 0 (store native DPU for Floating FX)

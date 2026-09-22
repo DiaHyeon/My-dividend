@@ -16,7 +16,7 @@ export interface FundSuggestion {
   category?: string;     // Segment category (e.g. 'Foreign', 'Equity', 'FixedIncome')
 }
 
-const SUPABASE_FUNCTION_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://ycflookcrilaujmeillt.supabase.co'}/functions/v1/stock-proxy`;
+import { invokeStockProxy } from './proxyClient';
 const SEC_API_KEY = process.env.EXPO_PUBLIC_SEC_API_KEY || '';
 
 // Curated catalog of top popular Thai mutual funds for instant 0ms autocomplete
@@ -402,7 +402,23 @@ export async function searchThaiFunds(query: string): Promise<FundSuggestion[]> 
         f.exchange.toUpperCase().includes(clean))
   );
 
-  return [...startsWithSymbol, ...otherMatches].slice(0, 8);
+  const existingSymbols = new Set([...startsWithSymbol, ...otherMatches].map((f) => f.symbol.toUpperCase()));
+  const dynamicOption: FundSuggestion[] =
+    !existingSymbols.has(clean) && clean.length >= 2 && /^[A-Z0-9\-()]+$/.test(clean)
+      ? [
+          {
+            symbol: clean,
+            rawSymbol: clean,
+            name: `ดึงข้อมูล NAV ของ "${clean}" จาก ก.ล.ต.`,
+            amc: 'กองทุนรวมไทย',
+            exchange: 'ก.ล.ต.',
+            market: 'TH',
+            currency: 'THB',
+          },
+        ]
+      : [];
+
+  return [...startsWithSymbol, ...otherMatches, ...dynamicOption].slice(0, 8);
 }
 
 /**
@@ -431,29 +447,18 @@ export async function fetchFundNav(
 
   // 1. Try fetching through Supabase Edge Function
   try {
-    const res = await fetch(SUPABASE_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'fund-nav',
-        projId: targetProjId,
-        symbol: cleanSymbol,
-      }),
+    const { data } = await invokeStockProxy({
+      action: 'fund-nav',
+      projId: targetProjId,
+      symbol: cleanSymbol,
     });
 
-    if (res.ok) {
-      if (res.status === 204) {
-        return null;
-      }
-      const text = await res.text();
-      const data = text ? JSON.parse(text) : {};
-      if (data.latestNav !== undefined && data.latestNav !== null) {
-        return {
-          latestNav: Number(data.latestNav),
-          navDate: data.navDate || '',
-          fundClassName: data.fundClassName,
-        };
-      }
+    if (data && data.latestNav !== undefined && data.latestNav !== null) {
+      return {
+        latestNav: Number(data.latestNav),
+        navDate: data.navDate || '',
+        fundClassName: data.fundClassName,
+      };
     }
   } catch (err) {
     console.warn('Edge function fund-nav notice:', err);
@@ -518,24 +523,14 @@ export async function fetchFundDividendAnalysis(
 
   // 1. Try Edge function
   try {
-    const res = await fetch(SUPABASE_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'fund-dividends',
-        projId: targetProjId,
-        symbol: cleanSymbol,
-      }),
+    const { data } = await invokeStockProxy({
+      action: 'fund-dividends',
+      projId: targetProjId,
+      symbol: cleanSymbol,
     });
 
-    if (res.ok) {
-      if (res.status === 204) {
-        items = [];
-      } else {
-        const text = await res.text();
-        const data = text ? JSON.parse(text) : {};
-        items = data.items || [];
-      }
+    if (data && Array.isArray(data.items)) {
+      items = data.items;
     }
   } catch (err) {
     console.warn('Edge function fund-dividends notice:', err);

@@ -18,12 +18,17 @@ import { AddAssetModal } from '../components/AddAssetModal';
 import { EditAssetModal } from '../components/EditAssetModal';
 import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal';
 import { GoalSettingsModal, GOAL_STORAGE_KEY, GOAL_PRESETS } from '../components/GoalSettingsModal';
+import { UpcomingPaydayRadar, UpcomingSchedule, ClosestSchedule } from '../components/UpcomingPaydayRadar';
+import { HeroNetWorthCard } from '../components/HeroNetWorthCard';
+import { AdjustDividendModal, AdjustDividendTarget, getSpecialScheduleIds } from '../components/AdjustDividendModal';
 import { getAllAssetCurrencies, getCachedExchangeRate, isKnownUSSymbol } from '../services/currencyService';
 import { calculateScheduleCashPayout } from '../services/taxService';
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
 import { usePrivacyMode } from '../services/privacyService';
 import { ensureAuthenticated } from '../services/authService';
 import { syncDailyPricesIfNeeded } from '../services/priceSyncService';
+import { cleanOrphanedReminders } from '../services/notificationService';
+import { calculatePortfolioReturns } from '../services/returnService';
 
 const MONTH_NAMES = [
   'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
@@ -35,6 +40,8 @@ interface MonthlyPayoutItem {
   monthName: string;
   amount: number;
   details: {
+    scheduleId: string;
+    assetId: string;
     symbol: string;
     dpu: number;
     currency?: 'THB' | 'USD';
@@ -42,6 +49,9 @@ interface MonthlyPayoutItem {
     netAmount: number;
     xdDate: string;
     isInterest: boolean;
+    taxRate: number;
+    isProjected: boolean;
+    isSpecial?: boolean;
     daysInfo?: string;
     isPartialCycle?: boolean;
   }[];
@@ -86,6 +96,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const { isPrivate: isPrivateMode, toggle: togglePrivateMode } = usePrivacyMode();
   const [monthlyGoal, setMonthlyGoal] = useState<number>(3000);
   const [isGoalModalVisible, setIsGoalModalVisible] = useState<boolean>(false);
+  const [selectedScheduleForAdjust, setSelectedScheduleForAdjust] = useState<AdjustDividendTarget | null>(null);
+  const [isAdjustModalVisible, setIsAdjustModalVisible] = useState<boolean>(false);
+  const [specialScheduleIds, setSpecialScheduleIds] = useState<Set<string>>(new Set());
 
   const isUSStock = useCallback((item: AssetSummary): boolean => {
     if (item.asset_type !== 'STOCKS') return false;
@@ -109,7 +122,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         .select('*')
         .order('created_at', { ascending: false });
 
-      let loadedAssets = (summaryData as AssetSummary[]) || [];
+      let loadedAssets = ((summaryData as AssetSummary[]) || []).filter((a) => !a.is_archived);
 
       // 1.1 Sync daily prices if new day or forced by pull-to-refresh
       if (loadedAssets.length > 0) {
@@ -120,7 +133,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             .select('*')
             .order('created_at', { ascending: false });
           if (!refreshedErr && refreshedSummary) {
-            loadedAssets = refreshedSummary as AssetSummary[];
+            loadedAssets = ((refreshedSummary as AssetSummary[]) || []).filter((a) => !a.is_archived);
           }
         }
       }
@@ -164,13 +177,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
         setDividendSchedules([]);
       }
 
-      // 4. Fetch live exchange rate and local currency settings
-      const [rate, currencies] = await Promise.all([
+      // 4. Fetch live exchange rate, local currency settings, and special schedules
+      const [rate, currencies, specialIds] = await Promise.all([
         getCachedExchangeRate(),
         getAllAssetCurrencies(),
+        getSpecialScheduleIds(),
       ]);
       setExchangeRate(rate);
       setCurrencyMap(currencies);
+      setSpecialScheduleIds(specialIds);
+
+      // Clean orphaned reminders for archived/deleted assets in the background
+      cleanOrphanedReminders(loadedAssets).catch(() => {});
     } catch (err: any) {
       console.warn('Load data error:', err.message);
     } finally {
@@ -211,6 +229,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const totalCost = assets.reduce((sum, item) => sum + (Number(item.total_cost) || 0), 0);
   const totalUnrealizedPL = totalMarketValue - totalCost;
   const totalUnrealizedPLPercent = totalCost > 0 ? (totalUnrealizedPL / totalCost) * 100 : 0;
+
+  // Realized Dividends & Total Return Metrics
+  const returnMetrics = calculatePortfolioReturns(
+    assets,
+    transactions,
+    dividendSchedules,
+    exchangeRate
+  );
 
   // Category Breakdown
   const categories: CategoryStats[] = [
@@ -288,26 +314,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const annualInflowByAsset: Record<string, number> = {};
 
   // Upcoming Paydays Radar
-  interface UpcomingPaydayItem {
-    symbol: string;
-    assetType: AssetType;
-    dateStr: string;
-    diffDays: number;
-    amount: number;
-    isInterest: boolean;
-    typeLabel: 'XD' | 'PAY';
-  }
-
-  interface ClosestSchedule {
-    symbol: string;
-    daysText: string;
-    amount: number;
-  }
-
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const upcomingList: UpcomingPaydayItem[] = [];
+  const upcomingList: UpcomingSchedule[] = [];
   let nextClosestSchedule: ClosestSchedule | null = null;
   let minFutureDiffDays = Infinity;
 
@@ -318,10 +328,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const isCashAsset = parentAsset.asset_type === 'CASH';
     const isUS = isUSStock(parentAsset);
 
-    // Strict XD Cutoff: only count buy/sell transactions occurring on or before xd_date
-    const eligibleTxs = transactions.filter(
-      (t) => t.asset_id === schedule.asset_id && t.transaction_date <= schedule.xd_date
-    );
+    // Strict XD Cutoff:
+    // For CASH: include deposits made on or before the period cutoff date (<= schedule.xd_date)
+    // For STOCKS / FUNDS: strictly include lots acquired BEFORE the Ex-Dividend date (< schedule.xd_date)
+    const eligibleTxs = transactions.filter((t) => {
+      if (t.asset_id !== schedule.asset_id) return false;
+      return isCashAsset
+        ? t.transaction_date <= schedule.xd_date
+        : t.transaction_date < schedule.xd_date;
+    });
     const eligibleShares = eligibleTxs.reduce(
       (sum, t) => sum + (t.type === 'BUY' ? Number(t.shares) : -Number(t.shares)),
       0
@@ -398,6 +413,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     if (matchesFilter && targetMonth >= 0 && targetMonth < 12) {
       monthlyForecasts[targetMonth].amount += netDividend;
       monthlyForecasts[targetMonth].details.push({
+        scheduleId: schedule.id,
+        assetId: schedule.asset_id,
         symbol: parentAsset.symbol,
         dpu,
         currency: isCashAsset ? 'THB' : isUS ? 'USD' : 'THB',
@@ -405,6 +422,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         netAmount: netDividend,
         xdDate: schedule.xd_date,
         isInterest: isCashAsset,
+        taxRate,
+        isProjected: schedule.is_projected !== false,
+        isSpecial: specialScheduleIds.has(schedule.id),
         daysInfo,
         isPartialCycle,
       });
@@ -419,6 +439,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     if (diffDays >= 0 && diffDays <= 14) {
       upcomingList.push({
+        scheduleId: schedule.id,
+        assetId: schedule.asset_id,
         symbol: parentAsset.symbol,
         assetType: parentAsset.asset_type,
         dateStr: dateToUse,
@@ -426,6 +448,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
         amount: netDividend,
         isInterest: isCashAsset,
         typeLabel: schedule.payment_date ? 'PAY' : 'XD',
+        dpu,
+        shares: eligibleShares,
+        currency: isCashAsset ? 'THB' : isUS ? 'USD' : 'THB',
+        taxRate,
+        isProjected: schedule.is_projected !== false,
+        isSpecial: specialScheduleIds.has(schedule.id),
       });
     } else if (diffDays > 14 && diffDays < minFutureDiffDays) {
       minFutureDiffDays = diffDays;
@@ -484,104 +512,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </View>
 
         {/* 1. Header: Total Portfolio Value & Dual Yield Highlight */}
-        <View style={styles.heroCard}>
-          {/* Top Row: Label + Frameless Eye Button on left, P/L Badge on right */}
-          <View style={styles.heroTopRow}>
-            <View style={styles.heroLabelContainer}>
-              <Text style={styles.heroLabel}>มูลค่าพอร์ตรวม (Total Net Worth)</Text>
-              <TouchableOpacity
-                style={styles.heroEyeBtn}
-                onPress={togglePrivateMode}
-                activeOpacity={0.6}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Ionicons
-                  name={isPrivateMode ? 'eye-off-outline' : 'eye-outline'}
-                  size={18}
-                  color={isPrivateMode ? '#34D399' : '#94A3B8'}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <View style={[styles.plBadge, totalUnrealizedPL >= 0 ? styles.plBadgeProfit : styles.plBadgeLoss]}>
-              <Ionicons
-                name={totalUnrealizedPL >= 0 ? 'arrow-up' : 'arrow-down'}
-                size={14}
-                color={totalUnrealizedPL >= 0 ? '#166534' : '#991B1B'}
-              />
-              <Text style={[styles.plBadgeText, totalUnrealizedPL >= 0 ? styles.profitText : styles.lossText]}>
-                {totalUnrealizedPL >= 0 ? '+' : ''}
-                {totalUnrealizedPLPercent.toFixed(2)}%
-              </Text>
-            </View>
-          </View>
-
-          {/* Value Row: Total Market Value */}
-          <View style={styles.heroValueRow}>
-            <Text style={styles.heroValue} numberOfLines={1}>
-              {formatMoney(totalMarketValue)}
-            </Text>
-          </View>
-
-          {/* Annual Net Inflow Highlight with Dual Yield Badges */}
-          <View style={styles.dividendHighlightBox}>
-            <View style={styles.dividendHighlightTop}>
-              <View style={styles.dividendIconBadge}>
-                <Ionicons name="cash-outline" size={22} color="#059669" />
-              </View>
-              <View style={styles.dividendTextContainer}>
-                <Text style={styles.dividendHighlightLabel}>
-                  {inflowFilter === 'ALL'
-                    ? 'กระแสเงินสดรับสุทธิคาดการณ์ทั้งปี'
-                    : inflowFilter === 'DIVIDENDS'
-                    ? 'เงินปันผลสุทธิคาดการณ์ทั้งปี'
-                    : 'ดอกเบี้ยเงินฝากสุทธิคาดการณ์ทั้งปี'}
-                </Text>
-                <Text style={styles.dividendHighlightValue}>
-                  {formatMoney(projectedAnnualNetDividend)}
-                </Text>
-              </View>
-            </View>
-
-            {/* Dual Yield & Monthly Avg Subrow */}
-            <View style={styles.dualYieldRow}>
-              <View style={styles.dualYieldItem}>
-                <Text style={styles.dualYieldSublabel} numberOfLines={1}>เฉลี่ยต่อเดือน</Text>
-                <Text style={styles.dualYieldSubval} numberOfLines={1}>
-                  {isPrivateMode ? '฿••••••' : `~${formatMoney(monthlyAvgInflow, 0)}/ด.`}
-                </Text>
-              </View>
-              <View style={styles.dualYieldDivider} />
-              <View style={styles.dualYieldItem}>
-                <Text style={styles.dualYieldSublabel} numberOfLines={1}>Current Yield</Text>
-                <Text style={styles.dualYieldSubval} numberOfLines={1}>{portfolioCurrentYield.toFixed(2)}%</Text>
-              </View>
-              <View style={styles.dualYieldDivider} />
-              <View style={styles.dualYieldItem}>
-                <Text style={styles.dualYieldSublabel} numberOfLines={1}>Yield on Cost</Text>
-                <Text style={styles.dualYieldYoCVal} numberOfLines={1}>{portfolioYoC.toFixed(2)}% 🚀</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Secondary stats row */}
-          <View style={styles.heroBottomRow}>
-            <View style={styles.heroStatItem}>
-              <Text style={styles.heroStatLabel}>ต้นทุนรวม</Text>
-              <Text style={styles.heroStatValue}>
-                {formatMoney(totalCost)}
-              </Text>
-            </View>
-            <View style={styles.heroDivider} />
-            <View style={styles.heroStatItem}>
-              <Text style={styles.heroStatLabel}>กำไร/ขาดทุน (P/L)</Text>
-              <Text style={[styles.heroStatValue, totalUnrealizedPL >= 0 ? styles.profitTextLight : styles.lossTextLight]}>
-                {totalUnrealizedPL >= 0 ? '+' : ''}
-                {formatMoney(totalUnrealizedPL)}
-              </Text>
-            </View>
-          </View>
-        </View>
+        <HeroNetWorthCard
+          totalMarketValue={totalMarketValue}
+          totalCost={totalCost}
+          totalUnrealizedPL={totalUnrealizedPL}
+          totalUnrealizedPLPercent={totalUnrealizedPLPercent}
+          totalDividendsReceived={returnMetrics.totalCumulativeDividends}
+          totalReturn={returnMetrics.totalReturn}
+          totalReturnPercent={returnMetrics.totalReturnPercent}
+          projectedAnnualNetDividend={projectedAnnualNetDividend}
+          portfolioCurrentYield={portfolioCurrentYield}
+          portfolioYoC={portfolioYoC}
+          monthlyAvgInflow={monthlyAvgInflow}
+          inflowFilter={inflowFilter}
+          isPrivateMode={isPrivateMode}
+          onTogglePrivateMode={togglePrivateMode}
+          formatMoney={formatMoney}
+        />
 
         {/* 2. Category Cards: Stocks, Funds, Cash/Savings */}
         <View style={styles.sectionHeader}>
@@ -679,45 +626,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </View>
 
         {/* Mini Payday Radar (Events in next 14 days) */}
-        {upcomingList.length > 0 ? (
-          <View style={styles.radarCard}>
-            <View style={styles.radarHeaderRow}>
-              <View style={styles.radarBadge}>
-                <Ionicons name="notifications" size={12} color="#059669" />
-                <Text style={styles.radarBadgeText}>เรดาร์เงินเข้าเร็วๆ นี้</Text>
-              </View>
-              <Text style={styles.radarCountText}>{upcomingList.length} รายการใน 14 วัน</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.radarScroll}>
-              {upcomingList.map((item, idx) => {
-                const daysText =
-                  item.diffDays === 0 ? 'วันนี้' : item.diffDays === 1 ? 'พรุ่งนี้' : `อีก ${item.diffDays} วัน`;
-                return (
-                  <View key={idx} style={styles.radarItemPill}>
-                    <View style={styles.radarItemLeft}>
-                      <View style={[styles.radarItemDot, item.isInterest ? styles.radarDotCash : styles.radarDotStock]} />
-                      <Text style={styles.radarSymbol}>{item.symbol}</Text>
-                      <Text style={styles.radarTypeTag}>{item.typeLabel === 'XD' ? 'XD' : 'จ่ายเงิน'}</Text>
-                    </View>
-                    <View style={styles.radarItemRight}>
-                      <Text style={styles.radarDaysText}>{daysText}</Text>
-                      <Text style={styles.radarAmount} numberOfLines={1}>
-                        {formatMoney(item.amount)}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </ScrollView>
-          </View>
-        ) : fallbackClosest ? (
-          <View style={styles.radarEmptyBar}>
-            <Ionicons name="time-outline" size={14} color="#64748B" />
-            <Text style={styles.radarEmptyText}>
-              ไม่มีรายการใน 14 วันนี้ • ถัดไป: <Text style={styles.radarEmptySymbol}>{(fallbackClosest as ClosestSchedule).symbol}</Text> ({(fallbackClosest as ClosestSchedule).daysText} • {formatMoney((fallbackClosest as ClosestSchedule).amount)})
-            </Text>
-          </View>
-        ) : null}
+        <UpcomingPaydayRadar
+          upcomingList={upcomingList}
+          fallbackClosest={fallbackClosest}
+          formatMoney={formatMoney}
+          onSelectSchedule={(item) => {
+            if (!item.scheduleId || !item.assetId) return;
+            setSelectedScheduleForAdjust({
+              scheduleId: item.scheduleId,
+              assetId: item.assetId,
+              symbol: item.symbol,
+              dpu: item.dpu || 0,
+              shares: item.shares || 0,
+              netAmount: item.amount,
+              xdDate: item.dateStr,
+              isInterest: item.isInterest,
+              currency: item.isInterest ? 'THB' : (currencyMap[item.assetId] || 'THB'),
+              taxRate: item.taxRate || 0,
+              isProjected: item.isProjected ?? true,
+              exchangeRate,
+            });
+            setIsAdjustModalVisible(true);
+          }}
+        />
 
         {/* 3-Way Inflow Toggle Filter (Option 3) */}
         <View style={styles.inflowFilterContainer}>
@@ -844,7 +775,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </Text>
                   </View>
                   {activeMonthData.details.map((d, idx) => (
-                    <View key={idx} style={styles.detailRow}>
+                    <TouchableOpacity
+                      key={idx}
+                      style={styles.detailRow}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setSelectedScheduleForAdjust({
+                          scheduleId: d.scheduleId,
+                          assetId: d.assetId,
+                          symbol: d.symbol,
+                          dpu: d.dpu,
+                          shares: d.shares,
+                          netAmount: d.netAmount,
+                          xdDate: d.xdDate,
+                          isInterest: d.isInterest,
+                          currency: d.currency,
+                          taxRate: d.taxRate,
+                          isProjected: d.isProjected,
+                          exchangeRate,
+                        });
+                        setIsAdjustModalVisible(true);
+                      }}
+                    >
                       <View style={styles.detailRowLeft}>
                         <View style={styles.detailSymbolRow}>
                           <Text style={styles.detailSymbol}>{d.symbol}</Text>
@@ -853,6 +805,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                               {d.isInterest ? 'ดอกเบี้ย' : 'ปันผล'}
                             </Text>
                           </View>
+                          {d.isSpecial && (
+                            <View style={styles.specialTag}>
+                              <Ionicons name="sparkles" size={10} color="#B45309" />
+                              <Text style={styles.specialTagText}>ปันผลพิเศษ</Text>
+                            </View>
+                          )}
+                          {d.isProjected === false && (
+                            <View style={styles.receivedBadge}>
+                              <Ionicons name="checkmark-circle" size={10} color="#059669" />
+                              <Text style={styles.receivedBadgeText}>ได้รับแล้ว</Text>
+                            </View>
+                          )}
                           {d.isInterest && d.daysInfo ? (
                             <View style={[styles.daysTag, d.isPartialCycle ? styles.daysTagPartial : styles.daysTagFull]}>
                               <Text style={[styles.daysTagText, d.isPartialCycle ? styles.daysTagTextPartial : styles.daysTagTextFull]}>
@@ -869,10 +833,27 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             : `${d.shares.toLocaleString()} หุ้น × ฿${d.dpu.toFixed(4)} (XD: ${d.xdDate})`}
                         </Text>
                       </View>
-                      <Text style={styles.detailAmount}>
-                        {formatMoney(d.netAmount)}
-                      </Text>
-                    </View>
+                      <View style={styles.detailRowRight}>
+                        {d.currency === 'USD' ? (
+                          <>
+                            <Text style={styles.detailAmount}>
+                              {isPrivateMode ? '฿••••••' : `$${(d.shares * d.dpu * (1 - (d.taxRate || 0))).toFixed(2)}`}
+                            </Text>
+                            <Text style={styles.detailSubAmount}>
+                              {formatMoney(d.netAmount)}
+                            </Text>
+                          </>
+                        ) : (
+                          <Text style={styles.detailAmount}>
+                            {formatMoney(d.netAmount)}
+                          </Text>
+                        )}
+                        <View style={styles.detailActionIndicator}>
+                          <Text style={styles.detailActionText}>ปรับยอด</Text>
+                          <Ionicons name="pencil" size={10} color="#94A3B8" />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
                   ))}
                 </View>
               )}
@@ -1108,6 +1089,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onClose={() => setIsGoalModalVisible(false)}
         onSave={(newGoal) => setMonthlyGoal(newGoal)}
       />
+
+      {/* 9. Adjust Dividend Payout Modal */}
+      <AdjustDividendModal
+        visible={isAdjustModalVisible}
+        target={selectedScheduleForAdjust}
+        onClose={() => {
+          setIsAdjustModalVisible(false);
+          setSelectedScheduleForAdjust(null);
+        }}
+        onSuccess={() => {
+          loadData(true);
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -1153,193 +1147,11 @@ const styles = StyleSheet.create({
   headerActionBtnActive: {
     backgroundColor: '#D1FAE5',
   },
-  heroCard: {
-    backgroundColor: '#0F172A',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 20,
-    elevation: 4,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-  },
-  heroTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  heroLabelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  heroLabel: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
-  heroEyeBtn: {
-    padding: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  heroValueRow: {
-    minHeight: 40,
-    justifyContent: 'center',
-  },
-  heroValue: {
-    fontSize: 32,
-    lineHeight: 38,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  plBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    gap: 4,
-    height: 28,
-  },
-  plBadgeProfit: {
-    backgroundColor: '#DCFCE7',
-  },
-  plBadgeLoss: {
-    backgroundColor: '#FEE2E2',
-  },
-  plBadgeText: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '700',
-  },
   profitText: {
     color: '#059669',
   },
   lossText: {
     color: '#DC2626',
-  },
-  profitTextLight: {
-    color: '#34D399',
-  },
-  lossTextLight: {
-    color: '#F87171',
-  },
-  dividendHighlightBox: {
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 14,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  dividendHighlightTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dividendIconBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#ECFDF5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  dividendTextContainer: {
-    flex: 1,
-  },
-  dividendHighlightLabel: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
-  dividendHighlightValue: {
-    fontSize: 20,
-    lineHeight: 26,
-    fontWeight: '800',
-    color: '#34D399',
-    marginTop: 2,
-    minHeight: 26,
-  },
-  dualYieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#0F172A',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#334155',
-    minHeight: 52,
-  },
-  dualYieldItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dualYieldDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: '#334155',
-  },
-  dualYieldSublabel: {
-    fontSize: 10,
-    lineHeight: 14,
-    color: '#94A3B8',
-  },
-  dualYieldSubval: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '700',
-    color: '#F8FAFC',
-    marginTop: 2,
-    minHeight: 16,
-  },
-  dualYieldYoCVal: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '800',
-    color: '#34D399',
-    marginTop: 2,
-    minHeight: 16,
-  },
-  heroBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 16,
-    marginTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#1E293B',
-  },
-  heroStatItem: {
-    flex: 1,
-  },
-  heroDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: '#1E293B',
-    marginHorizontal: 16,
-  },
-  heroStatLabel: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#94A3B8',
-  },
-  heroStatValue: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '700',
-    color: '#F8FAFC',
-    marginTop: 2,
-    minHeight: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1706,6 +1518,55 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#059669',
   },
+  detailSubAmount: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  detailRowRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  detailActionIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 2,
+  },
+  detailActionText: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  receivedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  receivedBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  specialTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  specialTagText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#B45309',
+  },
   assetCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
@@ -2026,127 +1887,6 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     fontWeight: '600',
     flex: 1,
-  },
-  radarCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  radarHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  radarBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  radarBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  radarCountText: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  radarScroll: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingVertical: 2,
-  },
-  radarItemPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 12,
-    minWidth: 145,
-    height: 44,
-  },
-  radarItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  radarItemDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-  },
-  radarDotCash: {
-    backgroundColor: '#059669',
-  },
-  radarDotStock: {
-    backgroundColor: '#2563EB',
-  },
-  radarSymbol: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  radarTypeTag: {
-    fontSize: 10,
-    color: '#64748B',
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  radarItemRight: {
-    alignItems: 'flex-end',
-  },
-  radarDaysText: {
-    fontSize: 10,
-    lineHeight: 14,
-    fontWeight: '600',
-    color: '#059669',
-  },
-  radarAmount: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  radarEmptyBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 16,
-  },
-  radarEmptyText: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  radarEmptySymbol: {
-    fontWeight: '700',
-    color: '#334155',
   },
   goalCard: {
     backgroundColor: '#FFFFFF',

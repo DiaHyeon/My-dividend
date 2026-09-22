@@ -120,27 +120,29 @@ function MainNavigator() {
     <View style={styles.container}>
       <StatusBar style="dark" />
 
-      {/* Screen Views */}
+      {/* Screen Views (Screens remain mounted to preserve state, scroll offset, and prevent re-querying) */}
       <View style={styles.screenContainer}>
-        {currentTab === 'DASHBOARD' ? (
+        <View style={[styles.screenWrapper, currentTab === 'DASHBOARD' ? styles.screenVisible : styles.screenHidden]}>
           <Dashboard
             onNavigateToPortfolio={handleNavigateToPortfolio}
             onNavigateToAssets={handleNavigateToAssets}
           />
-        ) : currentTab === 'PORTFOLIO' ? (
+        </View>
+        <View style={[styles.screenWrapper, currentTab === 'PORTFOLIO' ? styles.screenVisible : styles.screenHidden]}>
           <Portfolio
             initialCategoryFilter={portfolioCategory}
             onNavigateToDashboard={handleNavigateToDashboard}
             onNavigateToAssets={handleNavigateToAssets}
           />
-        ) : (
+        </View>
+        <View style={[styles.screenWrapper, currentTab === 'ASSETS' ? styles.screenVisible : styles.screenHidden]}>
           <AssetsScreen
             initialView={assetsInitialView}
             initialCategoryFilter={assetsCategory}
             onNavigateToDashboard={handleNavigateToDashboard}
             onNavigateToPortfolio={handleNavigateToPortfolio}
           />
-        )}
+        </View>
       </View>
 
       {/* Modern Docked Bottom Navigation Bar */}
@@ -266,6 +268,17 @@ const styles = StyleSheet.create({
   },
   screenContainer: {
     flex: 1,
+  },
+  screenWrapper: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  screenVisible: {
+    display: 'flex',
+  },
+  screenHidden: {
+    display: 'none',
   },
   bottomBar: {
     flexDirection: 'row',

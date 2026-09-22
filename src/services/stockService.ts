@@ -7,14 +7,15 @@ export interface StockSuggestion {
   currency: 'THB' | 'USD';
 }
 
-const SUPABASE_FUNCTION_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://ycflookcrilaujmeillt.supabase.co'}/functions/v1/stock-proxy`;
+import { invokeStockProxy } from './proxyClient';
 
 export function normalizeExchange(rawExch: string): string {
   const upper = (rawExch || '').toUpperCase();
   if (['NYQ', 'NYSE'].includes(upper)) return 'NYSE';
   if (['NMS', 'NGM', 'NCM', 'NAS', 'NASDAQ'].includes(upper)) return 'NASDAQ';
-  if (['SET', 'BKK'].includes(upper)) return 'SET';
-  if (['PCX', 'ARC', 'ASE', 'BATS'].includes(upper)) return 'NYSE/AMEX';
+  if (['SET', 'BKK', 'MAI'].includes(upper)) return 'SET';
+  if (['PCX', 'ARC', 'ASE', 'BATS', 'AMEX'].includes(upper)) return 'NYSE/AMEX';
+  if (['PNK', 'OTC', 'OQX', 'OBB'].includes(upper)) return 'OTC';
   return upper || 'US';
 }
 
@@ -94,62 +95,79 @@ export async function searchStocks(query: string): Promise<StockSuggestion[]> {
 
   // 2. Fetch live suggestions from Supabase Edge Function (CORS-friendly on web & mobile)
   let liveMatches: StockSuggestion[] = [];
+  const isShortTicker = !cleanQuery.includes('.') && cleanQuery.length <= 10 && /^[A-Z0-9]+$/.test(cleanQuery);
+
   try {
-    const response = await fetch(SUPABASE_FUNCTION_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ action: 'search', query: cleanQuery }),
-    });
+    const searchPromises = [invokeStockProxy({ action: 'search', query: cleanQuery })];
+    if (isShortTicker) {
+      searchPromises.push(invokeStockProxy({ action: 'search', query: `${cleanQuery}.BK` }));
+    }
 
-    if (response.ok) {
-      const data = await response.json();
-      const quotes: any[] = data.quotes || [];
+    const searchResponses = await Promise.allSettled(searchPromises);
+    const quotes: any[] = [];
+    for (const res of searchResponses) {
+      if (res.status === 'fulfilled' && res.value?.data?.quotes) {
+        quotes.push(...res.value.data.quotes);
+      }
+    }
 
-      for (const q of quotes) {
-        const rawSym = (q.symbol || '').toUpperCase();
-        const exch = (q.exchange || '').toUpperCase();
-        const shortname = q.shortname || q.longname || rawSym;
+    for (const q of quotes) {
+      const rawSym = (q.symbol || '').toUpperCase();
+      const exch = (q.exchange || '').toUpperCase();
+      const shortname = q.shortname || q.longname || rawSym;
 
-        const isThai = exch === 'SET' || rawSym.endsWith('.BK');
-        const isUS = ['NYQ', 'NMS', 'NGM', 'NCM', 'NAS', 'NYSE', 'NASDAQ', 'BATS', 'ARC', 'ASE', 'PCX'].includes(exch);
+      const isThai = exch === 'SET' || exch === 'BKK' || exch === 'MAI' || rawSym.endsWith('.BK');
+      const isUS = [
+        'NYQ', 'NMS', 'NGM', 'NCM', 'NAS', 'NYSE', 'NASDAQ',
+        'BATS', 'ARC', 'ASE', 'PCX', 'PNK', 'OTC', 'OQX', 'OBB', 'IEX', 'AMEX',
+      ].includes(exch);
 
-        if (isThai || isUS) {
-          const displaySymbol = isThai && rawSym.endsWith('.BK') ? rawSym.replace('.BK', '') : rawSym;
-          liveMatches.push({
-            symbol: displaySymbol,
-            rawSymbol: rawSym,
-            name: shortname,
-            market: isThai ? 'TH' : 'US',
-            exchange: normalizeExchange(exch),
-            currency: isThai ? 'THB' : 'USD',
-          });
-        }
+      if (isThai || isUS) {
+        const displaySymbol = isThai && rawSym.endsWith('.BK') ? rawSym.replace('.BK', '') : rawSym;
+        liveMatches.push({
+          symbol: displaySymbol,
+          rawSymbol: rawSym,
+          name: shortname,
+          market: isThai ? 'TH' : 'US',
+          exchange: normalizeExchange(exch),
+          currency: isThai ? 'THB' : 'USD',
+        });
       }
     }
   } catch (err: any) {
     // Fallback directly to Yahoo search if edge function unreachable
     try {
-      const fallbackUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(cleanQuery)}&quotesCount=8`;
-      const fallbackRes = await fetch(fallbackUrl);
-      if (fallbackRes.ok) {
-        const fbData = await fallbackRes.json();
-        const quotes = fbData.quotes || [];
-        for (const q of quotes) {
-          const rawSym = (q.symbol || '').toUpperCase();
-          const exch = (q.exchange || '').toUpperCase();
-          const isThai = exch === 'SET' || rawSym.endsWith('.BK');
-          const isUS = ['NYQ', 'NMS', 'NGM', 'NCM', 'NAS', 'NYSE', 'NASDAQ'].includes(exch);
-          if (isThai || isUS) {
-            liveMatches.push({
-              symbol: isThai && rawSym.endsWith('.BK') ? rawSym.replace('.BK', '') : rawSym,
-              rawSymbol: rawSym,
-              name: q.shortname || rawSym,
-              market: isThai ? 'TH' : 'US',
-              exchange: normalizeExchange(exch),
-              currency: isThai ? 'THB' : 'USD',
-            });
+      const urls = [
+        `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(cleanQuery)}&quotesCount=12&newsCount=0`,
+      ];
+      if (isShortTicker) {
+        urls.push(
+          `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(cleanQuery + '.BK')}&quotesCount=6&newsCount=0`
+        );
+      }
+      const fbResponses = await Promise.allSettled(urls.map((u) => fetch(u)));
+      for (const fbRes of fbResponses) {
+        if (fbRes.status === 'fulfilled' && fbRes.value.ok) {
+          const fbData = await fbRes.value.json();
+          const quotes = fbData.quotes || [];
+          for (const q of quotes) {
+            const rawSym = (q.symbol || '').toUpperCase();
+            const exch = (q.exchange || '').toUpperCase();
+            const isThai = exch === 'SET' || exch === 'BKK' || exch === 'MAI' || rawSym.endsWith('.BK');
+            const isUS = [
+              'NYQ', 'NMS', 'NGM', 'NCM', 'NAS', 'NYSE', 'NASDAQ',
+              'BATS', 'ARC', 'ASE', 'PCX', 'PNK', 'OTC', 'OQX', 'OBB', 'IEX', 'AMEX',
+            ].includes(exch);
+            if (isThai || isUS) {
+              liveMatches.push({
+                symbol: isThai && rawSym.endsWith('.BK') ? rawSym.replace('.BK', '') : rawSym,
+                rawSymbol: rawSym,
+                name: q.shortname || rawSym,
+                market: isThai ? 'TH' : 'US',
+                exchange: normalizeExchange(exch),
+                currency: isThai ? 'THB' : 'USD',
+              });
+            }
           }
         }
       }
@@ -207,16 +225,8 @@ export async function fetchStockPrice(symbol: string, rawSymbol?: string): Promi
 
   // 1. Try fetching via Supabase Edge Function (works on Web & Mobile without CORS error)
   try {
-    const response = await fetch(SUPABASE_FUNCTION_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ action: 'quote', symbol: targetSymbol }),
-    });
-
-    if (response.ok) {
-      const json = await response.json();
+    const { data: json } = await invokeStockProxy({ action: 'quote', symbol: targetSymbol });
+    if (json) {
       const meta = json.chart?.result?.[0]?.meta;
       const price = meta?.regularMarketPrice ?? meta?.chartPreviousClose ?? meta?.previousClose;
 
@@ -246,6 +256,16 @@ export async function fetchStockPrice(symbol: string, rawSymbol?: string): Promi
     console.warn(`Direct quote fallback error for ${targetSymbol}:`, err.message);
   }
 
+  // 3. Fallback: If not found and doesn't end with .BK, try with .BK (for Thai SET/mai stocks)
+  if (!targetSymbol.endsWith('.BK') && !targetSymbol.includes('=')) {
+    try {
+      const bkPrice = await fetchStockPrice(`${targetSymbol}.BK`);
+      if (bkPrice !== null) return bkPrice;
+    } catch {
+      // ignore
+    }
+  }
+
   return null;
 }
 
@@ -255,16 +275,8 @@ export async function fetchStockPrice(symbol: string, rawSymbol?: string): Promi
  */
 export async function fetchExchangeRate(): Promise<number> {
   try {
-    const response = await fetch(SUPABASE_FUNCTION_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ action: 'quote', symbol: 'USDTHB=X' }),
-    });
-
-    if (response.ok) {
-      const json = await response.json();
+    const { data: json } = await invokeStockProxy({ action: 'quote', symbol: 'USDTHB=X' });
+    if (json) {
       const meta = json.chart?.result?.[0]?.meta;
       const rate = meta?.regularMarketPrice ?? meta?.chartPreviousClose;
       if (rate && !isNaN(rate) && rate > 0) {
@@ -327,16 +339,8 @@ export async function fetchDividendAnalysis(
 
   // 1. Try Supabase Edge Function (CORS-friendly for Web & Mobile)
   try {
-    const response = await fetch(SUPABASE_FUNCTION_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ action: 'dividends', symbol: targetSymbol }),
-    });
-
-    if (response.ok) {
-      const json = await response.json();
+    const { data: json } = await invokeStockProxy({ action: 'dividends', symbol: targetSymbol });
+    if (json) {
       rawDividends = json?.chart?.result?.[0]?.events?.dividends;
     }
   } catch (err: any) {
@@ -362,8 +366,18 @@ export async function fetchDividendAnalysis(
     }
   }
 
-  // If no dividend events recorded, stock does not pay dividends
+  // If no dividend events recorded, check if it's a Thai stock that needs .BK suffix
   if (!rawDividends || Object.keys(rawDividends).length === 0) {
+    if (!targetSymbol.endsWith('.BK') && !targetSymbol.includes('=')) {
+      try {
+        const bkAnalysis = await fetchDividendAnalysis(`${targetSymbol}.BK`);
+        if (bkAnalysis && bkAnalysis.hasDividends) {
+          return bkAnalysis;
+        }
+      } catch {
+        // ignore
+      }
+    }
     return emptyResult;
   }
 

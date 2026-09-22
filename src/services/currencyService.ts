@@ -161,3 +161,81 @@ export async function getCachedExchangeRate(): Promise<number> {
   }
   return 34.00;
 }
+
+export const TX_CURRENCY_STORAGE_KEY = '@my_dividend_tx_currencies';
+
+export interface TransactionCurrencyMeta {
+  originalPrice: number;
+  currency: 'THB' | 'USD';
+  fxRate: number;
+  assetId?: string;
+}
+
+/**
+ * Saves original purchase currency and price for a specific transaction.
+ */
+export async function saveTransactionCurrencyMeta(
+  txId: string,
+  meta: TransactionCurrencyMeta
+): Promise<void> {
+  if (!txId) return;
+  try {
+    const raw = await AsyncStorage.getItem(TX_CURRENCY_STORAGE_KEY);
+    const map: Record<string, TransactionCurrencyMeta> = raw ? JSON.parse(raw) : {};
+    map[txId] = meta;
+    await AsyncStorage.setItem(TX_CURRENCY_STORAGE_KEY, JSON.stringify(map));
+  } catch (err) {
+    console.warn('Failed to save transaction currency meta:', err);
+  }
+}
+
+/**
+ * Retrieves the original purchase currency and price for a specific transaction.
+ */
+export async function getTransactionCurrencyMeta(
+  txId: string
+): Promise<TransactionCurrencyMeta | null> {
+  if (!txId) return null;
+  try {
+    const raw = await AsyncStorage.getItem(TX_CURRENCY_STORAGE_KEY);
+    if (raw) {
+      const map: Record<string, TransactionCurrencyMeta> = JSON.parse(raw);
+      return map[txId] || null;
+    }
+  } catch {
+    // fallback
+  }
+  return null;
+}
+
+/**
+ * Loads all transaction currency metadata mappings.
+ */
+export async function getAllTransactionCurrencyMeta(): Promise<Record<string, TransactionCurrencyMeta>> {
+  try {
+    const raw = await AsyncStorage.getItem(TX_CURRENCY_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Calculates the exact original USD weighted cost for an asset if transaction metadata exists.
+ */
+export async function getAssetAverageCostUSD(assetId: string): Promise<number | null> {
+  if (!assetId) return null;
+  try {
+    const raw = await AsyncStorage.getItem(TX_CURRENCY_STORAGE_KEY);
+    if (!raw) return null;
+    const map: Record<string, TransactionCurrencyMeta> = JSON.parse(raw);
+    const assetMetas = Object.values(map).filter(
+      (m) => m.assetId === assetId && m.currency === 'USD' && m.originalPrice > 0
+    );
+    if (assetMetas.length === 0) return null;
+    const total = assetMetas.reduce((sum, m) => sum + m.originalPrice, 0);
+    return Number((total / assetMetas.length).toFixed(2));
+  } catch {
+    return null;
+  }
+}
