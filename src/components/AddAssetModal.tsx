@@ -17,7 +17,7 @@ import { supabase } from '../lib/supabase';
 import { Asset, AssetType } from '../types/database';
 import { scheduleXdReminder } from '../services/notificationService';
 import { searchStocks, fetchStockPrice, fetchExchangeRate, fetchDividendAnalysis, StockSuggestion, DividendAnalysis } from '../services/stockService';
-import { searchThaiFunds, fetchFundNav, fetchFundDividendAnalysis, FundSuggestion, POPULAR_THAI_FUNDS, fetchFundCategory } from '../services/fundService';
+import { searchThaiFunds, fetchFundNav, fetchFundDividendAnalysis, FundSuggestion, POPULAR_THAI_FUNDS, fetchFundCategory, detectFundClass } from '../services/fundService';
 import { getSectorsForType, detectSector, setAssetSector, getSectorDefinition } from '../services/sectorService';
 import { evaluateCashTax, calculateAnnualGrossInterest } from '../services/taxService';
 import { setAssetCurrency, saveTransactionCurrencyMeta } from '../services/currencyService';
@@ -400,15 +400,24 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       setIsFetchingDividends(false);
       setDividendAnalysis(divAnalysis);
 
+      const classMeta = detectFundClass(fundItem.symbol, fundItem.name);
+      const classBadge = classMeta.isDividend
+        ? '🟡 [Class D จ่ายปันผล]'
+        : classMeta.type === 'ACCUMULATION'
+        ? '⚪ [Class A สะสมมูลค่า]'
+        : classMeta.type === 'TAX_SAVING'
+        ? `🟣 [ลดหย่อนภาษี ${classMeta.tokenText}]`
+        : `[${classMeta.label}]`;
+
       if (navResult && navResult.latestNav) {
         const navStr = navResult.latestNav.toFixed(4);
         setCurrentPrice(navStr);
         if (!costPrice.trim()) {
           setCostPrice(navStr);
         }
-        setPriceNote(`🇹🇭 ${fundItem.exchange || fundItem.amc} • ประเภท: ${catDef.label} • NAV ล่าสุด: ฿${navStr}${navResult.navDate ? ` (${navResult.navDate})` : ''}`);
+        setPriceNote(`🇹🇭 ${fundItem.exchange || fundItem.amc} • ${classBadge} • ประเภท: ${catDef.label} • NAV ล่าสุด: ฿${navStr}${navResult.navDate ? ` (${navResult.navDate})` : ''}`);
       } else {
-        setPriceNote(`🇹🇭 ${fundItem.exchange || fundItem.amc} • ประเภท: ${catDef.label} • ${fundItem.name}`);
+        setPriceNote(`🇹🇭 ${fundItem.exchange || fundItem.amc} • ${classBadge} • ประเภท: ${catDef.label} • ${fundItem.name}`);
       }
 
       if (divAnalysis && divAnalysis.hasDividends) {
@@ -580,6 +589,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
           shares: Number(parsedDeposit.toFixed(4)),
           price_per_share: 1.0000,
           transaction_date: todayDate,
+          exchange_rate: 1.0000,
         });
 
         if (txError) throw new Error(txError.message || 'ไม่สามารถบันทึกยอดเงินฝากได้');
@@ -746,6 +756,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         shares: Number(parsedShares.toFixed(4)),
         price_per_share: Number(convertedCostPrice.toFixed(4)),
         transaction_date: effectiveTxDate,
+        exchange_rate: Number(rate.toFixed(4)),
       }).select().single();
 
       if (txError) {
@@ -1014,61 +1025,87 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                             <Ionicons name="close-circle" size={16} color="#94A3B8" />
                           </TouchableOpacity>
                         </View>
-                        {suggestions.map((item) => (
-                          <TouchableOpacity
-                            key={item.rawSymbol}
-                            style={styles.suggestionItem}
-                            onPress={() => handleSelectSuggestion(item)}
-                            activeOpacity={0.7}
-                          >
-                            <View style={styles.suggestionLeft}>
-                              <View style={styles.suggestionTitleRow}>
-                                <Text style={styles.suggestionSymbol}>{item.symbol}</Text>
-                                <Text style={styles.suggestionExchange}>• {item.exchange}</Text>
-                                {'category' in item && item.category ? (
-                                  <View
-                                    style={[
-                                      styles.fundCatBadge,
-                                      {
-                                        backgroundColor:
-                                          getSectorDefinition(item.category, 'FUNDS').color + '20',
-                                      },
-                                    ]}
-                                  >
-                                    <Text
+                        {suggestions.map((item) => {
+                          const isFund = assetType === 'FUNDS' || 'amc' in item;
+                          const fundClass = isFund ? detectFundClass(item.symbol, item.name) : null;
+
+                          return (
+                            <TouchableOpacity
+                              key={item.rawSymbol}
+                              style={styles.suggestionItem}
+                              onPress={() => handleSelectSuggestion(item)}
+                              activeOpacity={0.7}
+                            >
+                              <View style={styles.suggestionLeft}>
+                                <View style={styles.suggestionTitleRow}>
+                                  <Text style={styles.suggestionSymbol}>{item.symbol}</Text>
+                                  {fundClass && (
+                                    <View
                                       style={[
-                                        styles.fundCatBadgeText,
+                                        styles.fundClassToken,
                                         {
-                                          color: getSectorDefinition(item.category, 'FUNDS').color,
+                                          backgroundColor: fundClass.tokenBg,
+                                          borderColor: fundClass.tokenBorder,
+                                        },
+                                        fundClass.isDividend && styles.fundClassTokenDividend,
+                                      ]}
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.fundClassTokenText,
+                                          { color: fundClass.tokenColor },
+                                        ]}
+                                      >
+                                        {fundClass.tokenText}
+                                      </Text>
+                                    </View>
+                                  )}
+                                  {!isFund && <Text style={styles.suggestionExchange}>• {item.exchange}</Text>}
+                                  {'category' in item && item.category ? (
+                                    <View
+                                      style={[
+                                        styles.fundCatBadge,
+                                        {
+                                          backgroundColor:
+                                            getSectorDefinition(item.category, 'FUNDS').color + '20',
                                         },
                                       ]}
                                     >
-                                      {getSectorDefinition(item.category, 'FUNDS').label.split(' ')[0]}
-                                    </Text>
-                                  </View>
-                                ) : null}
+                                      <Text
+                                        style={[
+                                          styles.fundCatBadgeText,
+                                          {
+                                            color: getSectorDefinition(item.category, 'FUNDS').color,
+                                          },
+                                        ]}
+                                      >
+                                        {getSectorDefinition(item.category, 'FUNDS').label.split(' ')[0]}
+                                      </Text>
+                                    </View>
+                                  ) : null}
+                                </View>
+                                <Text style={styles.suggestionName} numberOfLines={1}>
+                                  {item.name}
+                                </Text>
                               </View>
-                              <Text style={styles.suggestionName} numberOfLines={1}>
-                                {item.name}
-                              </Text>
-                            </View>
-                            <View
-                              style={[
-                                styles.marketBadge,
-                                item.market === 'US' ? styles.marketBadgeUS : styles.marketBadgeTH,
-                              ]}
-                            >
-                              <Text
+                              <View
                                 style={[
-                                  styles.marketBadgeText,
-                                  item.market === 'US' ? styles.marketBadgeTextUS : styles.marketBadgeTextTH,
+                                  styles.marketBadge,
+                                  item.market === 'US' ? styles.marketBadgeUS : styles.marketBadgeTH,
                                 ]}
                               >
-                                {item.market === 'US' ? `🇺🇸 ${item.exchange}` : `🇹🇭 ${item.exchange}`}
-                              </Text>
-                            </View>
-                          </TouchableOpacity>
-                        ))}
+                                <Text
+                                  style={[
+                                    styles.marketBadgeText,
+                                    item.market === 'US' ? styles.marketBadgeTextUS : styles.marketBadgeTextTH,
+                                  ]}
+                                >
+                                  {item.market === 'US' ? `🇺🇸 ${item.exchange}` : `🇹🇭 ${item.exchange}`}
+                                </Text>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
                     )}
                   </View>
@@ -1578,7 +1615,9 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                 <Text style={styles.reviewRowValBold}>
                   {assetType === 'CASH' ? symbol.trim() : symbol.trim().toUpperCase()}
                   <Text style={styles.reviewRowValSub}>
-                    {' • '}{assetType === 'STOCKS' ? 'หุ้น' : assetType === 'FUNDS' ? 'กองทุน' : 'เงินฝาก'}
+                    {' • '}{assetType === 'STOCKS' ? 'หุ้น' : assetType === 'FUNDS' ? (
+                      detectFundClass(symbol).isDividend ? 'กองทุน (ปันผล 🟡 D)' : 'กองทุน (สะสม ⚪ A)'
+                    ) : 'เงินฝาก'}
                   </Text>
                 </Text>
               </View>
@@ -1963,6 +2002,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  fundClassToken: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    marginLeft: 2,
+    marginRight: 1,
+  },
+  fundClassTokenDividend: {
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  fundClassTokenText: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    textAlign: 'center',
+    includeFontPadding: false,
+  },
+  fundClassLabelMini: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    marginRight: 2,
   },
   suggestionExchange: {
     fontSize: 12,

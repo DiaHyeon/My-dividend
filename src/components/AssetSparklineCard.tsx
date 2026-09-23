@@ -374,7 +374,7 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
             size={11}
             color={color}
           />
-          <Text style={styles.chartTagText}>แนวโน้ม 7 วัน</Text>
+          <Text style={styles.chartTagText}>ราคาย้อนหลัง 7 วัน</Text>
           {history?.isReal && (
             <View style={[styles.realIndicatorDot, { backgroundColor: color }]} />
           )}

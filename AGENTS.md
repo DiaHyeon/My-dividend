@@ -15,7 +15,7 @@ Read BRIEF.md before doing anything. It is the single source of truth and contai
 - For all cash/deposit interest and tax calculations, use `taxService.ts` and `CashAssetForm.tsx` as the standard components.
 - Always use `SafeAreaView` and `SafeAreaProvider` from `react-native-safe-area-context` (never use the deprecated `SafeAreaView` from `react-native`).
 - Charts from `react-native-gifted-charts` require `expo-linear-gradient` and `react-native-svg`.
-- For Thai mutual funds (`FUNDS`), use SEC Open API (`fundService.ts`), denominate strictly in THB (no USD toggle), and preserve exact symbol matching.
+- For Thai mutual funds (`FUNDS`), use SEC Open API (`fundService.ts`), denominate strictly in THB (no USD toggle), preserve exact symbol matching, and disambiguate share classes with Gold Token 'D' (`🟡 D`) for dividend vs 'A' (`⚪ A`) for accumulation classes.
 - For position accumulation and buy DCA, maintain unique holdings by `(symbol, asset_type)` via `assetConsolidationService.ts` and record multi-buy details in `transactions`.
 - For Portfolio Performance and Benchmark comparisons, use `benchmarkService.ts` and always calculate dynamic scale bounds (`maxValue`, `stepValue`, `noOfSections`, `mostNegativeValue`, `overflowTop`) across both primary and secondary datasets with balanced ~10-15% headroom to prevent graph overflow while avoiding excessive empty space above curves.
 - For minimal dropdowns and filter selectors, use unified bottom sheet modal pickers with checkmarks for seamless mobile and web UX.
@@ -37,5 +37,7 @@ Read BRIEF.md before doing anything. It is the single source of truth and contai
 - For stock split detection and one-click share/cost adjustments, use `splitService.ts` and `EditAssetModal.tsx` with `NUMERIC(15, 4)` precision and date-based purchase filtering (`transaction_date < split.date`).
 - For notification hygiene, prune scheduled XD reminders on asset deletion and run `cleanOrphanedReminders` on dashboard load.
 - For Total Return and cumulative dividends, use `returnService.ts` to separate Capital Gain from cumulative cash dividends, displaying both metrics cleanly on `HeroNetWorthCard.tsx` and `AssetSparklineCard.tsx`.
+- For multi-currency transactions and historical exchange rates, persist `transactions.exchange_rate` as `NUMERIC(15, 4)` (default `1.0000` for THB, live/cached THB/USD rate for US purchases) across `AddAssetModal.tsx`, `EditTransactionModal.tsx`, and `csvService.ts`.
+- For the Overview screen (`Dashboard.tsx`), maintain a streamlined, distraction-free layout focused on Net Worth and Cashflow: use compact minimal `HeroNetWorthCard.tsx` (~30% height reduction), dense 2-row `Category Cards` (~50% height reduction) with `ดูพอร์ตเต็ม →` link, and omit redundant bottom portfolio cards in favor of the dedicated `Portfolio` and `Holdings` tabs.
 
 

@@ -394,6 +394,7 @@ export async function importAssetRows(
         shares: Number(item.shares.toFixed(4)),
         price_per_share: Number(convertedCost.toFixed(4)),
         transaction_date: item.transaction_date,
+        exchange_rate: Number(rate.toFixed(4)),
       });
 
       if (txErr) {

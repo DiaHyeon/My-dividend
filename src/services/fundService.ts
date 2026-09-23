@@ -19,6 +19,142 @@ export interface FundSuggestion {
 import { invokeStockProxy } from './proxyClient';
 const SEC_API_KEY = process.env.EXPO_PUBLIC_SEC_API_KEY || '';
 
+export type FundShareClassType = 'DIVIDEND' | 'ACCUMULATION' | 'TAX_SAVING' | 'AUTO_REDEEM' | 'GENERAL';
+
+export interface FundClassMeta {
+  type: FundShareClassType;
+  tokenText: string;     // 'D', 'A', 'SSF', 'RMF', 'TESG', 'R'
+  label: string;         // 'ปันผล', 'สะสมมูลค่า', 'ลดหย่อนภาษี', 'รับซื้อคืน'
+  tokenColor: string;    // Gold '#D97706', Gray '#64748B', Purple '#7C3AED', Blue '#2563EB'
+  tokenBg: string;       // '#FEF3C7', '#F1F5F9', '#F5F3FF', '#EFF6FF'
+  tokenBorder: string;   // '#F59E0B', '#CBD5E1', '#DDD6FE', '#93C5FD'
+  isDividend: boolean;
+}
+
+/**
+ * Detects the share class of a Thai mutual fund from its symbol and name.
+ * Disambiguates Dividend-paying (-D) vs Accumulation (-A) vs Tax-Saving (SSF/RMF/TESG).
+ */
+export function detectFundClass(symbol: string, name?: string): FundClassMeta {
+  const sym = symbol.toUpperCase().trim();
+  const n = (name || '').toUpperCase().trim();
+
+  // 1. Tax saving classes (SSF, RMF, TESG, ThaiESG)
+  if (sym.includes('SSF') || n.includes('SSF') || sym.includes('-SSF') || sym.includes('(SSF)')) {
+    return {
+      type: 'TAX_SAVING',
+      tokenText: 'SSF',
+      label: 'ลดหย่อนภาษี',
+      tokenColor: '#7C3AED',
+      tokenBg: '#F5F3FF',
+      tokenBorder: '#DDD6FE',
+      isDividend: false,
+    };
+  }
+  if (sym.includes('RMF') || n.includes('RMF') || sym.includes('-RMF') || sym.includes('(RMF)')) {
+    return {
+      type: 'TAX_SAVING',
+      tokenText: 'RMF',
+      label: 'ลดหย่อนภาษี',
+      tokenColor: '#7C3AED',
+      tokenBg: '#F5F3FF',
+      tokenBorder: '#DDD6FE',
+      isDividend: false,
+    };
+  }
+  if (sym.includes('TESG') || sym.includes('THAIESG') || n.includes('THAIESG') || n.includes('THAI ESG')) {
+    return {
+      type: 'TAX_SAVING',
+      tokenText: 'TESG',
+      label: 'ลดหย่อนภาษี',
+      tokenColor: '#7C3AED',
+      tokenBg: '#F5F3FF',
+      tokenBorder: '#DDD6FE',
+      isDividend: false,
+    };
+  }
+
+  // 2. Explicit Dividend paying class (-D, -A(D), (D), -DIV, or name has 'ปันผล' / 'DIVIDEND' / 'HI DIV')
+  const isExplicitDiv =
+    sym.endsWith('-D') ||
+    sym.endsWith('(D)') ||
+    sym.includes('-A(D)') ||
+    sym.includes('-D(') ||
+    sym.endsWith('-DIV') ||
+    sym.includes('DIVIDEND') ||
+    sym.includes('KFDIV') ||
+    sym.includes('SCBDV') ||
+    sym.includes('TISCOHD') ||
+    n.includes('ปันผล') ||
+    n.includes('DIVIDEND');
+
+  if (isExplicitDiv) {
+    return {
+      type: 'DIVIDEND',
+      tokenText: 'D',
+      label: 'ปันผล',
+      tokenColor: '#B45309', // Deep Gold Amber
+      tokenBg: '#FEF3C7',    // Warm light amber
+      tokenBorder: '#F59E0B',// Vivid Gold
+      isDividend: true,
+    };
+  }
+
+  // 3. Auto Redemption (-R, (R), (AR), or 'รับซื้อคืนอัตโนมัติ')
+  const isAutoRedeem =
+    sym.endsWith('-R') ||
+    sym.endsWith('(R)') ||
+    sym.includes('-A(R)') ||
+    sym.includes('-R(') ||
+    n.includes('รับซื้อคืนอัตโนมัติ') ||
+    n.includes('AUTO REDEMPTION');
+
+  if (isAutoRedeem) {
+    return {
+      type: 'AUTO_REDEEM',
+      tokenText: 'R',
+      label: 'รับซื้อคืน',
+      tokenColor: '#2563EB',
+      tokenBg: '#EFF6FF',
+      tokenBorder: '#93C5FD',
+      isDividend: false,
+    };
+  }
+
+  // 4. Accumulation class (-A, -A(A), (A), -ACC, or name has 'สะสมมูลค่า')
+  const isAccum =
+    sym.endsWith('-A') ||
+    sym.endsWith('(A)') ||
+    sym.includes('-A(A)') ||
+    sym.includes('-A(') ||
+    sym.endsWith('-ACC') ||
+    n.includes('สะสมมูลค่า') ||
+    n.includes('ACCUMULATION');
+
+  if (isAccum) {
+    return {
+      type: 'ACCUMULATION',
+      tokenText: 'A',
+      label: 'สะสมมูลค่า',
+      tokenColor: '#64748B', // Cool slate gray
+      tokenBg: '#F1F5F9',
+      tokenBorder: '#CBD5E1',
+      isDividend: false,
+    };
+  }
+
+  // 5. General / Default Fund
+  return {
+    type: 'GENERAL',
+    tokenText: 'F',
+    label: 'ทั่วไป',
+    tokenColor: '#8B5CF6',
+    tokenBg: '#F3E8FF',
+    tokenBorder: '#DDD6FE',
+    isDividend: false,
+  };
+}
+
 // Curated catalog of top popular Thai mutual funds for instant 0ms autocomplete
 export const POPULAR_THAI_FUNDS: FundSuggestion[] = [
   // Kasikorn Asset Management (KAsset)
@@ -143,6 +279,17 @@ export const POPULAR_THAI_FUNDS: FundSuggestion[] = [
     category: 'Equity',
   },
   {
+    symbol: 'SCBDV-A',
+    rawSymbol: 'SCBDV-A',
+    name: 'กองทุนเปิดไทยพาณิชย์หุ้นทุนปันผล (ชนิดสะสมมูลค่า)',
+    amc: 'บลจ.ไทยพาณิชย์',
+    exchange: 'SCBAM',
+    market: 'TH',
+    currency: 'THB',
+    projId: 'M0452_2546',
+    category: 'Equity',
+  },
+  {
     symbol: 'SCBBLN',
     rawSymbol: 'SCBBLN',
     name: 'กองทุนเปิดไทยพาณิชย์ บิลเลียนแนร์',
@@ -250,9 +397,19 @@ export const POPULAR_THAI_FUNDS: FundSuggestion[] = [
 
   // Krungsri Asset Management (KSAM)
   {
-    symbol: 'KF-GTECH',
-    rawSymbol: 'KF-GTECH',
-    name: 'กองทุนเปิดกรุงศรีโกลบอลเทคโนโลยีอิควิตี้',
+    symbol: 'KF-GTECH-D',
+    rawSymbol: 'KF-GTECH-D',
+    name: 'กองทุนเปิดกรุงศรีโกลบอลเทคโนโลยีอิควิตี้ (ชนิดจ่ายเงินปันผล)',
+    amc: 'บลจ.กรุงศรี',
+    exchange: 'KSAM',
+    market: 'TH',
+    currency: 'THB',
+    category: 'Foreign',
+  },
+  {
+    symbol: 'KF-GTECH-A',
+    rawSymbol: 'KF-GTECH-A',
+    name: 'กองทุนเปิดกรุงศรีโกลบอลเทคโนโลยีอิควิตี้ (ชนิดสะสมมูลค่า)',
     amc: 'บลจ.กรุงศรี',
     exchange: 'KSAM',
     market: 'TH',
@@ -365,6 +522,16 @@ export const POPULAR_THAI_FUNDS: FundSuggestion[] = [
     currency: 'THB',
     category: 'Foreign',
   },
+  {
+    symbol: 'PRINCIPAL iPROP-D',
+    rawSymbol: 'PRINCIPAL iPROP-D',
+    name: 'กองทุนเปิดพรินซิเพิล อินคัม พร็อพเพอร์ตี้ (ชนิดจ่ายเงินปันผล)',
+    amc: 'บลจ.พรินซิเพิล',
+    exchange: 'Principal',
+    market: 'TH',
+    currency: 'THB',
+    category: 'Property',
+  },
 ];
 
 /**
@@ -380,12 +547,19 @@ export async function searchThaiFunds(query: string): Promise<FundSuggestion[]> 
     f.symbol.toUpperCase().startsWith(clean)
   );
 
-  // Sort startsWith: exact match first, then shorter symbol length, then alphabetical
+  // Sort startsWith: exact match first, then dividend class first, then shorter length, then alphabetical
   startsWithSymbol.sort((a, b) => {
     const aSym = a.symbol.toUpperCase();
     const bSym = b.symbol.toUpperCase();
     if (aSym === clean) return -1;
     if (bSym === clean) return 1;
+
+    // Prioritize dividend-paying class in dividend portfolio app
+    const aDiv = detectFundClass(a.symbol, a.name).isDividend;
+    const bDiv = detectFundClass(b.symbol, b.name).isDividend;
+    if (aDiv && !bDiv) return -1;
+    if (!aDiv && bDiv) return 1;
+
     if (aSym.length !== bSym.length) return aSym.length - bSym.length;
     return aSym.localeCompare(bSym);
   });

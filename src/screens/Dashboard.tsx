@@ -531,9 +531,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
         />
 
         {/* 2. Category Cards: Stocks, Funds, Cash/Savings */}
+        {/* 2. Category Cards: Stocks, Funds, Cash/Savings */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>สัดส่วนสินทรัพย์ตามหมวดหมู่</Text>
-          <Text style={styles.sectionSubtitle}>3 หมวดหมู่หลัก</Text>
+          <View>
+            <Text style={styles.sectionTitle}>สัดส่วนสินทรัพย์ตามหมวดหมู่</Text>
+            <Text style={styles.sectionSubtitle}>3 หมวดหมู่หลัก</Text>
+          </View>
+          {onNavigateToPortfolio && (
+            <TouchableOpacity
+              onPress={() => onNavigateToPortfolio('ALL')}
+              style={styles.seeAllBtn}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.seeAllBtnText}>ดูพอร์ตเต็ม →</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.categoryCardsContainer}>
@@ -547,52 +559,53 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 setIsCategoryModalVisible(true);
               }}
             >
+              {/* Row 1: Left has Icon + Title + Count + Segment Badge. Right has P/L badge + Allocation % */}
               <View style={styles.categoryHeader}>
-                <View style={[styles.categoryIconCircle, { backgroundColor: cat.bgColor }]}>
-                  <Ionicons name={cat.icon} size={20} color={cat.color} />
+                <View style={styles.categoryHeaderLeft}>
+                  <View style={[styles.categoryIconCircle, { backgroundColor: cat.bgColor }]}>
+                    <Ionicons name={cat.icon} size={14} color={cat.color} />
+                  </View>
+                  <Text style={styles.categoryTitle}>{cat.label}</Text>
+                  <Text style={styles.categoryAssetCount}>({cat.count})</Text>
+                  <View style={[styles.tapToPieBadge, { backgroundColor: cat.bgColor }]}>
+                    <Ionicons name="pie-chart" size={10} color={cat.color} />
+                    <Text style={[styles.tapToPieText, { color: cat.color }]}>Segment</Text>
+                  </View>
                 </View>
                 <View style={styles.categoryHeaderRightRow}>
-                  <View style={[styles.tapToPieBadge, { backgroundColor: cat.bgColor }]}>
-                    <Ionicons name="pie-chart" size={12} color={cat.color} />
-                    <Text style={[styles.tapToPieText, { color: cat.color }]}>สัดส่วน Segment</Text>
-                  </View>
+                  <Text style={[styles.categoryPL, cat.unrealizedPL >= 0 ? styles.profitText : styles.lossText]}>
+                    {cat.unrealizedPL >= 0 ? '+' : ''}
+                    {cat.unrealizedPLPercent.toFixed(1)}%
+                  </Text>
                   <View style={styles.categoryHeaderRight}>
                     <Text style={styles.categoryAllocationText}>{cat.allocationPercent.toFixed(1)}%</Text>
                   </View>
                 </View>
               </View>
 
-              <Text style={styles.categoryTitle}>{cat.label}</Text>
-              <Text style={styles.categoryValue}>
-                {formatMoney(cat.marketValue)}
-              </Text>
-
-              {/* Minimal Inflow Indicator per category */}
-              <View style={styles.categoryInflowRow}>
-                <Ionicons
-                  name={cat.type === 'CASH' ? 'wallet-outline' : 'leaf-outline'}
-                  size={12}
-                  color={cat.color}
-                />
-                <Text
-                  style={[styles.categoryInflowText, { color: cat.color }]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {cat.type === 'CASH'
-                    ? `ดอกเบี้ย ${formatMoney(annualInflowByCategory.CASH, 0)}/ปี`
-                    : cat.type === 'STOCKS'
-                    ? `ปันผล ${formatMoney(annualInflowByCategory.STOCKS, 0)}/ปี (YoC ${cat.totalCost > 0 ? ((annualInflowByCategory.STOCKS / cat.totalCost) * 100).toFixed(1) : '0.0'}%)`
-                    : `ปันผล ${formatMoney(annualInflowByCategory.FUNDS, 0)}/ปี (Yield ${cat.marketValue > 0 ? ((annualInflowByCategory.FUNDS / cat.marketValue) * 100).toFixed(1) : '0.0'}%)`}
+              {/* Row 2: Left has Market Value. Right has Inflow / Yield */}
+              <View style={styles.categoryValueRow}>
+                <Text style={styles.categoryValue}>
+                  {formatMoney(cat.marketValue)}
                 </Text>
-              </View>
-
-              <View style={styles.categoryFooter}>
-                <Text style={styles.categoryAssetCount}>{cat.count} รายการ</Text>
-                <Text style={[styles.categoryPL, cat.unrealizedPL >= 0 ? styles.profitText : styles.lossText]}>
-                  {cat.unrealizedPL >= 0 ? '+' : ''}
-                  {cat.unrealizedPLPercent.toFixed(2)}%
-                </Text>
+                <View style={styles.categoryInflowRow}>
+                  <Ionicons
+                    name={cat.type === 'CASH' ? 'wallet-outline' : 'leaf-outline'}
+                    size={11}
+                    color={cat.color}
+                  />
+                  <Text
+                    style={[styles.categoryInflowText, { color: cat.color }]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {cat.type === 'CASH'
+                      ? `ดอกเบี้ย ${formatMoney(annualInflowByCategory.CASH, 0)}/ปี`
+                      : cat.type === 'STOCKS'
+                      ? `ปันผล ${formatMoney(annualInflowByCategory.STOCKS, 0)}/ปี (YoC ${cat.totalCost > 0 ? ((annualInflowByCategory.STOCKS / cat.totalCost) * 100).toFixed(1) : '0.0'}%)`
+                      : `ปันผล ${formatMoney(annualInflowByCategory.FUNDS, 0)}/ปี (Yield ${cat.marketValue > 0 ? ((annualInflowByCategory.FUNDS / cat.marketValue) * 100).toFixed(1) : '0.0'}%)`}
+                  </Text>
+                </View>
               </View>
 
               {/* Progress bar */}
@@ -909,141 +922,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </View>
         </View>
 
-        {/* 4. Portfolio Overview & Link to Portfolio Screen */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>พอร์ตสินทรัพย์ ({assets.length})</Text>
-          {onNavigateToPortfolio && (
-            <TouchableOpacity
-              onPress={() => onNavigateToPortfolio('ALL')}
-              style={styles.seeAllBtn}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.seeAllBtnText}>ดูสัดส่วน & สินทรัพย์ →</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="small" color="#059669" />
-            <Text style={styles.loadingText}>กำลังโหลดข้อมูล...</Text>
-          </View>
-        ) : assets.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons name="wallet-outline" size={48} color="#94A3B8" />
-            <Text style={styles.emptyTitle}>ยังไม่มีสินทรัพย์ในพอร์ต</Text>
-            <Text style={styles.emptySubtitle}>แตะปุ่ม + ที่มุมขวาล่าง เพื่อบันทึกสินทรัพย์และปันผลแรกของคุณ</Text>
-          </View>
-        ) : (
-          <View style={styles.portfolioSummaryCard}>
-            <View style={styles.portfolioSummaryTop}>
-              <View>
-                <Text style={styles.portfolioSummaryLabel}>มูลค่าสินทรัพย์ทั้งหมดในพอร์ต</Text>
-                <Text style={styles.portfolioSummaryValue}>
-                  {formatMoney(assets.reduce((sum, a) => sum + (Number(a.market_value) || 0), 0))}
-                </Text>
-              </View>
-              {onNavigateToPortfolio && (
-                <TouchableOpacity
-                  style={styles.openPortfolioActionBtn}
-                  onPress={() => onNavigateToPortfolio('ALL')}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="pie-chart" size={15} color="#FFFFFF" />
-                  <Text style={styles.openPortfolioActionBtnText}>เปิดดู Pie Chart</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Quick Preview of Top 3 Assets by Highest Market Value */}
-            <View style={styles.topAssetsList}>
-              {[...assets]
-                .sort((a, b) => (Number(b.market_value) || 0) - (Number(a.market_value) || 0))
-                .slice(0, 3)
-                .map((item) => {
-                const isUS = isUSStock(item);
-                const rate = exchangeRate > 0 ? exchangeRate : 34.00;
-                const priceUSD = isUS ? Number(item.current_price) / rate : 0;
-                const itemTotalCost = Number(item.total_cost) || 0;
-                const itemInflow = annualInflowByAsset[item.id] || 0;
-                const itemYoC = itemTotalCost > 0 ? (itemInflow / itemTotalCost) * 100 : 0;
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={styles.topAssetItem}
-                    onPress={() => {
-                      setSelectedAssetForEdit(item);
-                      setIsEditModalVisible(true);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.topAssetLeft}>
-                      <View style={styles.topAssetSymbolRow}>
-                        <Text style={styles.topAssetSymbol}>{item.symbol}</Text>
-                        {isUS && (
-                          <View style={styles.usBadge}>
-                            <Text style={styles.usBadgeText}>USD $</Text>
-                          </View>
-                        )}
-                        <Text style={styles.topAssetTypeTag}>{item.asset_type}</Text>
-                      </View>
-                      <Text style={styles.topAssetSub}>
-                        {isUS
-                          ? `$${priceUSD.toFixed(2)} (~฿${Number(item.current_price).toFixed(2)}) • ${Number(item.net_shares).toLocaleString()} หุ้น`
-                          : item.asset_type === 'CASH'
-                          ? `เงินต้น ${formatMoney(Number(item.market_value), 0)}`
-                          : `฿${Number(item.current_price).toFixed(2)} • ${Number(item.net_shares).toLocaleString()} หุ้น`}
-                      </Text>
-                    </View>
-                    <View style={styles.topAssetRight}>
-                      <Text style={styles.topAssetVal}>
-                        {formatMoney(Number(item.market_value))}
-                      </Text>
-                      <View style={styles.topAssetRightSub}>
-                        <Text style={[styles.topAssetPL, Number(item.unrealized_pl) >= 0 ? styles.profitText : styles.lossText]}>
-                          {Number(item.unrealized_pl) >= 0 ? '+' : ''}
-                          {Number(item.unrealized_pl_percent).toFixed(1)}%
-                        </Text>
-                        {itemYoC > 0 && (
-                          <View style={styles.topAssetYoCBadge}>
-                            <Text style={styles.topAssetYoCText}>YoC {itemYoC.toFixed(1)}%</Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {onNavigateToAssets ? (
-              <TouchableOpacity
-                style={styles.viewFullPortfolioBtn}
-                onPress={() => onNavigateToAssets('HOLDINGS', 'ALL')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.viewFullPortfolioBtnText}>
-                  {assets.length > 3
-                    ? `ดูสินทรัพย์ทั้งหมด ${assets.length} รายการ & ประวัติธุรกรรม →`
-                    : 'เปิดดูรายการสินทรัพย์ทั้งหมด & ประวัติธุรกรรม →'}
-                </Text>
-              </TouchableOpacity>
-            ) : onNavigateToPortfolio && (
-              <TouchableOpacity
-                style={styles.viewFullPortfolioBtn}
-                onPress={() => onNavigateToPortfolio('ALL')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.viewFullPortfolioBtnText}>
-                  {assets.length > 3
-                    ? `ดูสินทรัพย์ทั้งหมดอีก ${assets.length - 3} รายการ ใน Portfolio →`
-                    : 'เปิดดูพอร์ตสินทรัพย์และ Donut Pie Chart →'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
@@ -1184,58 +1062,69 @@ const styles = StyleSheet.create({
   },
   categoryCardsContainer: {
     flexDirection: 'column',
-    gap: 10,
-    marginBottom: 20,
+    gap: 8,
+    marginBottom: 16,
   },
   categoryCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     elevation: 1,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 4,
+    shadowRadius: 3,
   },
   categoryHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
+  },
+  categoryHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
   },
   categoryIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
   },
   categoryHeaderRight: {
     backgroundColor: '#F8FAFC',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
   },
   categoryAllocationText: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '700',
     color: '#0F172A',
   },
   categoryTitle: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
+    fontSize: 13,
+    color: '#1E293B',
+    fontWeight: '700',
+  },
+  categoryValueRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
   },
   categoryValue: {
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 15,
+    lineHeight: 19,
     fontWeight: '800',
     color: '#0F172A',
-    marginTop: 2,
-    marginBottom: 8,
-    minHeight: 26,
+    minHeight: 19,
   },
   categoryFooter: {
     flexDirection: 'row',
@@ -1244,22 +1133,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   categoryAssetCount: {
-    fontSize: 12,
-    color: '#64748B',
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '500',
   },
   categoryPL: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   progressBarBackground: {
-    height: 6,
+    height: 3,
     backgroundColor: '#F1F5F9',
-    borderRadius: 3,
+    borderRadius: 2,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 2,
   },
   chartCard: {
     backgroundColor: '#FFFFFF',
@@ -1745,18 +1635,18 @@ const styles = StyleSheet.create({
   categoryHeaderRightRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   tapToPieBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    gap: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
   },
   tapToPieText: {
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '700',
   },
   seeAllBtn: {
@@ -1768,125 +1658,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#059669',
   },
-  portfolioSummaryCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  portfolioSummaryTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  portfolioSummaryLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  portfolioSummaryValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-  openPortfolioActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 9,
-  },
-  openPortfolioActionBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  topAssetsList: {
-    gap: 8,
-  },
-  topAssetItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  topAssetLeft: {
-    flex: 1,
-  },
-  topAssetSymbolRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  topAssetSymbol: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  topAssetTypeTag: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#059669',
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  topAssetSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  topAssetRight: {
-    alignItems: 'flex-end',
-  },
-  topAssetVal: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  topAssetPL: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  viewFullPortfolioBtn: {
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    alignItems: 'center',
-  },
-  viewFullPortfolioBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
   categoryInflowRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginTop: 4,
-    marginBottom: 8,
-    minHeight: 18,
+    gap: 4,
+    flexShrink: 1,
+    justifyContent: 'flex-end',
   },
   categoryInflowText: {
     fontSize: 11,
     lineHeight: 15,
     fontWeight: '600',
-    flex: 1,
   },
   goalCard: {
     backgroundColor: '#FFFFFF',

@@ -67,6 +67,7 @@ export interface Database {
           shares: number;
           price_per_share: number;
           transaction_date: string;
+          exchange_rate?: number;
           created_at: string;
         };
         Insert: {
@@ -76,6 +77,7 @@ export interface Database {
           shares: number;
           price_per_share: number;
           transaction_date?: string;
+          exchange_rate?: number;
           created_at?: string;
         };
         Update: {
@@ -85,6 +87,7 @@ export interface Database {
           shares?: number;
           price_per_share?: number;
           transaction_date?: string;
+          exchange_rate?: number;
           created_at?: string;
         };
         Relationships: [

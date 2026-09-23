@@ -122,6 +122,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
           shares: Number(parsedShares.toFixed(4)),
           price_per_share: Number(effectivePriceTHB.toFixed(4)),
           transaction_date: txDate.trim(),
+          exchange_rate: Number(rate.toFixed(4)),
         })
         .eq('id', transaction.id);
 

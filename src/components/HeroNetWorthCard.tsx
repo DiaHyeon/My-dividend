@@ -66,7 +66,7 @@ export const HeroNetWorthCard: React.FC<HeroNetWorthCardProps> = React.memo(({
         <View style={[styles.plBadge, totalUnrealizedPL >= 0 ? styles.plBadgeProfit : styles.plBadgeLoss]}>
           <Ionicons
             name={totalUnrealizedPL >= 0 ? 'arrow-up' : 'arrow-down'}
-            size={14}
+            size={12}
             color={totalUnrealizedPL >= 0 ? '#166534' : '#991B1B'}
           />
           <Text style={[styles.plBadgeText, totalUnrealizedPL >= 0 ? styles.profitText : styles.lossText]}>
@@ -86,21 +86,19 @@ export const HeroNetWorthCard: React.FC<HeroNetWorthCardProps> = React.memo(({
       {/* Annual Net Inflow Highlight with Dual Yield Badges */}
       <View style={styles.dividendHighlightBox}>
         <View style={styles.dividendHighlightTop}>
-          <View style={styles.dividendIconBadge}>
-            <Ionicons name="cash-outline" size={22} color="#059669" />
-          </View>
-          <View style={styles.dividendTextContainer}>
-            <Text style={styles.dividendHighlightLabel}>
+          <View style={styles.dividendHeaderLeft}>
+            <Ionicons name="cash-outline" size={15} color="#34D399" />
+            <Text style={styles.dividendHighlightLabel} numberOfLines={1}>
               {inflowFilter === 'ALL'
-                ? 'กระแสเงินสดรับสุทธิคาดการณ์ทั้งปี'
+                ? 'กระแสเงินสดรับคาดการณ์/ปี'
                 : inflowFilter === 'DIVIDENDS'
-                ? 'เงินปันผลสุทธิคาดการณ์ทั้งปี'
-                : 'ดอกเบี้ยเงินฝากสุทธิคาดการณ์ทั้งปี'}
-            </Text>
-            <Text style={styles.dividendHighlightValue}>
-              {formatMoney(projectedAnnualNetDividend)}
+                ? 'เงินปันผลสุทธิคาดการณ์/ปี'
+                : 'ดอกเบี้ยเงินฝากสุทธิคาดการณ์/ปี'}
             </Text>
           </View>
+          <Text style={styles.dividendHighlightValue} numberOfLines={1}>
+            {formatMoney(projectedAnnualNetDividend)}
+          </Text>
         </View>
 
         {/* Dual Yield & Monthly Avg Subrow */}
@@ -175,20 +173,21 @@ export const HeroNetWorthCard: React.FC<HeroNetWorthCardProps> = React.memo(({
 const styles = StyleSheet.create({
   heroCard: {
     backgroundColor: '#0F172A',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 20,
-    elevation: 4,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 14,
+    elevation: 3,
     shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
   heroTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   heroLabelContainer: {
     flexDirection: 'row',
@@ -196,8 +195,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   heroLabel: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
     color: '#94A3B8',
     fontWeight: '500',
   },
@@ -207,23 +206,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   heroValueRow: {
-    minHeight: 40,
+    minHeight: 34,
     justifyContent: 'center',
+    marginBottom: 8,
   },
   heroValue: {
-    fontSize: 32,
-    lineHeight: 38,
+    fontSize: 28,
+    lineHeight: 34,
     fontWeight: '800',
     color: '#FFFFFF',
   },
   plBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    gap: 4,
-    height: 28,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    gap: 3,
+    height: 22,
   },
   plBadgeProfit: {
     backgroundColor: '#DCFCE7',
@@ -232,8 +232,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE2E2',
   },
   plBadgeText: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 15,
     fontWeight: '700',
   },
   profitText: {
@@ -250,54 +250,48 @@ const styles = StyleSheet.create({
   },
   dividendHighlightBox: {
     backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 14,
-    marginTop: 16,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderWidth: 1,
     borderColor: '#334155',
   },
   dividendHighlightTop: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  dividendIconBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#ECFDF5',
-    justifyContent: 'center',
+  dividendHeaderLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 12,
-  },
-  dividendTextContainer: {
-    flex: 1,
+    gap: 5,
+    flexShrink: 1,
   },
   dividendHighlightLabel: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 15,
     color: '#94A3B8',
     fontWeight: '500',
   },
   dividendHighlightValue: {
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 15,
+    lineHeight: 19,
     fontWeight: '800',
     color: '#34D399',
-    marginTop: 2,
-    minHeight: 26,
+    textAlign: 'right',
   },
   dualYieldRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#0F172A',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    marginTop: 12,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
     borderWidth: 1,
     borderColor: '#334155',
-    minHeight: 52,
+    minHeight: 38,
   },
   dualYieldItem: {
     flex: 1,
@@ -306,36 +300,34 @@ const styles = StyleSheet.create({
   },
   dualYieldDivider: {
     width: 1,
-    height: 24,
+    height: 18,
     backgroundColor: '#334155',
   },
   dualYieldSublabel: {
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 9,
+    lineHeight: 12,
     color: '#94A3B8',
   },
   dualYieldSubval: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 15,
     fontWeight: '700',
     color: '#F8FAFC',
-    marginTop: 2,
-    minHeight: 16,
+    marginTop: 1,
   },
   dualYieldYoCVal: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 15,
     fontWeight: '800',
     color: '#34D399',
-    marginTop: 2,
-    minHeight: 16,
+    marginTop: 1,
   },
   heroBottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 16,
-    marginTop: 16,
+    alignItems: 'flex-start',
+    paddingTop: 10,
+    marginTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#1E293B',
   },
@@ -344,18 +336,19 @@ const styles = StyleSheet.create({
   },
   heroDivider: {
     width: 1,
-    height: 28,
+    height: 24,
     backgroundColor: '#1E293B',
-    marginHorizontal: 10,
+    marginHorizontal: 8,
+    marginTop: 2,
   },
   heroStatLabel: {
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 10,
+    lineHeight: 13,
     color: '#94A3B8',
   },
   heroStatValue: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: '700',
     color: '#F8FAFC',
     marginTop: 2,
@@ -366,9 +359,9 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   heroStatSubPercent: {
-    fontSize: 11,
-    lineHeight: 14,
-    marginTop: 2,
+    fontSize: 10,
+    lineHeight: 13,
+    marginTop: 1,
     fontWeight: '600',
   },
   profitSubText: {

@@ -44,7 +44,7 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
 - `assets`: Manages asset master records
   - Fields: `id` (uuid, PK), `user_id` (uuid), `symbol` (text), `asset_type` (STOCKS | FUNDS | CASH), `current_price` (numeric(15,4)), `tax_rate` (numeric(15,4), default 0.1000), `is_archived` (boolean), `created_at` (timestamptz)
 - `transactions`: Buy and deposit transaction logs
-  - Fields: `id` (uuid, PK), `asset_id` (uuid, FK), `type` (BUY | SELL), `shares` (numeric(15,4)), `price_per_share` (numeric(15,4)), `transaction_date` (date)
+  - Fields: `id` (uuid, PK), `asset_id` (uuid, FK), `type` (BUY | SELL), `shares` (numeric(15,4)), `price_per_share` (numeric(15,4)), `transaction_date` (date), `exchange_rate` (numeric(15,4), default 1.0000)
 - `dividend_schedules`: Dividend payment and projection schedules
   - Fields: `id` (uuid, PK), `asset_id` (uuid, FK), `dpu` (numeric(15,4)), `xd_date` (date), `payment_date` (date, nullable), `is_projected` (boolean)
 - `view_asset_summary` (SQL View): Automatically computes net remaining shares (`net_shares`), weighted average cost (`weighted_average_cost`), total market value (`market_value`), total cost basis (`total_cost`), and Unrealized P/L directly in the database engine.
@@ -55,14 +55,23 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
 
 ### 4.1 Dashboard & Navigation Structure
 - **Navigation Tabs**: Standardized international naming across the bottom navigation bar:
-  - `Overview` (Dashboard screen): Net worth hero card, category summary cards, payday radar, 12-month cashflow chart, and passive income goal card.
+  - `Overview` (Dashboard screen): Streamlined minimal cashflow hub containing net worth hero card, compact 3-category summary cards, upcoming payday radar, 12-month dividend/interest cashflow chart, and passive income goal card. Redundant bottom asset lists are omitted in favor of dedicated bottom tabs.
   - `Portfolio`: Portfolio asset allocation donut pie chart, sector breakdown, and cumulative performance benchmark comparison.
   - `Holdings`: Dedicated dual-view screen for holdings management with sparkline charts, and transaction history timeline with minimal dropdown filters.
-- **Category Summary Cards**: Grouped into 3 distinct asset classes:
+- **Minimal Hero Net Worth Card (`HeroNetWorthCard.tsx`)**:
+  - Compact FinTech aesthetic with ~30% height reduction (~110px saved).
+  - Inline cashflow header pairing a 15px cash icon with right-aligned projected annual inflow.
+  - Streamlined 38px 3-column dual yield subrow (`เฉลี่ยต่อเดือน`, `Current Yield`, `Yield on Cost 🚀`).
+  - Zero-jitter layout guarantees with static top row labels, frameless Privacy Mode eye toggle, and stable `minHeight` bounds.
+- **Compact Category Summary Cards**: Grouped into 3 distinct asset classes:
   - Stocks (`STOCKS` - Blue theme `#3B82F6`)
   - Mutual Funds (`FUNDS` - Purple theme `#8B5CF6`)
   - Digital Savings & Fixed Income (`CASH` - Emerald theme `#10B981`)
-  - Each card displays allocation percentage, total market value, asset count, unrealized profit/loss, and a visual progress allocation bar.
+  - **Compact 2-Row Layout (~50% Height Reduction)**:
+    - **Row 1**: Category icon (24px) + title + count `(X)` + `Segment` badge (tap to open Segment breakdown modal) + P/L badge + Allocation %.
+    - **Row 2**: Total market value (left) + annual inflow & YoC/Yield (right).
+    - **Row 3**: Slim 3px colored progress bar.
+    - **Quick Portfolio Navigation**: Section header includes `ดูพอร์ตเต็ม →` button for immediate transition to the `Portfolio` tab.
 
 ---
 
@@ -132,6 +141,13 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - Fetches historical DPU and book-closing dates from the SEC API with exact symbol matching to avoid incorrect share classes.
 - **Auto Sector Detection**:
   - Evaluates the fund investment policy description (`policy_desc`) to assign standard sector tags (Equity, Fixed Income, Foreign/FIF, Mixed, Property, Commodity, Money Market).
+- **Share Class Disambiguation UI & Gold Token 'D'**:
+  - Automatically classifies mutual fund share classes via `detectFundClass` (`fundService.ts`):
+    - **Dividend Class (`-D`, `-A(D)`, `ปันผล`)**: Marked with an elevated **Gold Token 'D'** (`🟡 D`) and gold label `ปันผล` with search priority.
+    - **Accumulation Class (`-A`, `-A(A)`, `สะสมมูลค่า`)**: Marked with a subtle slate **'A' Token** (`⚪ A`) and `สะสมมูลค่า` label to prevent mistaking non-dividend growth classes.
+    - **Tax-Deductible Class (`SSF`, `RMF`, `TESG`)**: Marked with a violet **Token** (`🟣 SSF` / `🟣 RMF`).
+    - **Auto-Redemption Class (`-R`)**: Marked with an azure **'R' Token** (`🔵 R`).
+  - Search results display class tokens side-by-side with AMC badges, and selected asset notes provide instant confirmation badges (`🟡 [Class D จ่ายปันผล]` vs `⚪ [Class A สะสมมูลค่า]`) before confirming transactions.
 - **Clean State Switcher**:
   - Toggling between `STOCKS`, `FUNDS`, and `CASH` resets input fields to prevent state leakage.
 
