@@ -27,7 +27,7 @@ import { consolidateDuplicateAssets } from '../services/assetConsolidationServic
 import { usePrivacyMode } from '../services/privacyService';
 import { ensureAuthenticated } from '../services/authService';
 import { syncDailyPricesIfNeeded } from '../services/priceSyncService';
-import { cleanOrphanedReminders } from '../services/notificationService';
+import { cleanOrphanedReminders, syncAllUpcomingXdReminders } from '../services/notificationService';
 import { calculatePortfolioReturns } from '../services/returnService';
 
 const MONTH_NAMES = [
@@ -187,8 +187,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       setCurrencyMap(currencies);
       setSpecialScheduleIds(specialIds);
 
-      // Clean orphaned reminders for archived/deleted assets in the background
-      cleanOrphanedReminders(loadedAssets).catch(() => {});
+      // Clean orphaned reminders for archived/deleted assets and sync upcoming XD reminders
+      cleanOrphanedReminders(loadedAssets)
+        .then(() => syncAllUpcomingXdReminders())
+        .catch(() => {});
     } catch (err: any) {
       console.warn('Load data error:', err.message);
     } finally {
@@ -559,18 +561,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 setIsCategoryModalVisible(true);
               }}
             >
-              {/* Row 1: Left has Icon + Title + Count + Segment Badge. Right has P/L badge + Allocation % */}
+              {/* Row 1: Left has Icon + Title + Count. Right has P/L badge + Allocation % + Chevron */}
               <View style={styles.categoryHeader}>
                 <View style={styles.categoryHeaderLeft}>
                   <View style={[styles.categoryIconCircle, { backgroundColor: cat.bgColor }]}>
                     <Ionicons name={cat.icon} size={14} color={cat.color} />
                   </View>
-                  <Text style={styles.categoryTitle}>{cat.label}</Text>
+                  <Text style={styles.categoryTitle} numberOfLines={1}>{cat.label}</Text>
                   <Text style={styles.categoryAssetCount}>({cat.count})</Text>
-                  <View style={[styles.tapToPieBadge, { backgroundColor: cat.bgColor }]}>
-                    <Ionicons name="pie-chart" size={10} color={cat.color} />
-                    <Text style={[styles.tapToPieText, { color: cat.color }]}>Segment</Text>
-                  </View>
                 </View>
                 <View style={styles.categoryHeaderRightRow}>
                   <Text style={[styles.categoryPL, cat.unrealizedPL >= 0 ? styles.profitText : styles.lossText]}>
@@ -580,6 +578,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <View style={styles.categoryHeaderRight}>
                     <Text style={styles.categoryAllocationText}>{cat.allocationPercent.toFixed(1)}%</Text>
                   </View>
+                  <Ionicons name="chevron-forward" size={13} color="#94A3B8" />
                 </View>
               </View>
 

@@ -68,7 +68,7 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - Mutual Funds (`FUNDS` - Purple theme `#8B5CF6`)
   - Digital Savings & Fixed Income (`CASH` - Emerald theme `#10B981`)
   - **Compact 2-Row Layout (~50% Height Reduction)**:
-    - **Row 1**: Category icon (24px) + title + count `(X)` + `Segment` badge (tap to open Segment breakdown modal) + P/L badge + Allocation %.
+    - **Row 1**: Category icon (24px) + title + count `(X)` + P/L badge + Allocation % + subtle `chevron-forward` tap indicator (tap to open Segment breakdown modal).
     - **Row 2**: Total market value (left) + annual inflow & YoC/Yield (right).
     - **Row 3**: Slim 3px colored progress bar.
     - **Quick Portfolio Navigation**: Section header includes `ดูพอร์ตเต็ม →` button for immediate transition to the `Portfolio` tab.
@@ -180,9 +180,11 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
 
 ### 4.6 Local Notifications (XD Ex-Dividend Reminders)
 - Handled by: `src/services/notificationService.ts`
-- Automatically schedules reminders 1 day prior to the ex-dividend date at 08:30 AM.
+- **Zero-Configuration Full-Auto Automation**: Automatically schedules reminders 1 day prior to the ex-dividend date at 08:30 AM without manual user intervention.
 - Dedicated Android Notification Channel: `xd-reminders` (High Importance, audio chime, and vibration).
-- Notification message: `🔔 [Symbol] goes Ex-Dividend tomorrow! Hold your position to receive payout.`
+- Notification message: `🔔 [Symbol] ขึ้นเครื่องหมาย XD พรุ่งนี้! ถือหุ้นไว้เพื่อรับสิทธิเงินปันผล`
+- **Portfolio-wide Auto-Synchronization (`syncAllUpcomingXdReminders`)**: Automatically synchronizes and schedules unexpired upcoming XD dates for active assets on Dashboard load/pull-to-refresh and immediately after CSV bulk portfolio imports.
+- **Hygiene & Single-Transaction Cleanup**: Cancels scheduled reminders on asset deletion and when archiving assets upon deleting their last transaction in `EditTransactionModal.tsx`.
 
 ---
 
@@ -205,8 +207,9 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
 ### 4.8 Segment Classification & Portfolio Allocation (Donut Pie Chart)
 - Handled by: `src/components/CategoryBreakdownModal.tsx`, `src/screens/Portfolio.tsx`, `src/services/sectorService.ts`
 - **Visual Presentation & White Callout Lines**:
-  - High-contrast Donut Pie Chart rendered on a dark card (`#0F172A`).
+  - High-contrast Donut Pie Chart rendered on a compact minimal dark card (`#0F172A`, ~40% height reduction) with streamlined padding and tighter callout radius.
   - **Crisp White Callout Lines**: Elegant directional lines linking chart slices directly to percentage and name badges, preventing overlapping labels.
+  - **Context Isolation**: The bank interest quota meter is omitted from the portfolio allocation card and maintained strictly inside `CategoryBreakdownModal` for CASH details, keeping the allocation overview focused and compact.
   - **Minor Items Grouping (Option A)**:
     - Holdings or segments representing $\ge 6\%$ receive dedicated chart slices and callouts.
     - Holdings representing $< 6\%$ are bundled into a single slate-gray (`#64748B`) slice labeled **"Others"** with a single callout line, eliminating mobile layout overcrowding.

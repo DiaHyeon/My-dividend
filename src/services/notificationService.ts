@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../lib/supabase';
 
 // Configure in-app notification behavior safely
 try {
@@ -242,5 +243,91 @@ export async function cleanOrphanedReminders(activeHoldings: { symbol: string; n
   } catch (err: any) {
     console.warn('Error cleaning orphaned notifications:', err?.message);
     return 0;
+  }
+}
+
+/**
+ * Synchronizes upcoming XD reminders from the database for all active (non-archived) assets.
+ * Schedules reminders for unexpired upcoming XD dates that haven't been scheduled yet.
+ */
+export async function syncAllUpcomingXdReminders(): Promise<number> {
+  if (Platform.OS === 'web') return 0;
+  try {
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Fetch upcoming dividend schedules for active assets
+    const { data: schedules, error } = await supabase
+      .from('dividend_schedules')
+      .select('id, dpu, xd_date, asset_id, assets(symbol, is_archived)')
+      .gte('xd_date', todayStr);
+
+    if (error || !schedules || schedules.length === 0) {
+      return 0;
+    }
+
+    const currentReminders = await getStoredReminders();
+    let scheduledCount = 0;
+
+    for (const item of schedules) {
+      const asset = item.assets as unknown as { symbol: string; is_archived: boolean } | null;
+      if (!asset || asset.is_archived || !asset.symbol) continue;
+
+      const symbol = asset.symbol;
+      const xdDate = item.xd_date;
+
+      // Check if already registered
+      const alreadyScheduled = currentReminders.some(
+        (r) => r.symbol.toUpperCase() === symbol.toUpperCase() && r.xdDate === xdDate
+      );
+
+      if (!alreadyScheduled) {
+        const notifId = await scheduleXdReminder(symbol, xdDate);
+        if (notifId) {
+          scheduledCount++;
+        }
+      }
+    }
+
+    if (scheduledCount > 0) {
+      console.log(`[Notification Service] Synchronized ${scheduledCount} new upcoming XD reminder(s)`);
+    }
+
+    return scheduledCount;
+  } catch (err: any) {
+    console.warn('[Notification Service] Error syncing upcoming XD reminders:', err?.message);
+    return 0;
+  }
+}
+
+/**
+ * Sends or schedules a test notification (useful for testing on Expo Go / device)
+ */
+export async function sendTestNotificationNow(delaySeconds: number = 3): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
+  try {
+    await initNotificationChannel();
+    await requestNotificationPermissions();
+
+    const title = '🔔 ทดสอบการแจ้งเตือน XD Reminders';
+    const body = 'ระบบแจ้งเตือนวันขึ้นเครื่องหมายเงินปันผลของ My dividend พร้อมทำงานเรียบร้อยแล้ว!';
+
+    const notificationId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        sound: true,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: Math.max(1, delaySeconds),
+        repeats: false,
+        channelId: 'xd-reminders',
+      },
+    });
+
+    return notificationId;
+  } catch (err: any) {
+    console.warn('[Notification Service] Test notification error:', err?.message);
+    return null;
   }
 }

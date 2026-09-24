@@ -7,6 +7,7 @@ import { fetchStockPrice } from './stockService';
 import { fetchFundNav } from './fundService';
 import { consolidateDuplicateAssets } from './assetConsolidationService';
 import { ensureAuthenticated } from './authService';
+import { syncAllUpcomingXdReminders } from './notificationService';
 
 export interface CsvAssetRow {
   symbol: string;
@@ -425,6 +426,9 @@ export async function importAssetRows(
 
   // รวมรายการซ้ำเพื่อความสมบูรณ์ของพอร์ต
   await consolidateDuplicateAssets();
+
+  // ซิงค์การแจ้งเตือนวัน XD ล่วงหน้าสำหรับรายการที่นำเข้าใหม่
+  await syncAllUpcomingXdReminders().catch(() => {});
 
   return {
     totalProcessed: rows.length,

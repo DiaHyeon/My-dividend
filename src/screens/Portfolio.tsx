@@ -587,24 +587,24 @@ export const Portfolio: React.FC<PortfolioProps> = ({
               <PieChart
                 data={pieData}
                 donut={true}
-                radius={SCREEN_WIDTH * 0.22}
-                innerRadius={SCREEN_WIDTH * 0.13}
+                radius={SCREEN_WIDTH * 0.19}
+                innerRadius={SCREEN_WIDTH * 0.11}
                 innerCircleColor="#0F172A"
                 strokeWidth={2}
                 strokeColor="#0F172A"
-                extraRadius={70}
-                paddingHorizontal={44}
-                paddingVertical={16}
+                extraRadius={48}
+                paddingHorizontal={32}
+                paddingVertical={6}
                 showExternalLabels={true}
                 labelLineConfig={{
                   color: '#FFFFFF',
                   thickness: 1.5,
-                  length: 22,
-                  tailLength: 12,
+                  length: 16,
+                  tailLength: 10,
                   avoidOverlappingOfLabels: true,
-                  labelComponentHeight: 30,
-                  labelComponentWidth: 68,
-                  labelComponentMargin: 6,
+                  labelComponentHeight: 26,
+                  labelComponentWidth: 62,
+                  labelComponentMargin: 4,
                 }}
                 externalLabelComponent={(item?: any) => {
                   const shortLabel = item?.shortLabel || item?.label || '';
@@ -614,29 +614,29 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                     <SvgG>
                       <Rect
                         x={0}
-                        y={-30}
-                        width={68}
-                        height={30}
-                        rx={6}
+                        y={-26}
+                        width={62}
+                        height={26}
+                        rx={5}
                         fill="#0F172A"
                         stroke={strokeColor}
                         strokeWidth={1.5}
                       />
                       <SvgText
-                        x={34}
-                        y={-17}
+                        x={31}
+                        y={-15}
                         fill="#94A3B8"
-                        fontSize={8.5}
+                        fontSize={8}
                         fontWeight="600"
                         textAnchor="middle"
                       >
                         {shortLabel}
                       </SvgText>
                       <SvgText
-                        x={34}
-                        y={-5}
+                        x={31}
+                        y={-4}
                         fill="#FFFFFF"
-                        fontSize={10.5}
+                        fontSize={10}
                         fontWeight="bold"
                         textAnchor="middle"
                       >
@@ -674,39 +674,6 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                     </Text>
                   </View>
                 ))}
-              </View>
-            </View>
-          )}
-
-          {/* Thai Tax-Free Interest Quota Meter (if CASH is viewed or present) */}
-          {(activeCategoryFilter === 'ALL' || activeCategoryFilter === 'CASH') && cashTaxSummary && (
-            <View style={styles.taxQuotaBox}>
-              <View style={styles.taxQuotaHeader}>
-                <Ionicons name="shield-checkmark" size={15} color="#059669" />
-                <Text style={styles.taxQuotaTitle}>
-                  โควตาดอกเบี้ยเงินฝากปลอดภาษี 20,000 บ./ปี (กรมสรรพากร)
-                </Text>
-              </View>
-              <View style={styles.progressBarBackground}>
-                <View
-                  style={[
-                    styles.progressBarFill,
-                    {
-                      width: `${cashTaxSummary.quotaUsedPercent}%`,
-                      backgroundColor: cashTaxSummary.isExceeded ? '#EF4444' : '#059669',
-                    },
-                  ]}
-                />
-              </View>
-              <View style={styles.taxQuotaFooter}>
-                <Text style={styles.taxQuotaText}>
-                  รับดอกเบี้ยสะสม: ฿{cashTaxSummary.totalGrossInterest.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </Text>
-                <Text style={[styles.taxQuotaText, { fontWeight: '700', color: cashTaxSummary.isExceeded ? '#DC2626' : '#059669' }]}>
-                  {cashTaxSummary.isExceeded
-                    ? '⚠️ เกินเกณฑ์ (เสียภาษี 15%)'
-                    : `เหลือโควตา ฿${cashTaxSummary.remainingQuota.toLocaleString('th-TH', { minimumFractionDigits: 0 })}`}
-                </Text>
               </View>
             </View>
           )}
@@ -1751,9 +1718,10 @@ const styles = StyleSheet.create({
   },
   chartCard: {
     backgroundColor: '#0F172A',
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 18,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#1E293B',
     alignItems: 'center',
@@ -1763,17 +1731,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     alignSelf: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   chartCardTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#F8FAFC',
   },
   chartContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 2,
     width: '100%',
   },
   centerLabelBox: {
@@ -1781,24 +1749,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   centerLabelText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: '#94A3B8',
   },
   centerLabelAmount: {
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: '800',
     color: '#FFFFFF',
-    minHeight: 20,
+    minHeight: 17,
   },
   legendContainer: {
     width: '100%',
-    marginTop: 16,
-    gap: 8,
+    marginTop: 10,
+    gap: 6,
     borderTopWidth: 1,
     borderTopColor: '#1E293B',
-    paddingTop: 12,
+    paddingTop: 10,
   },
   legendItem: {
     flexDirection: 'row',

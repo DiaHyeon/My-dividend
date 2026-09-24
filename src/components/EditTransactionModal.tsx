@@ -18,6 +18,7 @@ import { supabase } from '../lib/supabase';
 import { AssetType, Transaction } from '../types/database';
 import { CalendarPickerModal } from './CalendarPickerModal';
 import { isKnownUSSymbol, getTransactionCurrencyMeta, saveTransactionCurrencyMeta } from '../services/currencyService';
+import { cancelRemindersForSymbol } from '../services/notificationService';
 
 export interface EnrichedTransaction extends Transaction {
   symbol: string;
@@ -188,6 +189,8 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                   .from('assets')
                   .update({ is_archived: true })
                   .eq('id', transaction.asset_id);
+                // ยกเลิกการแจ้งเตือนวัน XD ที่ค้างอยู่ของสินทรัพย์นี้
+                await cancelRemindersForSymbol(transaction.symbol);
                 Alert.alert('สำเร็จ', `ลบรายการและนำ ${transaction.symbol} ออกจากพอร์ตเรียบร้อยแล้ว`);
               } else {
                 Alert.alert('สำเร็จ', 'ลบรายการเรียบร้อยแล้ว ระบบคำนวณต้นทุนเฉลี่ยและยอดคงเหลือใหม่ให้อัตโนมัติ');
