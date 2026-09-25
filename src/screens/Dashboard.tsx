@@ -841,8 +841,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           {d.isInterest
                             ? `ยอดเงินฝาก ${formatMoney(d.shares, 0)} • จ่ายเข้า ${d.xdDate}`
                             : d.currency === 'USD'
-                            ? `${d.shares.toLocaleString()} หุ้น × $${d.dpu.toFixed(4)} (~฿${(d.dpu * (exchangeRate || 34.0)).toFixed(2)}) (XD: ${d.xdDate})`
-                            : `${d.shares.toLocaleString()} หุ้น × ฿${d.dpu.toFixed(4)} (XD: ${d.xdDate})`}
+                            ? `${isPrivateMode ? '••••' : d.shares.toLocaleString()} หุ้น × $${d.dpu.toFixed(4)} (~฿${(d.dpu * (exchangeRate || 34.0)).toFixed(2)}) (XD: ${d.xdDate})`
+                            : `${isPrivateMode ? '••••' : d.shares.toLocaleString()} หุ้น × ฿${d.dpu.toFixed(4)} (XD: ${d.xdDate})`}
                         </Text>
                       </View>
                       <View style={styles.detailRowRight}>

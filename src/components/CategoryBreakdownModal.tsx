@@ -365,7 +365,9 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
                   <View style={styles.quotaProgressLabelRow}>
                     <Text style={styles.quotaProgressLabel}>ดอกเบี้ยออมทรัพย์คาดการณ์ทั้งพอร์ต:</Text>
                     <Text style={styles.quotaProgressValue}>
-                      ฿{portfolioTaxSummary.totalAnnualGrossInterest.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ฿20,000
+                      {isPrivateMode
+                        ? '฿•••••• / ฿20,000'
+                        : `฿${portfolioTaxSummary.totalAnnualGrossInterest.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ฿20,000`}
                     </Text>
                   </View>
                   <View style={styles.quotaTrack}>
@@ -388,8 +390,12 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
                       ]}
                     >
                       {portfolioTaxSummary.isExceededLimit
-                        ? `เกินเพดาน ฿${(portfolioTaxSummary.totalAnnualGrossInterest - 20000).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (ภาษี ฿${portfolioTaxSummary.totalTaxAmount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`
-                        : `คงเหลือโควตาปลอดภาษีอีก ฿${portfolioTaxSummary.remainingQuota.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        ? (isPrivateMode
+                            ? 'เกินเพดาน ฿•••••• (ภาษี ฿••••••)'
+                            : `เกินเพดาน ฿${(portfolioTaxSummary.totalAnnualGrossInterest - 20000).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (ภาษี ฿${portfolioTaxSummary.totalTaxAmount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`)
+                        : (isPrivateMode
+                            ? 'คงเหลือโควตาปลอดภาษีอีก ฿••••••'
+                            : `คงเหลือโควตาปลอดภาษีอีก ฿${portfolioTaxSummary.remainingQuota.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
                     </Text>
                   </View>
                 </View>
@@ -399,7 +405,9 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
                   <View style={styles.quotaNetRow}>
                     <Text style={styles.quotaNetLabel}>ดอกเบี้ยรับสุทธิหลังหักภาษีทั้งพอร์ต:</Text>
                     <Text style={styles.quotaNetValue}>
-                      ฿{portfolioTaxSummary.totalAnnualNetInterest.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} /ปี
+                      {isPrivateMode
+                        ? '฿•••••• /ปี'
+                        : `฿${portfolioTaxSummary.totalAnnualNetInterest.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} /ปี`}
                     </Text>
                   </View>
                 </View>
@@ -536,7 +544,9 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
 
                     <View style={styles.segmentRight}>
                       <Text style={styles.segmentValue}>
-                        ฿{group.totalMarketValue.toLocaleString('th-TH', { maximumFractionDigits: 0 })}
+                        {isPrivateMode
+                          ? '฿••••••'
+                          : `฿${group.totalMarketValue.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`}
                       </Text>
                       <View style={styles.segmentPercentBadge}>
                         <Text style={styles.segmentPercentText}>
@@ -563,13 +573,19 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
                           <Text style={styles.assetItemSub}>
                             {categoryType === 'CASH'
                               ? 'บัญชีเงินฝาก'
-                              : `${Number(asset.net_shares).toLocaleString()} หุ้น`}
+                              : isPrivateMode
+                              ? (categoryType === 'FUNDS' ? '•••• หน่วย' : '•••• หุ้น')
+                              : (categoryType === 'FUNDS'
+                                ? `${Number(asset.net_shares).toLocaleString()} หน่วย`
+                                : `${Number(asset.net_shares).toLocaleString()} หุ้น`)}
                           </Text>
                         </View>
 
                         <View style={styles.assetItemRight}>
                           <Text style={styles.assetItemValue}>
-                            ฿{Number(asset.market_value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {isPrivateMode
+                              ? '฿••••••'
+                              : `฿${Number(asset.market_value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                           </Text>
                           <View style={styles.editMiniBadge}>
                             <Ionicons name="pencil" size={10} color="#059669" />

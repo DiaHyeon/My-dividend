@@ -303,8 +303,8 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
             {isCash
               ? (isPrivateMode ? 'เงินต้น ฿••••••' : `เงินต้น ฿${marketValue.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`)
               : isFund
-              ? `${Number(item.net_shares).toLocaleString('th-TH', { minimumFractionDigits: 4 })} หน่วย`
-              : `${Number(item.net_shares).toLocaleString('th-TH')} หุ้น`}
+              ? (isPrivateMode ? '•••• หน่วย' : `${Number(item.net_shares).toLocaleString('th-TH', { minimumFractionDigits: 4 })} หน่วย`)
+              : (isPrivateMode ? '•••• หุ้น' : `${Number(item.net_shares).toLocaleString('th-TH')} หุ้น`)}
           </Text>
         </View>
 

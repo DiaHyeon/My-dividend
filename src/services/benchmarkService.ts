@@ -23,11 +23,11 @@ export interface BenchmarkComparisonResult {
   isLive?: boolean;
 }
 
-export const BENCHMARKS: { id: BenchmarkType; label: string; name: string; color: string; icon: string; symbol: string }[] = [
-  { id: 'NONE', label: 'พอร์ตเดี่ยว', name: 'ไม่เปรียบเทียบ', color: '#94A3B8', icon: 'person', symbol: '' },
-  { id: 'SET', label: '🇹🇭 SET Index', name: 'ตลาดหลักทรัพย์แห่งประเทศไทย (SET)', color: '#F59E0B', icon: 'trending-up', symbol: '^SET.BK' },
-  { id: 'SP500', label: '🇺🇸 S&P 500', name: 'ดัชนี S&P 500 สหรัฐฯ', color: '#8B5CF6', icon: 'globe', symbol: '^GSPC' },
-  { id: 'NASDAQ', label: '🇺🇸 NASDAQ', name: 'ดัชนีหุ้นเทคโนโลยี NASDAQ', color: '#EC4899', icon: 'hardware-chip', symbol: '^IXIC' },
+export const BENCHMARKS: { id: BenchmarkType; label: string; shortLabel: string; name: string; color: string; icon: string; symbol: string }[] = [
+  { id: 'NONE', label: 'พอร์ตเดี่ยว', shortLabel: 'พอร์ตเดี่ยว', name: 'ไม่เปรียบเทียบ', color: '#94A3B8', icon: 'person', symbol: '' },
+  { id: 'SET', label: '🇹🇭 SET Index', shortLabel: '🇹🇭 SET', name: 'ตลาดหลักทรัพย์แห่งประเทศไทย (SET)', color: '#F59E0B', icon: 'trending-up', symbol: '^SET.BK' },
+  { id: 'SP500', label: '🇺🇸 S&P 500', shortLabel: '🇺🇸 S&P 500', name: 'ดัชนี S&P 500 สหรัฐฯ', color: '#8B5CF6', icon: 'globe', symbol: '^GSPC' },
+  { id: 'NASDAQ', label: '🇺🇸 NASDAQ', shortLabel: '🇺🇸 NASDAQ', name: 'ดัชนีหุ้นเทคโนโลยี NASDAQ', color: '#EC4899', icon: 'hardware-chip', symbol: '^IXIC' },
 ];
 
 export const TIMEFRAMES: { id: TimeframeType; label: string; points: number }[] = [

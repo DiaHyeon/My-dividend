@@ -57,9 +57,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({
   const [currencyMap, setCurrencyMap] = useState<Record<string, 'THB' | 'USD'>>({});
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<'ALL' | AssetType>(initialCategoryFilter);
   const [portfolioView, setPortfolioView] = useState<'ALLOCATION' | 'PERFORMANCE'>('ALLOCATION');
-  const { isPrivate: isPrivateMode } = usePrivacyMode();
+  const { isPrivate: isPrivateMode, toggle: togglePrivateMode } = usePrivacyMode();
   const [timeframe, setTimeframe] = useState<TimeframeType>('1Y');
-  const [selectedBenchmark, setSelectedBenchmark] = useState<BenchmarkType>('SP500');
+  const [selectedBenchmark, setSelectedBenchmark] = useState<BenchmarkType>('NONE');
   const [isBenchmarkPickerVisible, setIsBenchmarkPickerVisible] = useState(false);
 
   useEffect(() => {
@@ -176,6 +176,22 @@ export const Portfolio: React.FC<PortfolioProps> = ({
   const totalUnrealizedPL = totalMarketValue - totalCost;
   const totalUnrealizedPLPercent = totalCost > 0 ? (totalUnrealizedPL / totalCost) * 100 : 0;
 
+  // Investment Assets Metrics (STOCKS & FUNDS exclusively, excluding CASH deposits)
+  const investmentAssets = useMemo(() => {
+    return assets.filter((a) => a.asset_type !== 'CASH');
+  }, [assets]);
+
+  const investmentMarketValue = useMemo(() => {
+    return investmentAssets.reduce((sum, a) => sum + (Number(a.market_value) || 0), 0);
+  }, [investmentAssets]);
+
+  const investmentCost = useMemo(() => {
+    return investmentAssets.reduce((sum, a) => sum + (Number(a.total_cost) || 0), 0);
+  }, [investmentAssets]);
+
+  const investmentUnrealizedPL = investmentMarketValue - investmentCost;
+  const investmentUnrealizedPLPercent = investmentCost > 0 ? (investmentUnrealizedPL / investmentCost) * 100 : 0;
+
   // Category values for Pie Chart
   const stocksTotal = useMemo(() => {
     return assets.filter((a) => a.asset_type === 'STOCKS').reduce((s, a) => s + (Number(a.market_value) || 0), 0);
@@ -220,15 +236,15 @@ export const Portfolio: React.FC<PortfolioProps> = ({
     };
   }, [assets, dividendSchedules]);
 
-  // Benchmark Comparison Memo
+  // Benchmark Comparison Memo: strictly calculated against investment assets (STOCKS + FUNDS) without CASH dilution
   const comparisonResult = useMemo(() => {
     return getBenchmarkComparison(
       timeframe,
       selectedBenchmark,
-      totalUnrealizedPLPercent,
-      assets
+      investmentUnrealizedPLPercent,
+      investmentAssets
     );
-  }, [timeframe, selectedBenchmark, totalUnrealizedPLPercent, assets]);
+  }, [timeframe, selectedBenchmark, investmentUnrealizedPLPercent, investmentAssets]);
 
   // Dynamic Chart Y-Axis Scale Bounds: tight, natural headroom (~10-15%) so curves never punch through without excessive empty space
   const chartScale = useMemo(() => {
@@ -298,12 +314,12 @@ export const Portfolio: React.FC<PortfolioProps> = ({
     };
   }, [comparisonResult, selectedBenchmark]);
 
-  // Asset Performance Ranking (% Unrealized P/L descending)
+  // Asset Performance Ranking (% Unrealized P/L descending) - investment assets only (exclude CASH)
   const performanceRanking = useMemo(() => {
-    return [...assets].sort(
+    return [...investmentAssets].sort(
       (a, b) => (Number(b.unrealized_pl_percent) || 0) - (Number(a.unrealized_pl_percent) || 0)
     );
-  }, [assets]);
+  }, [investmentAssets]);
 
   const selectedBenchmarkObj = useMemo(() => {
     return BENCHMARKS.find((b) => b.id === selectedBenchmark);
@@ -486,12 +502,25 @@ export const Portfolio: React.FC<PortfolioProps> = ({
       >
         {/* Header Bar */}
         <View style={styles.headerBar}>
-          <View>
+          <View style={styles.headerTitleBox}>
             <Text style={styles.headerTitle}>พอร์ตการลงทุน (Portfolio)</Text>
             <Text style={styles.headerSubtitle}>
               สัดส่วนการกระจายความเสี่ยงและผลการดำเนินงาน ({assets.length} รายการ)
             </Text>
           </View>
+          <TouchableOpacity
+            style={[styles.headerActionBtn, isPrivateMode && styles.headerActionBtnActive]}
+            onPress={togglePrivateMode}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="โหมดความเป็นส่วนตัว"
+          >
+            <Ionicons
+              name={isPrivateMode ? 'eye-off-outline' : 'eye-outline'}
+              size={18}
+              color={isPrivateMode ? '#059669' : '#475569'}
+            />
+          </TouchableOpacity>
         </View>
 
         {/* Portfolio View Switcher: Allocation vs Performance */}
@@ -744,8 +773,12 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                         <Text style={styles.assetTypeTag}>{item.asset_type}</Text>
                         <Text style={styles.assetSharesTag}>
                           {item.asset_type === 'CASH'
-                            ? `เงินต้น ฿${Number(item.market_value).toLocaleString()}`
-                            : `${Number(item.net_shares).toLocaleString('th-TH', { maximumFractionDigits: 4 })} หุ้น`}
+                            ? (isPrivateMode ? 'เงินต้น ฿••••••' : `เงินต้น ฿${Number(item.market_value).toLocaleString()}`)
+                            : isPrivateMode
+                            ? (item.asset_type === 'FUNDS' ? '•••• หน่วย' : '•••• หุ้น')
+                            : (item.asset_type === 'FUNDS'
+                              ? `${Number(item.net_shares).toLocaleString('th-TH', { maximumFractionDigits: 4 })} หน่วย`
+                              : `${Number(item.net_shares).toLocaleString('th-TH', { maximumFractionDigits: 4 })} หุ้น`)}
                         </Text>
                       </View>
                     </View>
@@ -798,7 +831,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
             {/* Performance Hero Card (Focus on Return %, not nominal net worth) */}
             <View style={styles.perfHeroCard}>
               <View style={styles.perfHeroTop}>
-                <Text style={styles.perfHeroLabel}>ผลตอบแทนสะสม (Cumulative Return)</Text>
+                <Text style={styles.perfHeroLabel}>ผลตอบแทนสะสม (หุ้น & กองทุน)</Text>
                 <View style={styles.perfPeriodBadge}>
                   <Text style={styles.perfPeriodBadgeText}>
                     {TIMEFRAMES.find((t) => t.id === timeframe)?.label || timeframe}
@@ -820,99 +853,36 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                 <View
                   style={[
                     styles.perfHeroBadge,
-                    totalUnrealizedPL >= 0 ? styles.perfHeroBadgeProfit : styles.perfHeroBadgeLoss,
+                    investmentUnrealizedPL >= 0 ? styles.perfHeroBadgeProfit : styles.perfHeroBadgeLoss,
                   ]}
                 >
                   <Ionicons
-                    name={totalUnrealizedPL >= 0 ? 'trending-up' : 'trending-down'}
+                    name={investmentUnrealizedPL >= 0 ? 'trending-up' : 'trending-down'}
                     size={12}
-                    color={totalUnrealizedPL >= 0 ? '#059669' : '#DC2626'}
+                    color={investmentUnrealizedPL >= 0 ? '#059669' : '#DC2626'}
                   />
                   <Text
                     style={[
                       styles.perfHeroBadgeText,
-                      totalUnrealizedPL >= 0 ? styles.profitColor : styles.lossColor,
+                      investmentUnrealizedPL >= 0 ? styles.profitColor : styles.lossColor,
                     ]}
                   >
-                    {totalUnrealizedPL >= 0 ? 'กำไร ' : 'ขาดทุน '}
+                    {investmentUnrealizedPL >= 0 ? 'กำไร ' : 'ขาดทุน '}
                     {isPrivateMode
                       ? '฿••••••'
-                      : `${totalUnrealizedPL >= 0 ? '+' : ''}฿${Math.abs(totalUnrealizedPL).toLocaleString('th-TH', {
+                      : `${investmentUnrealizedPL >= 0 ? '+' : ''}฿${Math.abs(investmentUnrealizedPL).toLocaleString('th-TH', {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}`}
                   </Text>
                 </View>
                 <Text style={styles.perfHeroCostText}>
-                  เทียบกับเงินต้นสะสม {isPrivateMode ? '฿••••••' : `฿${totalCost.toLocaleString('th-TH', {
+                  เทียบกับเงินต้นลงทุน {isPrivateMode ? '฿••••••' : `฿${investmentCost.toLocaleString('th-TH', {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
                   })}`}
                 </Text>
               </View>
-            </View>
-
-            {/* Timeframe Bar */}
-            <View style={styles.timeframeBar}>
-              {TIMEFRAMES.map((tf) => {
-                const isActive = timeframe === tf.id;
-                return (
-                  <TouchableOpacity
-                    key={tf.id}
-                    style={[styles.timeframeChip, isActive && styles.timeframeChipActive]}
-                    onPress={() => setTimeframe(tf.id)}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={[styles.timeframeChipText, isActive && styles.timeframeChipTextActive]}
-                    >
-                      {tf.id}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Benchmark Selector Dropdown */}
-            <View style={styles.benchmarkDropdownContainer}>
-              <Text style={styles.benchmarkDropdownLabel}>ดัชนีตลาดเปรียบเทียบ (Benchmark):</Text>
-              <TouchableOpacity
-                style={styles.benchmarkDropdownTrigger}
-                onPress={() => setIsBenchmarkPickerVisible(true)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.benchmarkTriggerLeft}>
-                  <View
-                    style={[
-                      styles.benchmarkTriggerIconWrap,
-                      {
-                        backgroundColor:
-                          selectedBenchmark !== 'NONE' && selectedBenchmarkObj?.color
-                            ? `${selectedBenchmarkObj.color}18`
-                            : '#F1F5F9',
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name={selectedBenchmarkObj?.icon as any || 'bar-chart'}
-                      size={16}
-                      color={selectedBenchmark !== 'NONE' ? selectedBenchmarkObj?.color : '#64748B'}
-                    />
-                  </View>
-                  <View style={styles.benchmarkTriggerTextWrap}>
-                    <Text style={styles.benchmarkTriggerTitle}>
-                      {selectedBenchmarkObj?.label || 'เลือกดัชนี'}
-                    </Text>
-                    <Text style={styles.benchmarkTriggerSubtitle} numberOfLines={1}>
-                      {selectedBenchmarkObj?.name || 'ไม่เปรียบเทียบ'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.benchmarkTriggerChevronBadge}>
-                  <Ionicons name="chevron-down" size={16} color="#475569" />
-                </View>
-              </TouchableOpacity>
             </View>
 
             {/* Performance Comparison Line Chart Card */}
@@ -946,28 +916,61 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                   </View>
                 ) : null}
 
-                {/* Legends */}
+                {/* Interactive Comparison Chips / Dropdown Header (Style reference like TradingView / Google Finance) */}
                 <View style={styles.perfChartLegends}>
-                  <View style={styles.perfLegendItem}>
-                    <View style={[styles.perfLegendDot, { backgroundColor: '#10B981' }]} />
-                    <Text style={styles.perfLegendText}>
+                  {/* Portfolio Legend Chip */}
+                  <View style={styles.perfPortfolioChip}>
+                    <View style={styles.perfPortfolioChipSquare} />
+                    <Text style={styles.perfPortfolioChipText}>
                       พอร์ตของคุณ ({comparisonResult.portfolioReturnPct >= 0 ? '+' : ''}
                       {comparisonResult.portfolioReturnPct.toFixed(1)}%)
                     </Text>
                   </View>
-                  {selectedBenchmark !== 'NONE' && (
-                    <View style={styles.perfLegendItem}>
-                      <View
-                        style={[
-                          styles.perfLegendDot,
-                          { backgroundColor: selectedBenchmarkObj?.color || '#8B5CF6' },
-                        ]}
-                      />
-                      <Text style={styles.perfLegendText}>
-                        {selectedBenchmarkObj?.label} ({comparisonResult.benchmarkReturnPct >= 0 ? '+' : ''}
-                        {comparisonResult.benchmarkReturnPct.toFixed(1)}%)
-                      </Text>
+
+                  {/* Benchmark Dropdown Chip */}
+                  {selectedBenchmark !== 'NONE' ? (
+                    <View style={styles.perfBenchmarkChip}>
+                      <TouchableOpacity
+                        style={styles.perfBenchmarkChipMain}
+                        onPress={() => setIsBenchmarkPickerVisible(true)}
+                        activeOpacity={0.7}
+                      >
+                        <View
+                          style={[
+                            styles.perfLegendDot,
+                            { backgroundColor: selectedBenchmarkObj?.color || '#F59E0B' },
+                          ]}
+                        />
+                        <Text style={styles.perfBenchmarkChipText} numberOfLines={1}>
+                          {selectedBenchmarkObj?.shortLabel || selectedBenchmarkObj?.label} ({comparisonResult.benchmarkReturnPct >= 0 ? '+' : ''}
+                          {comparisonResult.benchmarkReturnPct.toFixed(1)}%)
+                        </Text>
+                        <Ionicons
+                          name="chevron-down"
+                          size={11}
+                          color="#64748B"
+                        />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.perfBenchmarkChipCloseBtn}
+                        onPress={() => setSelectedBenchmark('NONE')}
+                        activeOpacity={0.6}
+                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 8 }}
+                      >
+                        <Ionicons name="close" size={13} color="#64748B" />
+                      </TouchableOpacity>
                     </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.perfAddBenchmarkChip}
+                      onPress={() => setIsBenchmarkPickerVisible(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="add" size={13} color="#475569" />
+                      <Text style={styles.perfAddBenchmarkText}>เปรียบเทียบ</Text>
+                      <Ionicons name="chevron-down" size={11} color="#94A3B8" />
+                    </TouchableOpacity>
                   )}
                 </View>
               </View>
@@ -1021,11 +1024,32 @@ export const Portfolio: React.FC<PortfolioProps> = ({
               )}
             </View>
 
+            {/* Timeframe Bar (Located below the chart) */}
+            <View style={styles.timeframeBar}>
+              {TIMEFRAMES.map((tf) => {
+                const isActive = timeframe === tf.id;
+                return (
+                  <TouchableOpacity
+                    key={tf.id}
+                    style={[styles.timeframeChip, isActive && styles.timeframeChipActive]}
+                    onPress={() => setTimeframe(tf.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[styles.timeframeChipText, isActive && styles.timeframeChipTextActive]}
+                    >
+                      {tf.id}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
             {/* Asset Performance Ranking List */}
             <View style={styles.rankingSection}>
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.rankingSectionTitle}>
-                  จัดอันดับผลตอบแทนรายสินทรัพย์ ({performanceRanking.length} รายการ)
+                  จัดอันดับผลตอบแทนรายสินทรัพย์ลงทุน ({performanceRanking.length} รายการ)
                 </Text>
               </View>
 
@@ -1238,7 +1262,28 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 14,
+  },
+  headerTitleBox: {
+    flex: 1,
+  },
+  headerActionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
+  headerActionBtnActive: {
+    backgroundColor: 'rgba(5, 150, 105, 0.1)',
+    borderColor: '#A7F3D0',
   },
   headerTitle: {
     fontSize: 22,
@@ -1350,7 +1395,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 10,
     padding: 3,
-    marginBottom: 12,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
@@ -1373,64 +1418,71 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
   },
-  benchmarkDropdownContainer: {
-    marginBottom: 12,
-  },
-  benchmarkDropdownLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 6,
-  },
-  benchmarkDropdownTrigger: {
+  perfPortfolioChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 6,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    borderColor: '#E2E8F0',
   },
-  benchmarkTriggerLeft: {
+  perfPortfolioChipSquare: {
+    width: 8,
+    height: 8,
+    borderRadius: 2,
+    backgroundColor: '#10B981',
+  },
+  perfPortfolioChipText: {
+    fontSize: 11.5,
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  perfBenchmarkChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingLeft: 10,
+    paddingRight: 6,
+    paddingVertical: 4.5,
   },
-  benchmarkTriggerIconWrap: {
-    width: 34,
-    height: 34,
+  perfBenchmarkChipMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  perfBenchmarkChipText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  perfBenchmarkChipCloseBtn: {
+    marginLeft: 6,
+    padding: 2,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  benchmarkTriggerTextWrap: {
-    flex: 1,
-  },
-  benchmarkTriggerTitle: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  benchmarkTriggerSubtitle: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  benchmarkTriggerChevronBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#F1F5F9',
+  perfAddBenchmarkChip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  perfAddBenchmarkText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#475569',
   },
   modalOverlay: {
     flex: 1,
@@ -1531,7 +1583,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 14,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
@@ -1564,24 +1616,15 @@ const styles = StyleSheet.create({
   },
   perfChartLegends: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 14,
+    gap: 8,
     marginTop: 2,
-  },
-  perfLegendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
   },
   perfLegendDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-  },
-  perfLegendText: {
-    fontSize: 11,
-    color: '#475569',
-    fontWeight: '600',
   },
   lineChartBox: {
     alignItems: 'center',

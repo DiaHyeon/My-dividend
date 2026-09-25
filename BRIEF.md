@@ -345,21 +345,21 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   1. **[ 🥧 Allocation Tab ]**:
      - Features the high-contrast Donut Pie Chart prominently with asset filter buttons and top 3 holdings preview.
   2. **[ 📈 Performance Tab ]**:
-     - **Performance Hero Card**: Highlights cumulative percentage return (`+14.8%`), net unrealized profit (฿), and total invested capital.
-     - **Timeframe Selector**: `[ 1M | 3M | 6M | 1Y | ALL ]`.
-     - **Benchmark Selector Dropdown**: Minimal bottom sheet picker to select:
-       - `Solo Portfolio (Area Fill)`
-       - `🇹🇭 SET Index`
-       - `🇺🇸 S&P 500`
-       - `🇺🇸 NASDAQ`
+     - **Performance Hero Card**: Highlights cumulative percentage return (`+14.8%`), net unrealized profit (฿), and total invested capital (หุ้น & กองทุน).
+     - **Timeframe Selector**: `[ 1M | 3M | 6M | 1Y | ALL ]` positioned directly beneath the line chart card for seamless, intuitive thumb reach.
+     - **TradingView / Google Finance Comparison Dropdown Pills**:
+       - Replaces large separate benchmark selector boxes with minimal capsule pills directly above the chart:
+         - **Primary Pill**: `[ 🟩 พอร์ตของคุณ (+X.X%) ]`
+         - **Benchmark Dropdown Pill**: Defaults to `[ + เปรียบเทียบ ▾ ]`. Tapping opens a unified bottom sheet modal to select the target market index (`🇹🇭 SET Index`, `🇺🇸 S&P 500`, `🇺🇸 NASDAQ`). Once selected, cleanly transforms into `[ 🟠 ตลาด (+X.X%) ▾  ✕ ]` with one-tap clearing (`✕`) and instant switching.
      - **Dual-Line Comparison Chart with Dynamic Safe Scale Bounds**:
        - Built on `react-native-gifted-charts`.
        - Real-time dynamic calculation of `maxValue`, `stepValue`, `noOfSections`, `mostNegativeValue`, and `overflowTop` across both datasets.
        - **Balanced Headroom Scaling (~10-15%)**: Evaluates section counts (3, 4, 5) and clean step intervals (0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 15, 20, 25...) to provide tight, natural headroom (~10-15%) above peak data points. Curves never punch through the ceiling while avoiding excessive empty space above the graph.
-       - Line 1: User Portfolio (Emerald `#10B981`).
+       - Line 1: User Portfolio (Emerald `#10B981`, with subtle gradient area fill when uncompared).
        - Line 2: Selected Benchmark (Amber/Violet/Pink).
      - **Alpha / Outperformance Banner**: Dynamic summary card (e.g., `🎉 Outperforming S&P 500 by +3.5%` or `📊 Trailing benchmark by -1.2%`).
-     - **Asset Return Ranking**: Ranked leaderboard of portfolio assets sorted from highest to lowest % gain.
+     - **Asset Return Ranking**: Ranked leaderboard of portfolio assets sorted from highest to lowest % gain (investment assets exclusively).
+     - **Investment Isolation from Cash Deposits (Option A)**: In the Performance Tab, calculations for cumulative return, total invested cost, unrealized capital gain, benchmark curves (SET, S&P 500, NASDAQ), and the asset return ranking strictly isolate investment assets (STOCKS & FUNDS) from bank deposits (CASH). This eliminates return dilution (0% cash capital gain) and ensures fair, apple-to-apple equity index comparison. The Allocation Tab continues to display 100% of all asset classes.
 
 ---
 
@@ -375,10 +375,10 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
     - **Value Row**: 32px full-width Net Worth value with `numberOfLines={1}` and `minHeight: 40`.
     - **Dual Yield Subvalue**: Formatted strictly as `฿••••••` under Privacy Mode with `numberOfLines={1}` and `minHeight: 52` to eliminate text wrapping into 2 rows.
   - Replaces separate refresh buttons with standard mobile **Pull-to-Refresh**, keeping the header clean and uncluttered.
-- **Global Privacy Mode**:
+- **Global Privacy Mode & Comprehensive Masking**:
   - Persisted in AsyncStorage (`@my_dividend_privacy_mode`) and broadcasted via `privacyService.ts`.
-  - Masks monetary values into `฿••••••` across all screens simultaneously (Overview, Portfolio, Holdings, CategoryBreakdownModal).
-  - Preserves percentages, asset allocations, and Yield on Cost ratios for uninterrupted analytics.
+  - Masks monetary values (`฿••••••`), deposit principals, and shares/units held (`•••• หุ้น` / `•••• หน่วย`) across all screens (Overview, Portfolio, Holdings, CategoryBreakdownModal, and Transaction History) to eliminate indirect net worth estimation via share counts, while keeping percentage and Yield on Cost ratios visible.
+  - Interactive eye toggle buttons are consistently placed across Overview, Portfolio, and Holdings headers.
 - **Upcoming Payday Radar**:
   - Minimal 1-line ticker banner positioned above the 12-month chart, tracking upcoming ex-dividend or interest payouts within 14 days with days-remaining countdowns.
 - **Minimal Passive Income Goal Card**:

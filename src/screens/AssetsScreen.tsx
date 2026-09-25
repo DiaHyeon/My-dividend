@@ -724,7 +724,9 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                   ยอดเงินธุรกรรมรวม ({selectedYear === 'ALL' ? 'ทุกปี' : selectedYear} / {selectedMonth === 'ALL' ? 'ทุกเดือน' : MONTH_NAMES.find(m => m.key === selectedMonth)?.label})
                 </Text>
                 <Text style={styles.txStatsVal}>
-                  ฿{transactionStats.totalVolume.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {isPrivateMode
+                    ? '฿••••••'
+                    : `฿${transactionStats.totalVolume.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 </Text>
               </View>
               <View style={styles.txCountBadge}>
@@ -807,9 +809,13 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                         </View>
                         <Text style={styles.txDetailSub}>
                           {isDeposit
-                            ? `เงินต้นที่บันทึก ฿${Number(tx.shares).toLocaleString()}`
-                            : `${Number(tx.shares).toLocaleString()} หุ้น @ ฿${Number(tx.price_per_share).toFixed(2)}`}
-                          {isUS && ` ($${priceUSD.toFixed(2)})`}
+                            ? (isPrivateMode ? 'เงินต้นที่บันทึก ฿••••••' : `เงินต้นที่บันทึก ฿${Number(tx.shares).toLocaleString()}`)
+                            : isPrivateMode
+                            ? (tx.asset_type === 'FUNDS' ? '•••• หน่วย' : '•••• หุ้น')
+                            : (tx.asset_type === 'FUNDS'
+                              ? `${Number(tx.shares).toLocaleString()} หน่วย @ ฿${Number(tx.price_per_share).toFixed(4)}`
+                              : `${Number(tx.shares).toLocaleString()} หุ้น @ ฿${Number(tx.price_per_share).toFixed(2)}`)}
+                          {!isPrivateMode && isUS && ` ($${priceUSD.toFixed(2)})`}
                         </Text>
                       </View>
 
