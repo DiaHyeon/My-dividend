@@ -351,6 +351,8 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
        - Replaces large separate benchmark selector boxes with minimal capsule pills directly above the chart:
          - **Primary Pill**: `[ 🟩 พอร์ตของคุณ (+X.X%) ]`
          - **Benchmark Dropdown Pill**: Defaults to `[ + เปรียบเทียบ ▾ ]`. Tapping opens a unified bottom sheet modal to select the target market index (`🇹🇭 SET Index`, `🇺🇸 S&P 500`, `🇺🇸 NASDAQ`). Once selected, cleanly transforms into `[ 🟠 ตลาด (+X.X%) ▾  ✕ ]` with one-tap clearing (`✕`) and instant switching.
+      - **Google Finance Floor Timeline & Subtle Vertical Gridlines**: Month labels are placed in a dedicated floor row (`chartFloorTimelineRow`) at the bottom of the card, completely separated from the plotting canvas, with subtle vertical gridlines (`rgba(226, 232, 240, 0.75)`) rising directly from each month checkpoint across the chart.
+      - **Dynamic Tight Y-Axis Bounds (Minimal Headroom ~8%)**: Automatically computes responsive headroom (~8%, min 0.5%) adapting to active timeframe data (1M, 3M, 6M, 1Y, ALL) so curves fill the chart naturally without wasteful space (e.g. for max 10%, ceiling stays at ~10-12%, never blowing up to 20%).
      - **Dual-Line Comparison Chart with Dynamic Safe Scale Bounds**:
        - Built on `react-native-gifted-charts`.
        - Real-time dynamic calculation of `maxValue`, `stepValue`, `noOfSections`, `mostNegativeValue`, and `overflowTop` across both datasets.

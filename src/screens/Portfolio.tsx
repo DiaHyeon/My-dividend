@@ -246,7 +246,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
     );
   }, [timeframe, selectedBenchmark, investmentUnrealizedPLPercent, investmentAssets]);
 
-  // Dynamic Chart Y-Axis Scale Bounds: tight, natural headroom (~10-15%) so curves never punch through without excessive empty space
+  // Dynamic Chart Y-Axis Scale Bounds: tight, responsive headroom (~8-10%) adapting to active timeframe data without wasteful space
   const chartScale = useMemo(() => {
     const pVals = comparisonResult.portfolioData.map((d) => d.value || 0);
     const bVals =
@@ -259,60 +259,109 @@ export const Portfolio: React.FC<PortfolioProps> = ({
     const minVal = allVals.length > 0 ? Math.min(...allVals) : 0;
     const absMin = Math.abs(minVal);
 
-    // Target peak headroom: ~12% above highest data point (min 1.0% headroom above peak, min ceiling 2%)
-    const targetPeak = Math.max(maxVal * 1.12, maxVal + 1.0, 2);
+    // Dynamic responsive headroom: ~8% headroom (min 0.5% above peak, min 1% ceiling)
+    const targetPeak = Math.max(maxVal * 1.08, maxVal + 0.5, 1.0);
+    const targetTrough = minVal < 0 ? Math.min(minVal * 1.08, minVal - 0.5) : 0;
 
     const NICE_STEPS = [
-      0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 75, 100
+      0.2, 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 75, 100
     ];
 
-    // Evaluate section counts [4, 5, 3] to find the tightest, most natural headroom
     let bestConfig = {
       stepValue: 5,
-      noOfSections: 4,
-      maxValue: 20,
+      noOfSections: 2,
+      maxValue: 10,
+      mostNegativeValue: 0,
+      noOfSectionsBelowXAxis: 0,
     };
-    let minOverheadRatio = Infinity;
+    let minExcess = Infinity;
 
-    for (const sections of [4, 5, 3]) {
-      // Step must accommodate both targetPeak / sections, and absMin / 3 (if negative)
-      const neededForPositive = targetPeak / sections;
-      const neededForNegative = minVal < 0 ? (absMin * 1.05) / 3 : 0;
-      const neededStep = Math.max(neededForPositive, neededForNegative);
+    for (const step of NICE_STEPS) {
+      const posSec = Math.max(1, Math.ceil(targetPeak / step));
+      const negSec = minVal < 0 ? Math.max(1, Math.ceil(Math.abs(targetTrough) / step)) : 0;
+      const totSec = posSec + negSec;
 
-      const step = NICE_STEPS.find((s) => s >= neededStep) || Math.ceil(neededStep / 25) * 25;
-      const candidateMax = step * sections;
+      // Keep total sections between 2 and 5 for clean, uncrowded horizontal rules
+      if (totSec >= 2 && totSec <= 5) {
+        const candidateMax = posSec * step;
+        const candidateMin = -(negSec * step);
 
-      if (candidateMax >= maxVal) {
-        const overhead = candidateMax / Math.max(maxVal, 1);
-        if (overhead < minOverheadRatio) {
-          minOverheadRatio = overhead;
-          bestConfig = {
-            stepValue: step,
-            noOfSections: sections,
-            maxValue: candidateMax,
-          };
+        if (candidateMax >= maxVal && (!minVal || candidateMin <= minVal)) {
+          // Minimize excess headroom wasted above max and below min
+          const excess = (candidateMax - maxVal) + (Math.abs(candidateMin) - absMin);
+          if (excess < minExcess) {
+            minExcess = excess;
+            bestConfig = {
+              stepValue: step,
+              noOfSections: posSec,
+              maxValue: candidateMax,
+              mostNegativeValue: candidateMin,
+              noOfSectionsBelowXAxis: negSec,
+            };
+          }
         }
       }
     }
 
-    const { stepValue, noOfSections, maxValue } = bestConfig;
-
-    let mostNegativeValue = 0;
-    let noOfSectionsBelowXAxis = 0;
-    if (minVal < 0) {
-      noOfSectionsBelowXAxis = Math.max(1, Math.ceil((absMin * 1.05) / stepValue));
-      mostNegativeValue = -(noOfSectionsBelowXAxis * stepValue);
-    }
-
-    return {
-      maxValue,
-      stepValue,
-      noOfSections,
-      mostNegativeValue,
-      noOfSectionsBelowXAxis,
-    };
+    return bestConfig;
   }, [comparisonResult, selectedBenchmark]);
+
+  // Google Finance Style Floor Timeline Checkpoints (always placed at the bottom floor)
+  const floorTimelineLabels = useMemo(() => {
+    const now = new Date();
+    const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    const curYear = now.getFullYear();
+
+    if (timeframe === '1M') {
+      const p1 = new Date(now); p1.setDate(p1.getDate() - 24);
+      const p2 = new Date(now); p2.setDate(p2.getDate() - 16);
+      const p3 = new Date(now); p3.setDate(p3.getDate() - 8);
+      return [
+        { label: `${p1.getDate()} ${thMonths[p1.getMonth()]}`, percent: 10 },
+        { label: `${p2.getDate()} ${thMonths[p2.getMonth()]}`, percent: 36 },
+        { label: `${p3.getDate()} ${thMonths[p3.getMonth()]}`, percent: 64 },
+        { label: `${now.getDate()} ${thMonths[now.getMonth()]}`, percent: 90 },
+      ];
+    } else if (timeframe === '3M') {
+      const p1 = new Date(now); p1.setMonth(p1.getMonth() - 2);
+      const p2 = new Date(now); p2.setMonth(p2.getMonth() - 1);
+      return [
+        { label: `${thMonths[p1.getMonth()]} ${p1.getFullYear()}`, percent: 12 },
+        { label: `${thMonths[p2.getMonth()]} ${p2.getFullYear()}`, percent: 50 },
+        { label: `${thMonths[now.getMonth()]} ${curYear}`, percent: 88 },
+      ];
+    } else if (timeframe === '6M') {
+      const p1 = new Date(now); p1.setMonth(p1.getMonth() - 5);
+      const p2 = new Date(now); p2.setMonth(p2.getMonth() - 3);
+      const p3 = new Date(now); p3.setMonth(p3.getMonth() - 1);
+      return [
+        { label: `${thMonths[p1.getMonth()]} ${p1.getFullYear()}`, percent: 10 },
+        { label: `${thMonths[p2.getMonth()]} ${p2.getFullYear()}`, percent: 45 },
+        { label: `${thMonths[now.getMonth()]} ${curYear}`, percent: 88 },
+      ];
+    } else if (timeframe === '1Y') {
+      const p1 = new Date(now); p1.setMonth(p1.getMonth() - 11);
+      const p2 = new Date(now); p2.setMonth(p2.getMonth() - 7);
+      const p3 = new Date(now); p3.setMonth(p3.getMonth() - 3);
+      return [
+        { label: `${thMonths[p1.getMonth()]} ${p1.getFullYear()}`, percent: 8 },
+        { label: `${thMonths[p2.getMonth()]} ${p2.getFullYear()}`, percent: 36 },
+        { label: `${thMonths[p3.getMonth()]} ${p3.getFullYear()}`, percent: 64 },
+        { label: `${thMonths[now.getMonth()]} ${curYear}`, percent: 90 },
+      ];
+    } else {
+      // ALL
+      const p1 = new Date(now); p1.setFullYear(p1.getFullYear() - 3);
+      const p2 = new Date(now); p2.setFullYear(p2.getFullYear() - 2);
+      const p3 = new Date(now); p3.setFullYear(p3.getFullYear() - 1);
+      return [
+        { label: `${p1.getFullYear()}`, percent: 10 },
+        { label: `${p2.getFullYear()}`, percent: 38 },
+        { label: `${p3.getFullYear()}`, percent: 66 },
+        { label: `${curYear}`, percent: 92 },
+      ];
+    }
+  }, [timeframe]);
 
   // Asset Performance Ranking (% Unrealized P/L descending) - investment assets only (exclude CASH)
   const performanceRanking = useMemo(() => {
@@ -981,45 +1030,82 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                   <ActivityIndicator size="small" color="#10B981" />
                 </View>
               ) : (
-                <View style={styles.lineChartBox}>
-                  <LineChart
-                    data={comparisonResult.portfolioData}
-                    {...(selectedBenchmark !== 'NONE' ? { data2: comparisonResult.benchmarkData } : {})}
-                    color="#10B981"
-                    color2={selectedBenchmarkObj?.color || '#8B5CF6'}
-                    thickness={2.8}
-                    thickness2={2.2}
-                    curved
-                    isAnimated
-                    rulesType="dashed"
-                    rulesColor="#E2E8F0"
-                    yAxisTextStyle={styles.chartAxisText}
-                    xAxisLabelTextStyle={styles.chartAxisText}
-                    yAxisLabelSuffix="%"
-                    maxValue={chartScale.maxValue}
-                    stepValue={chartScale.stepValue}
-                    noOfSections={chartScale.noOfSections}
-                    {...(chartScale.mostNegativeValue < 0
-                      ? {
-                          mostNegativeValue: chartScale.mostNegativeValue,
-                          noOfSectionsBelowXAxis: chartScale.noOfSectionsBelowXAxis,
-                        }
-                      : {})}
-                    overflowTop={10}
-                    height={185}
-                    width={SCREEN_WIDTH - 84}
-                    initialSpacing={15}
-                    spacing={(SCREEN_WIDTH - 110) / (comparisonResult.portfolioData.length || 6)}
-                    {...(selectedBenchmark === 'NONE'
-                      ? {
-                          areaChart: true,
-                          startFillColor: '#10B981',
-                          endFillColor: '#10B981',
-                          startOpacity: 0.2,
-                          endOpacity: 0.02,
-                        }
-                      : {})}
-                  />
+                <View style={styles.chartPlotContainer}>
+                  {/* Subtle Grey Vertical Grid Lines Layer (Google Finance Style) */}
+                  <View style={styles.chartVerticalGridOverlay} pointerEvents="none">
+                    {floorTimelineLabels.map((item, idx) => (
+                      <View
+                        key={idx}
+                        style={[
+                          styles.chartVerticalGridLine,
+                          { left: `${item.percent}%` },
+                        ]}
+                      />
+                    ))}
+                  </View>
+
+                  {/* Line Chart (Y-Axis & Curves only) */}
+                  <View style={styles.lineChartBox}>
+                    <LineChart
+                      data={comparisonResult.portfolioData.map((d) => ({ value: d.value }))}
+                      {...(selectedBenchmark !== 'NONE'
+                        ? {
+                            data2: comparisonResult.benchmarkData.map((d) => ({
+                              value: d.value,
+                            })),
+                          }
+                        : {})}
+                      color="#10B981"
+                      color2={selectedBenchmarkObj?.color || '#F59E0B'}
+                      thickness={2.8}
+                      thickness2={2.2}
+                      curved
+                      isAnimated
+                      rulesType="dashed"
+                      rulesColor="#E2E8F0"
+                      xAxisThickness={0}
+                      yAxisTextStyle={styles.chartAxisText}
+                      yAxisLabelSuffix="%"
+                      maxValue={chartScale.maxValue}
+                      stepValue={chartScale.stepValue}
+                      noOfSections={chartScale.noOfSections}
+                      {...(chartScale.mostNegativeValue < 0
+                        ? {
+                            mostNegativeValue: chartScale.mostNegativeValue,
+                            noOfSectionsBelowXAxis: chartScale.noOfSectionsBelowXAxis,
+                          }
+                        : {})}
+                      overflowTop={10}
+                      height={175}
+                      width={SCREEN_WIDTH - 84}
+                      initialSpacing={15}
+                      spacing={(SCREEN_WIDTH - 110) / (comparisonResult.portfolioData.length || 6)}
+                      {...(selectedBenchmark === 'NONE'
+                        ? {
+                            areaChart: true,
+                            startFillColor: '#10B981',
+                            endFillColor: '#10B981',
+                            startOpacity: 0.18,
+                            endOpacity: 0.02,
+                          }
+                        : {})}
+                    />
+                  </View>
+
+                  {/* Google Finance Floor Timeline Row (Always at the floor below all curves) */}
+                  <View style={styles.chartFloorTimelineRow}>
+                    {floorTimelineLabels.map((item, idx) => (
+                      <View
+                        key={idx}
+                        style={[
+                          styles.chartFloorItem,
+                          { left: `${item.percent}%` },
+                        ]}
+                      >
+                        <Text style={styles.chartFloorText}>{item.label}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
               )}
             </View>
@@ -1626,15 +1712,54 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
+  chartPlotContainer: {
+    position: 'relative',
+    marginTop: 4,
+    paddingBottom: 2,
+  },
+  chartVerticalGridOverlay: {
+    position: 'absolute',
+    top: 4,
+    bottom: 24,
+    left: 44,
+    right: 18,
+  },
+  chartVerticalGridLine: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: 'rgba(226, 232, 240, 0.75)',
+  },
   lineChartBox: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 2,
     marginLeft: -16,
     overflow: 'hidden',
   },
   chartAxisText: {
-    fontSize: 9,
+    fontSize: 9.5,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  chartFloorTimelineRow: {
+    position: 'relative',
+    height: 20,
+    marginLeft: 44,
+    marginRight: 18,
+    marginTop: 2,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 4,
+  },
+  chartFloorItem: {
+    position: 'absolute',
+    transform: [{ translateX: -20 }],
+  },
+  chartFloorText: {
+    fontSize: 9.5,
+    fontWeight: '600',
     color: '#94A3B8',
   },
   rankingSection: {
