@@ -267,12 +267,16 @@ export const Portfolio: React.FC<PortfolioProps> = ({
       0.2, 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 75, 100
     ];
 
+    const TARGET_TOTAL_HEIGHT = 150;
     let bestConfig = {
       stepValue: 5,
       noOfSections: 2,
       maxValue: 10,
       mostNegativeValue: 0,
       noOfSectionsBelowXAxis: 0,
+      stepHeight: 75,
+      chartHeight: 150,
+      totalHeight: 150,
     };
     let minExcess = Infinity;
 
@@ -291,30 +295,25 @@ export const Portfolio: React.FC<PortfolioProps> = ({
           const excess = (candidateMax - maxVal) + (Math.abs(candidateMin) - absMin);
           if (excess < minExcess) {
             minExcess = excess;
+            const stepHeight = Math.round(TARGET_TOTAL_HEIGHT / totSec);
+            const chartHeight = posSec * stepHeight;
+            const totalHeight = totSec * stepHeight;
             bestConfig = {
               stepValue: step,
               noOfSections: posSec,
               maxValue: candidateMax,
               mostNegativeValue: candidateMin,
               noOfSectionsBelowXAxis: negSec,
+              stepHeight,
+              chartHeight,
+              totalHeight,
             };
           }
         }
       }
     }
 
-    const TARGET_TOTAL_HEIGHT = 168;
-    const totalSections = bestConfig.noOfSections + bestConfig.noOfSectionsBelowXAxis;
-    const chartHeight =
-      bestConfig.noOfSectionsBelowXAxis > 0
-        ? Math.round((TARGET_TOTAL_HEIGHT * bestConfig.noOfSections) / totalSections)
-        : TARGET_TOTAL_HEIGHT;
-
-    return {
-      ...bestConfig,
-      chartHeight,
-      totalHeight: TARGET_TOTAL_HEIGHT,
-    };
+    return bestConfig;
   }, [comparisonResult, selectedBenchmark]);
 
   // Google Finance Style Floor Timeline Checkpoints (always placed at the bottom floor)
@@ -1080,13 +1079,14 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                       maxValue={chartScale.maxValue}
                       stepValue={chartScale.stepValue}
                       noOfSections={chartScale.noOfSections}
+                      stepHeight={chartScale.stepHeight}
                       {...(chartScale.mostNegativeValue < 0
                         ? {
                             mostNegativeValue: chartScale.mostNegativeValue,
                             noOfSectionsBelowXAxis: chartScale.noOfSectionsBelowXAxis,
                           }
                         : {})}
-                      overflowTop={10}
+                      overflowTop={16}
                       height={chartScale.chartHeight}
                       disableScroll
                       width={SCREEN_WIDTH - 84}
@@ -1731,7 +1731,7 @@ const styles = StyleSheet.create({
   },
   chartVerticalGridOverlay: {
     position: 'absolute',
-    top: 4,
+    top: 12,
     bottom: 24,
     left: 44,
     right: 18,
@@ -1745,12 +1745,9 @@ const styles = StyleSheet.create({
   },
   lineChartBox: {
     alignItems: 'center',
-    justifyContent: 'center',
-    height: 180,
-    minHeight: 180,
-    maxHeight: 180,
+    paddingTop: 12,
+    paddingBottom: 2,
     marginLeft: -16,
-    overflow: 'hidden',
   },
   chartAxisText: {
     fontSize: 9.5,
