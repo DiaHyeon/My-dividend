@@ -303,7 +303,18 @@ export const Portfolio: React.FC<PortfolioProps> = ({
       }
     }
 
-    return bestConfig;
+    const TARGET_TOTAL_HEIGHT = 168;
+    const totalSections = bestConfig.noOfSections + bestConfig.noOfSectionsBelowXAxis;
+    const chartHeight =
+      bestConfig.noOfSectionsBelowXAxis > 0
+        ? Math.round((TARGET_TOTAL_HEIGHT * bestConfig.noOfSections) / totalSections)
+        : TARGET_TOTAL_HEIGHT;
+
+    return {
+      ...bestConfig,
+      chartHeight,
+      totalHeight: TARGET_TOTAL_HEIGHT,
+    };
   }, [comparisonResult, selectedBenchmark]);
 
   // Google Finance Style Floor Timeline Checkpoints (always placed at the bottom floor)
@@ -1076,7 +1087,8 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                           }
                         : {})}
                       overflowTop={10}
-                      height={175}
+                      height={chartScale.chartHeight}
+                      disableScroll
                       width={SCREEN_WIDTH - 84}
                       initialSpacing={15}
                       spacing={(SCREEN_WIDTH - 110) / (comparisonResult.portfolioData.length || 6)}
@@ -1734,7 +1746,9 @@ const styles = StyleSheet.create({
   lineChartBox: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 2,
+    height: 180,
+    minHeight: 180,
+    maxHeight: 180,
     marginLeft: -16,
     overflow: 'hidden',
   },
