@@ -74,6 +74,27 @@ export async function consolidateDuplicateAssets(): Promise<ConsolidationResult>
 
         if (divMoveErr) {
           console.warn(`[Consolidation] Error moving dividend schedules from ${dup.id} to ${primary.id}:`, divMoveErr.message);
+        } else {
+          // ลบ dividend_schedules ที่ซ้ำซ้อนกันใน primary asset
+          const { data: primaryScheds } = await supabase
+            .from('dividend_schedules')
+            .select('id, xd_date')
+            .eq('asset_id', primary.id);
+
+          if (primaryScheds && primaryScheds.length > 0) {
+            const seenXd = new Set<string>();
+            const dupSchedIds: string[] = [];
+            for (const s of primaryScheds) {
+              if (seenXd.has(s.xd_date)) {
+                dupSchedIds.push(s.id);
+              } else {
+                seenXd.add(s.xd_date);
+              }
+            }
+            if (dupSchedIds.length > 0) {
+              await supabase.from('dividend_schedules').delete().in('id', dupSchedIds);
+            }
+          }
         }
 
         // Archive duplicate asset

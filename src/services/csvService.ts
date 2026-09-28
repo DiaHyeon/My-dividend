@@ -388,19 +388,37 @@ export async function importAssetRows(
         assetId = newAsset.id;
       }
 
-      // 3. บันทึกธุรกรรมการซื้อเข้าตาราง transactions
-      const { error: txErr } = await supabase.from('transactions').insert({
+      // 3. บันทึกธุรกรรมการซื้อเข้าตาราง transactions (พร้อม Resilient Fallback สำหรับ exchange_rate)
+      const txPayload: any = {
         asset_id: assetId,
         type: 'BUY',
         shares: Number(item.shares.toFixed(4)),
         price_per_share: Number(convertedCost.toFixed(4)),
         transaction_date: item.transaction_date,
         exchange_rate: Number(rate.toFixed(4)),
-      });
+      };
+
+      let { data: insertedTx, error: txErr } = await supabase
+        .from('transactions')
+        .insert(txPayload)
+        .select()
+        .single();
+
+      if (txErr && (txErr.message?.includes('exchange_rate') || txErr.code === '42703' || txErr.message?.includes('schema cache'))) {
+        delete txPayload.exchange_rate;
+        const retry = await supabase
+          .from('transactions')
+          .insert(txPayload)
+          .select()
+          .single();
+        insertedTx = retry.data;
+        txErr = retry.error;
+      }
 
       if (txErr) {
         throw new Error(txErr.message || 'ไม่สามารถบันทึกธุรกรรมได้');
       }
+
 
       // 4. บันทึกตารางปันผล (dividend_schedules) ด้วย Native DPU
       if (item.expected_dpu && item.expected_dpu > 0) {

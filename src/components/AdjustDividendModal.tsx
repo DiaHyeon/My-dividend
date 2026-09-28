@@ -137,14 +137,25 @@ export const AdjustDividendModal: React.FC<AdjustDividendModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      // 1. Update this dividend schedule in Supabase with NUMERIC(15, 4)
-      const { error: updateErr } = await supabase
+      // 1. Update this dividend schedule in Supabase with NUMERIC(15, 4) & resilient is_special fallback
+      const updateData: any = {
+        dpu: Number(finalDpu.toFixed(6)),
+        is_projected: !isReceived,
+        is_special: isSpecialDividend,
+      };
+      let { error: updateErr } = await supabase
         .from('dividend_schedules')
-        .update({
-          dpu: Number(finalDpu.toFixed(6)),
-          is_projected: !isReceived,
-        })
+        .update(updateData)
         .eq('id', target.scheduleId);
+
+      if (updateErr && (updateErr.message?.includes('is_special') || updateErr.code === '42703' || updateErr.message?.includes('schema cache'))) {
+        delete updateData.is_special;
+        const retry = await supabase
+          .from('dividend_schedules')
+          .update(updateData)
+          .eq('id', target.scheduleId);
+        updateErr = retry.error;
+      }
 
       if (updateErr) {
         throw new Error(updateErr.message || 'ไม่สามารถปรับปรุงยอดได้');
@@ -152,6 +163,7 @@ export const AdjustDividendModal: React.FC<AdjustDividendModalProps> = ({
 
       // 2. Persist Special Dividend status in local storage
       await setSpecialScheduleId(target.scheduleId, isSpecialDividend);
+
 
       // 3. If user chose to update future projections for this asset (only allowed for regular dividends)
       if (applyToFuture && !isSpecialDividend) {

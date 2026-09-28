@@ -1,28 +1,39 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 
-// Configure in-app notification behavior safely
-try {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
-  });
-} catch {
-  // Silently handled for Expo Go
-}
+/**
+ * Checks whether the app is running inside the Expo Go client app.
+ * Expo Go on Android removed native push/notification channel support in SDK 53-57,
+ * whereas standalone production builds (APK/AAB) have full native notification support.
+ */
+export const isRunningInExpoGo =
+  Constants?.executionEnvironment === ExecutionEnvironment.StoreClient ||
+  Constants?.appOwnership === 'expo';
 
+// Configure in-app notification behavior safely (only when supported)
+if (!isRunningInExpoGo && Platform.OS !== 'web') {
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+  } catch {
+    // Silently caught for safe fallback
+  }
+}
 
 /**
  * Initialize Android notification channel for XD reminders
  */
 export async function initNotificationChannel(): Promise<void> {
-  if (Platform.OS === 'android') {
+  if (Platform.OS === 'android' && !isRunningInExpoGo) {
     try {
       if (typeof Notifications.setNotificationChannelAsync === 'function') {
         await Notifications.setNotificationChannelAsync('xd-reminders', {
@@ -33,9 +44,8 @@ export async function initNotificationChannel(): Promise<void> {
           sound: 'default',
         });
       }
-    } catch {
-      // In Expo Go on Android, NotificationsChannelsProvider is null by design.
-      // Silently catch to avoid triggering intrusive LogBox warning on user's device.
+    } catch (err: any) {
+      console.warn('[Notification Service] Failed to initialize Android notification channel:', err?.message);
     }
   }
 }
@@ -44,7 +54,7 @@ export async function initNotificationChannel(): Promise<void> {
  * Request notification permissions from user
  */
 export async function requestNotificationPermissions(): Promise<boolean> {
-  if (Platform.OS === 'web') {
+  if (Platform.OS === 'web' || isRunningInExpoGo) {
     return false;
   }
 
@@ -90,6 +100,14 @@ export async function scheduleXdReminder(
     if (Platform.OS === 'web') {
       console.log(`[Notification Service Web] Scheduled XD reminder: ${body} for ${reminderDate.toLocaleString('th-TH')}`);
       return 'web-scheduled';
+    }
+
+    // If running inside Expo Go, record schedule locally and bypass native Android notification trigger safely
+    if (isRunningInExpoGo) {
+      console.log(`[Notification Service Expo Go] Scheduled XD reminder recorded: ${body} for ${reminderDate.toLocaleString('th-TH')}`);
+      const mockId = `expo-go-${symbol}-${xdDateString}`;
+      await saveScheduledReminder(mockId, symbol, xdDateString);
+      return mockId;
     }
 
     await initNotificationChannel();
@@ -163,7 +181,9 @@ async function saveScheduledReminder(notificationId: string, symbol: string, xdD
 export async function cancelXdReminder(notificationId: string): Promise<void> {
   if (!notificationId || Platform.OS === 'web') return;
   try {
-    await Notifications.cancelScheduledNotificationAsync(notificationId);
+    if (!isRunningInExpoGo) {
+      await Notifications.cancelScheduledNotificationAsync(notificationId);
+    }
     const list = await getStoredReminders();
     const updated = list.filter((r) => r.notificationId !== notificationId);
     await AsyncStorage.setItem(SCHEDULED_REMINDERS_STORAGE_KEY, JSON.stringify(updated));
@@ -181,11 +201,13 @@ export async function cancelRemindersForSymbol(symbol: string): Promise<void> {
   try {
     const list = await getStoredReminders();
     const targetReminders = list.filter((r) => r.symbol.toUpperCase() === symbol.toUpperCase());
-    for (const r of targetReminders) {
-      try {
-        await Notifications.cancelScheduledNotificationAsync(r.notificationId);
-      } catch {
-        // ignore
+    if (!isRunningInExpoGo) {
+      for (const r of targetReminders) {
+        try {
+          await Notifications.cancelScheduledNotificationAsync(r.notificationId);
+        } catch {
+          // ignore
+        }
       }
     }
     const remaining = list.filter((r) => r.symbol.toUpperCase() !== symbol.toUpperCase());
@@ -202,7 +224,9 @@ export async function cancelRemindersForSymbol(symbol: string): Promise<void> {
 export async function cancelAllXdReminders(): Promise<void> {
   if (Platform.OS === 'web') return;
   try {
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    if (!isRunningInExpoGo) {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+    }
     await AsyncStorage.removeItem(SCHEDULED_REMINDERS_STORAGE_KEY);
     console.log('[Notification Service] Cancelled all scheduled notifications');
   } catch (err: any) {
@@ -225,11 +249,13 @@ export async function cleanOrphanedReminders(activeHoldings: { symbol: string; n
     const list = await getStoredReminders();
     const orphaned = list.filter((r) => !activeSymbols.has(r.symbol.toUpperCase()));
 
-    for (const r of orphaned) {
-      try {
-        await Notifications.cancelScheduledNotificationAsync(r.notificationId);
-      } catch {
-        // ignore
+    if (!isRunningInExpoGo) {
+      for (const r of orphaned) {
+        try {
+          await Notifications.cancelScheduledNotificationAsync(r.notificationId);
+        } catch {
+          // ignore
+        }
       }
     }
 
@@ -300,10 +326,14 @@ export async function syncAllUpcomingXdReminders(): Promise<number> {
 }
 
 /**
- * Sends or schedules a test notification (useful for testing on Expo Go / device)
+ * Sends or schedules a test notification (useful for testing on device)
  */
 export async function sendTestNotificationNow(delaySeconds: number = 3): Promise<string | null> {
   if (Platform.OS === 'web') return null;
+  if (isRunningInExpoGo) {
+    console.log('[Notification Service] Test notification skipped on Expo Go (only available on Standalone build).');
+    return 'expo-go-test';
+  }
   try {
     await initNotificationChannel();
     await requestNotificationPermissions();

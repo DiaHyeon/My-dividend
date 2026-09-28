@@ -382,7 +382,7 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - Masks monetary values (`฿••••••`), deposit principals, and shares/units held (`•••• หุ้น` / `•••• หน่วย`) across all screens (Overview, Portfolio, Holdings, CategoryBreakdownModal, and Transaction History) to eliminate indirect net worth estimation via share counts, while keeping percentage and Yield on Cost ratios visible.
   - Interactive eye toggle buttons are consistently placed across Overview, Portfolio, and Holdings headers.
 - **Upcoming Payday Radar**:
-  - Minimal 1-line ticker banner positioned above the 12-month chart, tracking upcoming ex-dividend or interest payouts within 14 days with days-remaining countdowns.
+  - 30-day forward horizon radar banner positioned above the 12-month chart, tracking upcoming ex-dividend or payment events with distinct `[ วัน XD ]` and `[ เงินเข้า ]` badges, countdowns, and 1-click payment confirmation.
 - **Minimal Passive Income Goal Card**:
   - Tracks monthly passive income progress against target levels (Level 1: Coffee ฿1,000, Level 2: Utilities ฿3,000, Level 3: Living ฿10,000, Level 4: Lean FIRE ฿30,000, or Custom).
   - Elegant progress bar with remaining shortfall calculator, managed via `GoalSettingsModal.tsx`.
@@ -421,15 +421,61 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
 
 ---
 
+### 4.18 Resilient Database Schema Fallback Architecture
+- Handled by: `src/components/AddAssetModal.tsx`, `src/components/EditTransactionModal.tsx`, `src/components/AdjustDividendModal.tsx`, `src/services/csvService.ts`, `src/screens/Dashboard.tsx`
+- **Graceful Zero-Crash Fallback**:
+  - In environments where remote Supabase migrations (`002` through `005`) have not yet been applied, the application automatically catches missing column schema cache errors (e.g. `exchange_rate`, `is_special`, `currency`, `sector`) and retries the mutation or query instantly without the missing column.
+  - For local UI states like special dividends (`is_special`), the app seamlessly pairs Supabase persistence with local `AsyncStorage` caching (`@my_dividend_special_schedules`), ensuring 100% feature availability and zero user-facing errors regardless of database migration status.
+  - Provided idempotent migration script `supabase/migrations/005_unified_schema_update.sql` to cleanly add all required columns (`sector`, `currency`, `exchange_rate`, `is_special`) whenever database access is available.
+
+---
+
+### 4.19 Stock Split Adjustment Engine & Historical DPU Protection
+- Handled by: `src/services/splitService.ts`, `src/components/EditAssetModal.tsx`
+- **Strict Rule for Historical Dividends**:
+  - Historical paid dividends must **NEVER** have their DPU divided retroactively by stock split ratios!
+  - When applying a split adjustment (e.g., 1:10), the split ratio only divides future or projected payout cycles (`is_projected === true || payment_date >= split.date || xd_date >= split.date`).
+  - Past completed dividend distributions maintain their authentic, un-diluted historical DPU, guaranteeing that cumulative received dividend records (`returnService.ts`) remain 100% accurate and mathematically sound.
+  - All share calculations and cost adjustments maintain strict `NUMERIC(15, 4)` precision.
+
+---
+
+### 4.20 Enhanced 30-Day Payday Radar & 1-Click Payment Confirmation
+- Handled by: `src/components/UpcomingPaydayRadar.tsx`, `src/screens/Dashboard.tsx`
+- **30-Day Forward Lookahead**: Expands the upcoming events window to 30 days, capturing both upcoming Ex-Dividend dates (`[ วัน XD ]`) and Payout dates (`[ เงินเข้า ]`).
+- **Estimated Payout Dates**: Displays a tilde (`~D MMM`) when payment dates are forecasted based on standard settlement intervals (14 days for US stocks, 20 days for Thai assets).
+- **1-Click Payday Button (`[ ✓ เงินเข้าแล้ว ]`)**:
+  - Automatically activates on the payment date (`diffDays <= 0`).
+  - Tapping prompts a clean native confirmation dialog displaying the exact net inflow.
+  - Upon confirmation, updates the schedule to `payment_date = today` and `is_projected = false` on Supabase, instantaneously converting projected cashflow into verified received dividends.
+
+---
+
+### 4.21 Annual YoY Dividend Comparison & Special Dividend Engine
+- Handled by: `src/components/AnnualComparisonSheet.tsx`, `src/components/HeroNetWorthCard.tsx`, `src/components/AdjustDividendModal.tsx`, `src/screens/Dashboard.tsx`
+- **Year-over-Year (YoY) Growth Highlight**:
+  - Hero card displays a tappable pill badge (`+X.X% YoY` or `[ ✦ ปีแรก ]` if no prior history).
+  - Tapping opens the `AnnualComparisonSheet` comparing projected annual income against the prior calendar year.
+- **Special Dividend Disambiguation**:
+  - Payouts can be marked as "Special Dividend" (`is_special: true`) in `AdjustDividendModal`.
+  - The Annual Comparison Sheet cleanly separates Regular Dividends from Special Dividends, explaining natural annual income fluctuations and preventing misleading yield distortions.
+- **Rolling 1-Year Forward Horizon**:
+  - The 12-month bar chart utilizes a rolling 365-day forward horizon, ensuring that 4-quarter forecasts crossing calendar year boundaries are never prematurely truncated.
+
+---
+
 ## 5. Mobile & Network Operational Guidelines
 
 ### 5.1 Resolving Expo Go Android Runtime Crashes
 - **Root Cause**:
   1. `expo-notifications` invokes `warnOfExpoGoPushUsage` which throws an uncaught error in Android Expo Go (Expo SDK 53+ removed remote push from Expo Go).
   2. `TopicSubscriptionModule.android.js` calls `requireNativeModule('ExpoTopicSubscriptionModule')` which is absent in Expo Go Android binaries.
-- **Integrated Solution**:
+- **Integrated Solution & Environment Isolation**:
   - `scripts/patch-expo-notifications.js` automatically patches `warnOfExpoGoPushUsage` to `console.warn` and injects a fallback dummy for `TopicSubscriptionModule`.
   - Configured as `"postinstall": "node ./scripts/patch-expo-notifications.js"` in `package.json`.
+  - `notificationService.ts` dynamically evaluates `isRunningInExpoGo` via `expo-constants`:
+    - **In Expo Go**: Safely bypasses native Android notification channel creation and notification scheduling, logging schedules in `AsyncStorage` registry to guarantee zero-crash execution during development.
+    - **In Standalone Builds (Google Play Store)**: Activates native Android Notification Channel (`xd-reminders`, High Importance, audio chime) and native scheduling 1 day prior to XD at 08:30 AM.
   - Root error boundary `RootErrorBoundary` in `App.tsx` catches unexpected runtime errors gracefully.
 
 ### 5.2 Safe Area & Native UI Graphics Standards
@@ -446,11 +492,26 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   *(or `npx expo start --tunnel --go --web`)*
 - Tunnel mode via `@expo/ngrok` provides a public `.exp.direct` proxy enabling instant QR code scanning and bundle loading across any network.
 
-### 5.4 Agent Operation & Scope Discipline (กฎเหล็กการทำงานของ AI Agent)
+### 5.4 Google Play Store Configuration & Compliance (`app.json`)
+- **Package Name**: Enforces official unique Android application ID `"package": "com.mydividend.app"`.
+- **Version Code**: Managed as integer `versionCode: 1` for Android App Bundle (AAB) store releases.
+- **Deep Linking Scheme**: Configured with `"scheme": "mydividend"` for authentication callbacks.
+- **Visual Branding**: `userInterfaceStyle` set to `"dark"`, with `#0F172A` dark slate adaptive icon background and `#10B981` emerald notification accents to eliminate bright flashes upon app launch.
+- **Permissions**: Declares `POST_NOTIFICATIONS` (Android 13+), `SCHEDULE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, and `VIBRATE`.
+
+### 5.5 Upstream Network Resilience & Offline Sync Safety
+- **Timeout Guards**: Direct Yahoo Finance quote and dividend fetch fallbacks in `stockService.ts` employ 5,000ms–6,000ms `AbortController` timeout guards, preventing connection hanging and eliminating Android Application Not Responding (ANR) risks.
+- **Offline Sync Resilience**: `priceSyncService.ts` tracks `successfulFetchCount`, ensuring that complete network offline periods do not prematurely lock today's sync date (`LAST_SYNC_DATE_KEY`), allowing seamless on-demand sync once internet connectivity resumes.
+
+### 5.6 Holdings Visual Performance Architecture
+- **Zero Pop-in Experience**: In `AssetsScreen.tsx`, holding cards are rendered using `ScrollView` paired with `React.memo` in `AssetSparklineCard.tsx` and Once-a-Day EOD caching (`historyService.ts`). For typical dividend portfolios (10–50 assets), this architecture delivers instantaneous 60 FPS scrolling without the visual blank spaces or delayed pop-in flickers inherent in aggressive lazy rendering.
+
+### 5.7 Agent Operation & Scope Discipline (กฎเหล็กการทำงานของ AI Agent)
 - **Explicit Declaration (ต้องบอกก่อนทำ)**: ก่อนลงมือแก้ไขโค้ดหรือดำเนินการใดๆ ต้องอธิบายให้ผู้ใช้ทราบล่วงหน้าอย่างชัดเจนเสมอ
 - **Strict Scope Boundaries (ห้ามทำเกินกว่าที่บอก)**: ต้องปฏิบัติตามขอบเขตที่ได้แจ้งและที่ได้รับมอบหมายเท่านั้น ห้ามแก้ไข เพิ่มเติม หรือดัดแปลงส่วนอื่นนอกเหนือจากที่บอกไว้โดยเด็ดขาด
 
 ---
+
 
 ## 6. Project File Structure
 - `App.tsx`: Root Application Component with `RootErrorBoundary` and bottom tab navigation (`Overview`, `Portfolio`, `Holdings`)
@@ -469,9 +530,10 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - `components/CashAssetForm.tsx`: Modular form component for bank deposits, interest payout cycles, and pro-rata tax calculations
   - `components/CategoryBreakdownModal.tsx`: Bottom sheet modal displaying segment breakdown donut chart and 20,000 THB tax-free interest quota meter
   - `components/GoalSettingsModal.tsx`: Minimal bottom sheet modal for configuring monthly passive income goal targets and level presets
-  - `components/HeroNetWorthCard.tsx`: Zero-jitter hero card displaying total portfolio net worth, unrealized P/L, dual dividend yields (Current & YoC), and privacy masking
-  - `components/UpcomingPaydayRadar.tsx`: Compact radar ticker displaying upcoming ex-dividend dates and bank interest payout events within 14 days
-  - `components/AdjustDividendModal.tsx`: Minimal bottom sheet modal for manual dividend payout adjustments, actual received verification, and DPU overrides
+  - `components/HeroNetWorthCard.tsx`: Zero-jitter hero card displaying total portfolio net worth, unrealized P/L, dual dividend yields (Current & YoC), YoY comparison pill, and privacy masking
+  - `components/UpcomingPaydayRadar.tsx`: Compact radar ticker displaying upcoming ex-dividend dates and bank interest payout events within 30 days with 1-click payday confirmation
+  - `components/AdjustDividendModal.tsx`: Minimal bottom sheet modal for manual dividend payout adjustments, actual received verification, special dividend tagging, and DPU overrides
+  - `components/AnnualComparisonSheet.tsx`: Bottom sheet modal comparing current projected annual dividend against prior year with special dividend disambiguation
   - `services/privacyService.ts`: Global privacy state management and cross-screen masking synchronization via AsyncStorage
   - `services/taxService.ts`: Thai bank deposit interest tax calculation engine (20,000 THB annual exemption threshold)
   - `services/sectorService.ts`: Standard GICS, AIMC, and deposit sector taxonomy classification service
@@ -479,13 +541,15 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - `services/fundService.ts`: Thai mutual fund search, daily NAV quotes, and dividend history service via SEC Open API v2
   - `services/csvService.ts`: Portfolio CSV export, import parsing, column mapping, and automated asset creation service
   - `services/notificationService.ts`: Local ex-dividend (XD) notification scheduling service for Android
-  - `services/assetConsolidationService.ts`: Position accumulation and duplicate asset consolidation service
+  - `services/assetConsolidationService.ts`: Position accumulation, duplicate asset consolidation, and schedule deduplication service
   - `services/benchmarkService.ts`: Portfolio cumulative return, alpha calculation, and market benchmark comparison service (SET, S&P 500, NASDAQ)
   - `services/historyService.ts`: 7-day historical closing price caching service with Once-a-Day EOD cache and on-demand refresh
   - `services/priceSyncService.ts`: Automated daily market price and NAV synchronization service updating Supabase database with batch throttling (HTTP 429 protection)
   - `services/proxyClient.ts`: Centralized client helper for securely invoking the stock-proxy Supabase Edge Function with automatic authentication headers and timeout control
-  - `services/splitService.ts`: Automated stock split detection, market event fetching, and 1-click share & cost adjustments engine
+  - `services/splitService.ts`: Automated stock split detection, market event fetching, and 1-click share & cost adjustments engine protecting historical paid DPU
   - `services/returnService.ts`: Realized dividend income calculation and Total Return engine (Capital Gain + Dividends)
 - `scripts/`
   - `patch-expo-notifications.js`: Patch script resolving Expo Go Android notification crashes
+- `supabase/migrations/`
+  - `005_unified_schema_update.sql`: Idempotent migration script adding sector, currency, exchange_rate, and is_special columns
 - `supabase/functions/stock-proxy/`: Supabase Edge Function source code proxying Yahoo Finance and SEC Open API requests

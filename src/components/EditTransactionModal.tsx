@@ -117,19 +117,31 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase
+      const updatePayload: any = {
+        shares: Number(parsedShares.toFixed(4)),
+        price_per_share: Number(effectivePriceTHB.toFixed(4)),
+        transaction_date: txDate.trim(),
+        exchange_rate: Number(rate.toFixed(4)),
+      };
+
+      let { error } = await supabase
         .from('transactions')
-        .update({
-          shares: Number(parsedShares.toFixed(4)),
-          price_per_share: Number(effectivePriceTHB.toFixed(4)),
-          transaction_date: txDate.trim(),
-          exchange_rate: Number(rate.toFixed(4)),
-        })
+        .update(updatePayload)
         .eq('id', transaction.id);
+
+      if (error && (error.message?.includes('exchange_rate') || error.code === '42703' || error.message?.includes('schema cache'))) {
+        delete updatePayload.exchange_rate;
+        const retry = await supabase
+          .from('transactions')
+          .update(updatePayload)
+          .eq('id', transaction.id);
+        error = retry.error;
+      }
 
       if (error) {
         throw new Error(error.message || 'ไม่สามารถบันทึกการแก้ไขได้');
       }
+
 
       await saveTransactionCurrencyMeta(transaction.id, {
         originalPrice: parsedPrice,

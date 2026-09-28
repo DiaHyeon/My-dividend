@@ -238,10 +238,13 @@ export async function fetchStockPrice(symbol: string, rawSymbol?: string): Promi
     console.warn(`Edge function quote error for ${targetSymbol}:`, err.message);
   }
 
-  // 2. Direct Yahoo Finance Chart fallback
+  // 2. Direct Yahoo Finance Chart fallback with 5000ms timeout guard
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(targetSymbol)}?interval=1d&range=1d`;
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
 
     if (response.ok) {
       const json = await response.json();
@@ -253,7 +256,7 @@ export async function fetchStockPrice(symbol: string, rawSymbol?: string): Promi
       }
     }
   } catch (err: any) {
-    console.warn(`Direct quote fallback error for ${targetSymbol}:`, err.message);
+    console.warn(`Direct quote fallback error for ${targetSymbol}:`, err?.message || err);
   }
 
   // 3. Fallback: If not found and doesn't end with .BK, try with .BK (for Thai SET/mai stocks)
@@ -347,22 +350,26 @@ export async function fetchDividendAnalysis(
     console.warn(`Edge function dividend fetch notice for ${targetSymbol}:`, err.message);
   }
 
-  // 2. Direct Yahoo Finance fallback (works natively on React Native)
+  // 2. Direct Yahoo Finance fallback (works natively on React Native) with 6000ms timeout guard
   if (!rawDividends) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(targetSymbol)}?interval=1mo&range=2y&events=div`;
       const response = await fetch(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         },
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const json = await response.json();
         rawDividends = json?.chart?.result?.[0]?.events?.dividends;
       }
     } catch (err: any) {
-      console.warn(`Direct dividend fetch fallback notice for ${targetSymbol}:`, err.message);
+      console.warn(`Direct dividend fetch fallback notice for ${targetSymbol}:`, err?.message || err);
     }
   }
 

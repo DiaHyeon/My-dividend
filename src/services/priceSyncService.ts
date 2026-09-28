@@ -95,6 +95,7 @@ export async function syncDailyPricesIfNeeded(
 
     // 2. Fetch latest quotes in small batches with gentle throttling to protect upstream APIs against rate limits (HTTP 429)
     const priceUpdates: { id: string; symbol: string; newPriceTHB: number }[] = [];
+    let successfulFetchCount = 0;
     const BATCH_SIZE = 3;
 
     for (let i = 0; i < eligibleAssets.length; i += BATCH_SIZE) {
@@ -108,6 +109,7 @@ export async function syncDailyPricesIfNeeded(
             if (asset.asset_type === 'STOCKS') {
               const rawMarketPrice = await fetchStockPrice(rawSymbol);
               if (rawMarketPrice !== null && !isNaN(rawMarketPrice) && rawMarketPrice > 0) {
+                successfulFetchCount++;
                 const currency = await getAssetCurrency(
                   asset.id,
                   asset.symbol,
@@ -130,6 +132,7 @@ export async function syncDailyPricesIfNeeded(
             } else if (asset.asset_type === 'FUNDS') {
               const navResult = await fetchFundNav(undefined, rawSymbol);
               if (navResult && !isNaN(navResult.latestNav) && navResult.latestNav > 0) {
+                successfulFetchCount++;
                 const roundedTHB = Number(navResult.latestNav.toFixed(4));
                 const oldPrice = Number(asset.current_price) || 0;
 
@@ -143,7 +146,7 @@ export async function syncDailyPricesIfNeeded(
               }
             }
           } catch (assetErr: any) {
-            console.warn(`Price sync error for ${asset.symbol}:`, assetErr?.message || assetErr);
+            console.warn(`Price sync notice for ${asset.symbol}:`, assetErr?.message || assetErr);
           }
         })
       );
@@ -170,8 +173,10 @@ export async function syncDailyPricesIfNeeded(
       );
     }
 
-    // 4. Record successful sync date for today
-    await AsyncStorage.setItem(LAST_SYNC_DATE_KEY, todayKey);
+    // 4. Record successful sync date for today only if at least one quote succeeded
+    if (successfulFetchCount > 0 || eligibleAssets.length === 0) {
+      await AsyncStorage.setItem(LAST_SYNC_DATE_KEY, todayKey);
+    }
     return priceUpdates.length > 0;
   } catch (err: any) {
     console.warn('Daily price sync execution failed:', err?.message || err);

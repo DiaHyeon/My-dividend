@@ -581,18 +581,27 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
           asset = newAsset;
         }
 
-        // Insert into transactions table
+        // Insert into transactions table with resilient fallback for exchange_rate
         const todayDate = (depositDate && depositDate.trim()) || new Date().toISOString().split('T')[0];
-        const { error: txError } = await supabase.from('transactions').insert({
+        const txPayload: any = {
           asset_id: asset.id,
           type: 'BUY',
           shares: Number(parsedDeposit.toFixed(4)),
           price_per_share: 1.0000,
           transaction_date: todayDate,
           exchange_rate: 1.0000,
-        });
+        };
+
+        let { error: txError } = await supabase.from('transactions').insert(txPayload);
+        if (txError && (txError.message?.includes('exchange_rate') || txError.code === '42703' || txError.message?.includes('schema cache'))) {
+          // Fallback retry without exchange_rate column
+          delete txPayload.exchange_rate;
+          const retry = await supabase.from('transactions').insert(txPayload);
+          txError = retry.error;
+        }
 
         if (txError) throw new Error(txError.message || 'ไม่สามารถบันทึกยอดเงินฝากได้');
+
 
         // Insert interest schedules
         if (!isNaN(parsedRate) && parsedRate > 0) {
@@ -747,21 +756,40 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         asset = newAsset;
       }
 
-      // 2. Insert BUY record to transactions table
+      // 2. Insert BUY record to transactions table with resilient fallback for exchange_rate
       const todayDate = new Date().toISOString().split('T')[0];
       const effectiveTxDate = purchaseDate && purchaseDate.trim() ? purchaseDate.trim() : todayDate;
-      const { data: insertedTx, error: txError } = await supabase.from('transactions').insert({
+      const txPayload: any = {
         asset_id: asset.id,
         type: 'BUY',
         shares: Number(parsedShares.toFixed(4)),
         price_per_share: Number(convertedCostPrice.toFixed(4)),
         transaction_date: effectiveTxDate,
         exchange_rate: Number(rate.toFixed(4)),
-      }).select().single();
+      };
+
+      let { data: insertedTx, error: txError } = await supabase
+        .from('transactions')
+        .insert(txPayload)
+        .select()
+        .single();
+
+      if (txError && (txError.message?.includes('exchange_rate') || txError.code === '42703' || txError.message?.includes('schema cache'))) {
+        // Fallback retry without exchange_rate column
+        delete txPayload.exchange_rate;
+        const retry = await supabase
+          .from('transactions')
+          .insert(txPayload)
+          .select()
+          .single();
+        insertedTx = retry.data;
+        txError = retry.error;
+      }
 
       if (txError) {
         throw new Error(txError.message || 'ไม่สามารถบันทึกรายการซื้อได้');
       }
+
 
       if (insertedTx && insertedTx.id) {
         await saveTransactionCurrencyMeta(insertedTx.id, {

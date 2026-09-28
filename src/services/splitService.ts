@@ -184,8 +184,9 @@ export async function applySplitAdjustment(
   asset: AssetSummary,
   split: StockSplitEvent,
   eligibleTransactions: Transaction[]
-): Promise<{ updatedCount: number; newShares: number; newAvgCost: number }> {
+): Promise<{ updatedCount: number; newShares: number; newAvgCost: number; updatedScheduleCount: number }> {
   let updatedCount = 0;
+  let updatedScheduleCount = 0;
 
   for (const tx of eligibleTransactions) {
     const originalShares = Number(tx.shares) || 0;
@@ -207,6 +208,38 @@ export async function applySplitAdjustment(
     }
   }
 
+  // ปรับค่าเงินปันผลต่อหุ้น (DPU) เฉพาะรอบปัจจุบันและอนาคตที่ยังไม่ได้จ่าย
+  // ป้องกันการคำนวณเงินปันผลคาดการณ์เฟ้อตามจำนวนหุ้นที่เพิ่มขึ้น และไม่แตะต้องรอบในอดีตที่รับเงินจริงไปแล้ว
+  try {
+    const { data: schedules } = await supabase
+      .from('dividend_schedules')
+      .select('id, dpu, xd_date, payment_date, is_projected')
+      .eq('asset_id', asset.id);
+
+    if (schedules && schedules.length > 0) {
+      for (const sch of schedules) {
+        const isUnpaidOrFuture =
+          sch.is_projected ||
+          (sch.payment_date && sch.payment_date >= split.date) ||
+          sch.xd_date >= split.date;
+
+        if (isUnpaidOrFuture && sch.dpu) {
+          const newDpu = Number((Number(sch.dpu) / split.ratio).toFixed(4));
+          const { error: schErr } = await supabase
+            .from('dividend_schedules')
+            .update({ dpu: newDpu })
+            .eq('id', sch.id);
+
+          if (!schErr) {
+            updatedScheduleCount++;
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn('[splitService] Error adjusting dividend schedules DPU for split:', err?.message);
+  }
+
   // บันทึกวันที่แตกพาร์ว่าปรับเรียบร้อยแล้ว
   await markSplitAsApplied(asset.id, split.date);
 
@@ -222,5 +255,7 @@ export async function applySplitAdjustment(
     updatedCount,
     newShares,
     newAvgCost,
+    updatedScheduleCount,
   };
 }
+

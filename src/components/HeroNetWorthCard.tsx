@@ -18,6 +18,8 @@ interface HeroNetWorthCardProps {
   inflowFilter: 'ALL' | 'DIVIDENDS' | 'INTEREST';
   isPrivateMode: boolean;
   onTogglePrivateMode: () => void;
+  priorYearAnnualNetDividend?: number;
+  onOpenAnnualComparison?: () => void;
   formatMoney: (amount: number, digits?: number) => string;
 }
 
@@ -36,12 +38,21 @@ export const HeroNetWorthCard: React.FC<HeroNetWorthCardProps> = React.memo(({
   inflowFilter,
   isPrivateMode,
   onTogglePrivateMode,
+  priorYearAnnualNetDividend,
+  onOpenAnnualComparison,
   formatMoney,
 }) => {
   const effectiveTotalReturn = totalReturn !== undefined ? totalReturn : (totalUnrealizedPL + totalDividendsReceived);
   const effectiveTotalReturnPercent = totalReturnPercent !== undefined
     ? totalReturnPercent
     : (totalCost > 0 ? (effectiveTotalReturn / totalCost) * 100 : 0);
+
+  const hasPriorYearData = priorYearAnnualNetDividend !== undefined && priorYearAnnualNetDividend > 0;
+  const yoyPercent = hasPriorYearData
+    ? ((projectedAnnualNetDividend - priorYearAnnualNetDividend) / priorYearAnnualNetDividend) * 100
+    : 0;
+  const isPositiveGrowth = yoyPercent >= 0;
+
 
   return (
     <View style={styles.heroCard}>
@@ -96,10 +107,50 @@ export const HeroNetWorthCard: React.FC<HeroNetWorthCardProps> = React.memo(({
                 : 'ดอกเบี้ยเงินฝากสุทธิคาดการณ์/ปี'}
             </Text>
           </View>
-          <Text style={styles.dividendHighlightValue} numberOfLines={1}>
-            {formatMoney(projectedAnnualNetDividend)}
-          </Text>
+          <View style={styles.dividendHeaderRight}>
+            <Text style={styles.dividendHighlightValue} numberOfLines={1}>
+              {formatMoney(projectedAnnualNetDividend)}
+            </Text>
+            {onOpenAnnualComparison && (
+              <TouchableOpacity
+                style={[
+                  styles.yoyBadge,
+                  hasPriorYearData
+                    ? isPositiveGrowth
+                      ? styles.yoyBadgePos
+                      : styles.yoyBadgeNeg
+                    : styles.yoyBadgeNew,
+                ]}
+                onPress={onOpenAnnualComparison}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                {hasPriorYearData ? (
+                  <>
+                    <Ionicons
+                      name={isPositiveGrowth ? 'caret-up' : 'caret-down'}
+                      size={9}
+                      color={isPositiveGrowth ? '#34D399' : '#F87171'}
+                    />
+                    <Text
+                      style={[
+                        styles.yoyBadgeText,
+                        isPositiveGrowth ? styles.yoyTextPos : styles.yoyTextNeg,
+                      ]}
+                    >
+                      {isPositiveGrowth ? '+' : ''}
+                      {yoyPercent.toFixed(1)}% YoY
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={[styles.yoyBadgeText, styles.yoyTextNew]}>✦ ปีแรก</Text>
+                )}
+                <Ionicons name="information-circle-outline" size={10} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
+
 
         {/* Dual Yield & Monthly Avg Subrow */}
         <View style={styles.dualYieldRow}>
@@ -274,6 +325,11 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontWeight: '500',
   },
+  dividendHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   dividendHighlightValue: {
     fontSize: 15,
     lineHeight: 19,
@@ -281,6 +337,41 @@ const styles = StyleSheet.create({
     color: '#34D399',
     textAlign: 'right',
   },
+  yoyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  yoyBadgePos: {
+    backgroundColor: 'rgba(5, 150, 105, 0.15)',
+    borderColor: 'rgba(52, 211, 153, 0.3)',
+  },
+  yoyBadgeNeg: {
+    backgroundColor: 'rgba(220, 38, 38, 0.15)',
+    borderColor: 'rgba(248, 113, 113, 0.3)',
+  },
+  yoyBadgeNew: {
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    borderColor: 'rgba(129, 140, 248, 0.3)',
+  },
+  yoyBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  yoyTextPos: {
+    color: '#34D399',
+  },
+  yoyTextNeg: {
+    color: '#F87171',
+  },
+  yoyTextNew: {
+    color: '#A5B4FC',
+  },
+
   dualYieldRow: {
     flexDirection: 'row',
     alignItems: 'center',

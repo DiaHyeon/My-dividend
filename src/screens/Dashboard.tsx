@@ -9,6 +9,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
@@ -21,6 +22,8 @@ import { GoalSettingsModal, GOAL_STORAGE_KEY, GOAL_PRESETS } from '../components
 import { UpcomingPaydayRadar, UpcomingSchedule, ClosestSchedule } from '../components/UpcomingPaydayRadar';
 import { HeroNetWorthCard } from '../components/HeroNetWorthCard';
 import { AdjustDividendModal, AdjustDividendTarget, getSpecialScheduleIds } from '../components/AdjustDividendModal';
+import { AnnualComparisonSheet, PriorYearDividendItem } from '../components/AnnualComparisonSheet';
+
 import { getAllAssetCurrencies, getCachedExchangeRate, isKnownUSSymbol } from '../services/currencyService';
 import { calculateScheduleCashPayout } from '../services/taxService';
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
@@ -99,6 +102,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [selectedScheduleForAdjust, setSelectedScheduleForAdjust] = useState<AdjustDividendTarget | null>(null);
   const [isAdjustModalVisible, setIsAdjustModalVisible] = useState<boolean>(false);
   const [specialScheduleIds, setSpecialScheduleIds] = useState<Set<string>>(new Set());
+  const [isAnnualComparisonVisible, setIsAnnualComparisonVisible] = useState<boolean>(false);
+
 
   const isUSStock = useCallback((item: AssetSummary): boolean => {
     if (item.asset_type !== 'STOCKS') return false;
@@ -160,18 +165,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
           setTransactions((txData as Transaction[]) || []);
         }
 
-        // 3. Fetch dividend schedules only for active assets
-        const { data: divData, error: divError } = await supabase
+        // 3. Fetch dividend schedules only for active assets (with resilient is_special fallback)
+        let schedulesData: DividendSchedule[] = [];
+        const { data: divDataWithSpecial, error: divSpecialError } = await supabase
           .from('dividend_schedules')
-          .select('id, asset_id, dpu, xd_date, payment_date, is_projected')
+          .select('id, asset_id, dpu, xd_date, payment_date, is_projected, is_special')
           .in('asset_id', activeAssetIds)
           .order('xd_date', { ascending: true });
 
-        if (divError) {
-          console.warn('Error fetching dividend_schedules:', divError.message);
+        if (!divSpecialError && divDataWithSpecial) {
+          schedulesData = divDataWithSpecial as DividendSchedule[];
         } else {
-          setDividendSchedules((divData as DividendSchedule[]) || []);
+          const { data: divData, error: divError } = await supabase
+            .from('dividend_schedules')
+            .select('id, asset_id, dpu, xd_date, payment_date, is_projected')
+            .in('asset_id', activeAssetIds)
+            .order('xd_date', { ascending: true });
+
+          if (divError) {
+            console.warn('Error fetching dividend_schedules:', divError.message);
+          } else {
+            schedulesData = (divData as DividendSchedule[]) || [];
+          }
         }
+        setDividendSchedules(schedulesData);
+
       } else {
         setTransactions([]);
         setDividendSchedules([]);
@@ -315,15 +333,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
   const annualInflowByAsset: Record<string, number> = {};
 
-  // Upcoming Paydays Radar
+  // Upcoming Paydays Radar & Annual Dividend Tracking
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const currentYear = today.getFullYear();
+  let priorYearTotalNetDividend = 0;
+  const priorYearDetails: PriorYearDividendItem[] = [];
 
   const upcomingList: UpcomingSchedule[] = [];
   let nextClosestSchedule: ClosestSchedule | null = null;
   let minFutureDiffDays = Infinity;
+  const seenScheduleKeys = new Set<string>();
 
   dividendSchedules.forEach((schedule) => {
+    // Deduplicate identical schedules if any
+    const schedKey = `${schedule.asset_id}_${schedule.xd_date}_${schedule.payment_date || ''}`;
+    if (seenScheduleKeys.has(schedKey)) return;
+    seenScheduleKeys.add(schedKey);
+
     const parentAsset = assets.find((a) => a.id === schedule.asset_id);
     if (!parentAsset) return;
 
@@ -398,23 +425,43 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     if (netDividend <= 0) return;
 
-    // Accumulate total annual inflow per category and per asset (unaffected by temporary inflowFilter)
-    annualInflowByCategory[parentAsset.asset_type] += netDividend;
-    annualInflowByAsset[parentAsset.id] = (annualInflowByAsset[parentAsset.id] || 0) + netDividend;
+    const isSpecialItem = schedule.is_special || specialScheduleIds.has(schedule.id);
 
-    // Filter by Inflow Mode for 12-Month Bar Chart and Hero Card highlight
-    const matchesFilter =
-      inflowFilter === 'ALL' ||
-      (inflowFilter === 'DIVIDENDS' && !isCashAsset) ||
-      (inflowFilter === 'INTEREST' && isCashAsset);
+    // Parse dates safely without UTC timezone skew
+    const parseDateParts = (dStr?: string | null) => {
+      if (!dStr) return null;
+      const p = dStr.split('T')[0].split('-').map(Number);
+      if (p.length < 3 || isNaN(p[0]) || isNaN(p[1]) || isNaN(p[2])) return null;
+      return new Date(p[0], p[1] - 1, p[2]);
+    };
 
-    // Determine payout month from xd_date or payment_date
-    const dateToUse = schedule.payment_date || schedule.xd_date;
-    const targetMonth = new Date(dateToUse).getMonth();
+    const xdDateObj = parseDateParts(schedule.xd_date);
+    const payDateObj = parseDateParts(schedule.payment_date);
 
-    if (matchesFilter && targetMonth >= 0 && targetMonth < 12) {
-      monthlyForecasts[targetMonth].amount += netDividend;
-      monthlyForecasts[targetMonth].details.push({
+    // Determine payout date and whether it's an estimated calculation
+    let payoutDateObj: Date;
+    let isEstimatedPayout = false;
+
+    if (payDateObj) {
+      payoutDateObj = payDateObj;
+      isEstimatedPayout = false;
+    } else if (xdDateObj) {
+      payoutDateObj = new Date(xdDateObj.getFullYear(), xdDateObj.getMonth(), xdDateObj.getDate());
+      const daysToAdd = isCashAsset ? 0 : isUS ? 14 : 20;
+      payoutDateObj.setDate(payoutDateObj.getDate() + daysToAdd);
+      isEstimatedPayout = !isCashAsset;
+    } else {
+      return;
+    }
+
+    const itemYear = payoutDateObj.getFullYear();
+    const targetMonth = payoutDateObj.getMonth();
+    const diffPay = Math.ceil((payoutDateObj.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    // 1. Prior Year Accumulation for Historical Comparison & Special Dividend Inspection
+    if (itemYear === currentYear - 1 || diffPay < -365) {
+      priorYearTotalNetDividend += netDividend;
+      priorYearDetails.push({
         scheduleId: schedule.id,
         assetId: schedule.asset_id,
         symbol: parentAsset.symbol,
@@ -423,45 +470,104 @@ export const Dashboard: React.FC<DashboardProps> = ({
         shares: eligibleShares,
         netAmount: netDividend,
         xdDate: schedule.xd_date,
+        paymentDate: schedule.payment_date || payoutDateObj.toISOString().split('T')[0],
         isInterest: isCashAsset,
         taxRate,
-        isProjected: schedule.is_projected !== false,
-        isSpecial: specialScheduleIds.has(schedule.id),
-        daysInfo,
-        isPartialCycle,
+        isSpecial: isSpecialItem,
       });
-      projectedAnnualNetDividend += netDividend;
     }
 
-    // Check Upcoming Payday Radar (Events in next 14 days)
-    const eventDate = new Date(dateToUse);
-    eventDate.setHours(0, 0, 0, 0);
-    const diffMs = eventDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    // 2. Active 12-Month Inflow Forecast (Forward 12 months & current year cycles)
+    // Captures all scheduled payouts within the 1-year forward projection horizon
+    const isForward12Month = (diffPay >= -30 && diffPay <= 365) || (itemYear === currentYear && diffPay >= -180);
 
-    if (diffDays >= 0 && diffDays <= 14) {
+    if (isForward12Month) {
+      annualInflowByCategory[parentAsset.asset_type] += netDividend;
+      annualInflowByAsset[parentAsset.id] = (annualInflowByAsset[parentAsset.id] || 0) + netDividend;
+
+      const matchesFilter =
+        inflowFilter === 'ALL' ||
+        (inflowFilter === 'DIVIDENDS' && !isCashAsset) ||
+        (inflowFilter === 'INTEREST' && isCashAsset);
+
+      if (matchesFilter && targetMonth >= 0 && targetMonth < 12) {
+        monthlyForecasts[targetMonth].amount += netDividend;
+        monthlyForecasts[targetMonth].details.push({
+          scheduleId: schedule.id,
+          assetId: schedule.asset_id,
+          symbol: parentAsset.symbol,
+          dpu,
+          currency: isCashAsset ? 'THB' : isUS ? 'USD' : 'THB',
+          shares: eligibleShares,
+          netAmount: netDividend,
+          xdDate: schedule.xd_date,
+          isInterest: isCashAsset,
+          taxRate,
+          isProjected: schedule.is_projected !== false,
+          isSpecial: isSpecialItem,
+          daysInfo,
+          isPartialCycle,
+        });
+        projectedAnnualNetDividend += netDividend;
+      }
+    }
+
+    // 3. Upcoming Payday Radar (Events in next 30 days)
+    // Check XD Event (if upcoming in next 30 days and not yet passed)
+    if (xdDateObj) {
+      const diffXd = Math.ceil((xdDateObj.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffXd >= 0 && diffXd <= 30) {
+        upcomingList.push({
+          scheduleId: schedule.id,
+          assetId: schedule.asset_id,
+          symbol: parentAsset.symbol,
+          assetType: parentAsset.asset_type,
+          dateStr: schedule.xd_date,
+          diffDays: diffXd,
+          amount: netDividend,
+          isInterest: isCashAsset,
+          typeLabel: 'XD',
+          dpu,
+          shares: eligibleShares,
+          currency: isCashAsset ? 'THB' : isUS ? 'USD' : 'THB',
+          taxRate,
+          isProjected: schedule.is_projected !== false,
+          isSpecial: isSpecialItem,
+          dateDisplay: `${xdDateObj.getDate()} ${MONTH_NAMES[xdDateObj.getMonth()]}`,
+        });
+      }
+    }
+
+    // Check Payout Event (Payment date or estimated payout in next 30 days or recent 1 day past)
+    if (diffPay >= -1 && diffPay <= 30) {
+      const pDay = payoutDateObj.getDate();
+      const pMonth = MONTH_NAMES[payoutDateObj.getMonth()];
+      const dateDisplay = isEstimatedPayout ? `~${pDay} ${pMonth}` : `${pDay} ${pMonth}`;
+
       upcomingList.push({
         scheduleId: schedule.id,
         assetId: schedule.asset_id,
         symbol: parentAsset.symbol,
         assetType: parentAsset.asset_type,
-        dateStr: dateToUse,
-        diffDays,
+        dateStr: schedule.payment_date || payoutDateObj.toISOString().split('T')[0],
+        diffDays: diffPay,
         amount: netDividend,
         isInterest: isCashAsset,
-        typeLabel: schedule.payment_date ? 'PAY' : 'XD',
+        typeLabel: 'PAY',
         dpu,
         shares: eligibleShares,
         currency: isCashAsset ? 'THB' : isUS ? 'USD' : 'THB',
         taxRate,
         isProjected: schedule.is_projected !== false,
-        isSpecial: specialScheduleIds.has(schedule.id),
+        isSpecial: isSpecialItem,
+        isEstimatedDate: isEstimatedPayout,
+        dateDisplay,
       });
-    } else if (diffDays > 14 && diffDays < minFutureDiffDays) {
-      minFutureDiffDays = diffDays;
+    } else if (diffPay > 30 && diffPay < minFutureDiffDays) {
+      minFutureDiffDays = diffPay;
       nextClosestSchedule = {
         symbol: parentAsset.symbol,
-        daysText: `อีก ${diffDays} วัน`,
+        daysText: `อีก ${diffPay} วัน`,
         amount: netDividend,
       };
     }
@@ -483,6 +589,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const formatMoney = (amount: number, digits: number = 2): string => {
     if (isPrivateMode) return '฿••••••';
     return `฿${amount.toLocaleString('th-TH', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+  };
+
+  // 1-Click Payday Confirmation Handler
+  const handleConfirmPayment = (item: UpcomingSchedule) => {
+    const scheduleId = item.scheduleId;
+    if (!scheduleId) return;
+    const amountStr = formatMoney(item.amount);
+    Alert.alert(
+      'ยืนยันเงินปันผลเข้าบัญชี',
+      `ยืนยันว่าได้รับเงินปันผลสุทธิ ${amountStr} (${item.symbol}) เข้าบัญชีเรียบร้อยแล้วใช่หรือไม่?`,
+      [
+        { text: 'ยกเลิก', style: 'cancel' },
+        {
+          text: 'ยืนยันเงินเข้าแล้ว',
+          onPress: async () => {
+            try {
+              const todayStr = new Date().toISOString().split('T')[0];
+              const { error } = await supabase
+                .from('dividend_schedules')
+                .update({
+                  payment_date: todayStr,
+                  is_projected: false,
+                })
+                .eq('id', scheduleId);
+
+              if (error) throw error;
+              loadData(true);
+            } catch (err: any) {
+              Alert.alert('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถยืนยันได้');
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Max value for bar chart normalization
@@ -529,6 +669,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           inflowFilter={inflowFilter}
           isPrivateMode={isPrivateMode}
           onTogglePrivateMode={togglePrivateMode}
+          priorYearAnnualNetDividend={priorYearTotalNetDividend}
+          onOpenAnnualComparison={() => setIsAnnualComparisonVisible(true)}
           formatMoney={formatMoney}
         />
 
@@ -637,11 +779,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </View>
         </View>
 
-        {/* Mini Payday Radar (Events in next 14 days) */}
+        {/* Mini Payday Radar (Events in next 30 days) */}
         <UpcomingPaydayRadar
           upcomingList={upcomingList}
           fallbackClosest={fallbackClosest}
           formatMoney={formatMoney}
+          onConfirmPayment={handleConfirmPayment}
           onSelectSchedule={(item) => {
             if (!item.scheduleId || !item.assetId) return;
             setSelectedScheduleForAdjust({
@@ -978,6 +1121,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onSuccess={() => {
           loadData(true);
         }}
+      />
+
+      {/* 10. Annual YoY Comparison & Historical Breakdown Sheet */}
+      <AnnualComparisonSheet
+        visible={isAnnualComparisonVisible}
+        onClose={() => setIsAnnualComparisonVisible(false)}
+        currentYear={currentYear}
+        currentYearTotal={projectedAnnualNetDividend}
+        priorYearTotal={priorYearTotalNetDividend}
+        priorYearItems={priorYearDetails}
+        formatMoney={formatMoney}
       />
     </SafeAreaView>
   );

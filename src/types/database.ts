@@ -108,6 +108,7 @@ export interface Database {
           xd_date: string;
           payment_date: string | null;
           is_projected: boolean;
+          is_special?: boolean;
           created_at: string;
         };
         Insert: {
@@ -117,6 +118,7 @@ export interface Database {
           xd_date: string;
           payment_date?: string | null;
           is_projected?: boolean;
+          is_special?: boolean;
           created_at?: string;
         };
         Update: {
@@ -126,8 +128,10 @@ export interface Database {
           xd_date?: string;
           payment_date?: string | null;
           is_projected?: boolean;
+          is_special?: boolean;
           created_at?: string;
         };
+
         Relationships: [
           {
             foreignKeyName: 'dividend_schedules_asset_id_fkey';
