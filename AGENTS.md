@@ -53,7 +53,4 @@ Read BRIEF.md before doing anything. It is the single source of truth and contai
 - For User Authentication and Portfolio Isolation, use `AuthScreen.tsx`, `authService.ts`, and Supabase Row Level Security (RLS) to ensure absolute data isolation between users. On sign out, clear local AsyncStorage portfolio cache and user display name, returning users cleanly to the login screen with password recovery and 1-click demo portfolio access.
 - For Time-of-Day English Greetings, use `userService.ts` to compute dynamic greetings (`Good morning ☀️` / `Good afternoon 🌤️` / `Good evening 🌙, [Name]`), reading user display names from Supabase auth metadata and AsyncStorage with graceful email prefix fallback, paired with a right-aligned sign-out door icon button (`[ 🚪 ]`) on `Dashboard.tsx`.
 - For Authentication UX, keyboard ergonomics, and spam prevention (`AuthScreen.tsx`), provide smart duplicate email guidance with a 1-tap recovery redirection button, enforce a 60-second anti-spam cooldown timer on password reset requests, eliminate vertical centering (`justifyContent: 'center'`) in ScrollView content with a `paddingBottom: 160` buffer and tap-outside dismissal to prevent keyboard obstruction, and guard all auth operations with offline connectivity error alerts.
-
-
-
-
+- ห้ามเพิ่ม license header ในไฟล์โค้ด มีแค่ไฟล์ LICENSE ที่ root

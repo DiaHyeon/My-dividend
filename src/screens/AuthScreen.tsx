@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { signInWithEmail, signUpWithEmail, resetPasswordForEmail, signInWithDemo } from '../services/authService';
+import { signInWithEmail, signUpWithEmail, resetPasswordForEmail } from '../services/authService';
 import { setUserDisplayName } from '../services/userService';
 
 type AuthMode = 'SIGN_IN' | 'SIGN_UP' | 'FORGOT_PASSWORD';
@@ -27,7 +27,6 @@ export const AuthScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [demoLoading, setDemoLoading] = useState(false);
   const [resetCooldown, setResetCooldown] = useState<number>(0);
 
   // ตัวนับถอยหลัง Cooldown 60 วินาที สำหรับป้องกันการสแปมส่งอีเมลรีเซ็ตรหัสผ่าน
@@ -198,31 +197,6 @@ export const AuthScreen: React.FC = () => {
     }
   };
 
-  // เข้าสู่ระบบด้วยบัญชีพอร์ตทดลองทันที (1-Click Demo)
-  const handleDemoSignIn = async () => {
-    setDemoLoading(true);
-    try {
-      const { session, error } = await signInWithDemo();
-      if (error) {
-        const errorMsg = error.message || '';
-        if (isNetworkError(errorMsg)) {
-          Alert.alert('โหมดออฟไลน์', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่ายก่อนเข้าสู่พอร์ตทดลองครับ');
-        } else {
-          Alert.alert('เข้าสู่พอร์ตทดลองไม่สำเร็จ', errorMsg || 'ไม่พบบัญชีพอร์ตทดลองในระบบ');
-        }
-      }
-    } catch (err: any) {
-      const msg = err.message || '';
-      if (isNetworkError(msg)) {
-        Alert.alert('โหมดออฟไลน์', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่ายก่อนเข้าสู่พอร์ตทดลองครับ');
-      } else {
-        Alert.alert('เกิดข้อผิดพลาด', msg || 'ไม่สามารถเข้าสู่พอร์ตทดลองได้');
-      }
-    } finally {
-      setDemoLoading(false);
-    }
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -362,7 +336,7 @@ export const AuthScreen: React.FC = () => {
                   ? handleSignUp
                   : handleForgotPassword
               }
-              disabled={loading || demoLoading || (mode === 'FORGOT_PASSWORD' && resetCooldown > 0)}
+              disabled={loading || (mode === 'FORGOT_PASSWORD' && resetCooldown > 0)}
               activeOpacity={0.8}
             >
               {loading ? (
@@ -391,36 +365,6 @@ export const AuthScreen: React.FC = () => {
               </TouchableOpacity>
             )}
           </View>
-
-          {/* Quick Demo Access Divider & Button */}
-          {mode === 'SIGN_IN' && (
-            <View style={styles.demoSection}>
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>หรือ</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <TouchableOpacity
-                style={styles.demoButton}
-                onPress={handleDemoSignIn}
-                disabled={loading || demoLoading}
-                activeOpacity={0.8}
-              >
-                {demoLoading ? (
-                  <ActivityIndicator color="#10B981" size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="sparkles" size={18} color="#10B981" />
-                    <Text style={styles.demoButtonText}>เข้าสู่พอร์ตทดลอง (Demo Portfolio)</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-              <Text style={styles.demoHintText}>
-                พอร์ตสาธิต 10 สินทรัพย์ (MCD, KO, CPALL, Kplus ฯลฯ)
-              </Text>
-            </View>
-          )}
 
           {/* Data Isolation & Security Guarantee Badge */}
           <View style={styles.securityBadge}>
@@ -582,46 +526,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#94A3B8',
-  },
-  demoSection: {
-    marginTop: 16,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 12,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#334155',
-  },
-  dividerText: {
-    fontSize: 12,
-    color: '#64748B',
-    paddingHorizontal: 12,
-  },
-  demoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderRadius: 12,
-    height: 46,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-  },
-  demoButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#10B981',
-  },
-  demoHintText: {
-    fontSize: 11,
-    color: '#64748B',
-    textAlign: 'center',
-    marginTop: 6,
   },
   securityBadge: {
     flexDirection: 'row',
