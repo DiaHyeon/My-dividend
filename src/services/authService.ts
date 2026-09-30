@@ -104,7 +104,7 @@ export async function signUpWithEmail(
   email: string,
   pass: string,
   displayName?: string
-): Promise<{ user: User | null; error: Error | null }> {
+): Promise<{ user: User | null; session: Session | null; error: Error | null }> {
   try {
     const trimmedEmail = email.trim();
     const { data, error } = await supabase.auth.signUp({
@@ -112,9 +112,9 @@ export async function signUpWithEmail(
       password: pass,
       options: displayName ? { data: { display_name: displayName.trim() } } : undefined,
     });
-    return { user: data.user, error: error ? new Error(error.message) : null };
+    return { user: data.user, session: data.session, error: error ? new Error(error.message) : null };
   } catch (err: any) {
-    return { user: null, error: err };
+    return { user: null, session: null, error: err };
   }
 }
 

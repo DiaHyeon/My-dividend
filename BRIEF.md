@@ -489,7 +489,10 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - Dark mode FinTech UI matching `#0F172A` theme.
   - **Sign In**: Email & Password validation with password visibility toggle.
   - **Sign Up**: Custom Display Name input (`user_metadata.display_name`) + Email + Password.
-  - **Forgot Password**: One-tap password reset request dispatching verification links to user's email via Supabase Auth (`resetPasswordForEmail`).
+  - **Forgot Password & 60s Anti-Spam Cooldown**: One-tap password reset request dispatching verification links to user's email via Supabase Auth (`resetPasswordForEmail`) with a 60-second client countdown timer disabling the submit button to prevent spam and rate-limit exhaustion.
+  - **Smart Duplicate Email Guidance**: When sign-up detects an existing registered email, displays an interactive Thai alert dialog with a 1-tap "กู้คืนบัญชีนี้" action button that automatically switches to the recovery tab and pre-fills the email address for seamless account reclaiming.
+  - **Keyboard Avoidance Architecture**: Eliminates vertical centering (`justifyContent: 'center'`) inside the ScrollView, applies a generous `paddingBottom: 160` scroll buffer, integrates `TouchableWithoutFeedback` for tap-outside keyboard dismissal, and sets `behavior="height"` with `keyboardVerticalOffset={24}` on Android, ensuring password fields and action buttons are never obscured.
+  - **Offline Resilience & Network Guarding**: Detects offline/network failures during sign-in, sign-up, password reset, and demo access, displaying clear, non-technical Thai guidance alerts (`Alert.alert('โหมดออฟไลน์', ...)`) rather than generic error codes.
   - **1-Click Demo Portfolio Access**: Instant sign-in shortcut into the 10-asset demonstration portfolio (`demo@mydividend.app` / `Password123!`).
 - **Hygiene & Cache Clearance on Sign Out**:
   - Tapping the right-aligned exit door button (`[ 🚪 ]` `log-out-outline`) prompts native confirmation dialog.

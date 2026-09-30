@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,6 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +28,25 @@ export const AuthScreen: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
+  const [resetCooldown, setResetCooldown] = useState<number>(0);
+
+  // ตัวนับถอยหลัง Cooldown 60 วินาที สำหรับป้องกันการสแปมส่งอีเมลรีเซ็ตรหัสผ่าน
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (resetCooldown > 0) {
+      timer = setInterval(() => {
+        setResetCooldown((prev) => (prev > 1 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [resetCooldown]);
+
+  const isNetworkError = (msg: string) => {
+    const m = msg.toLowerCase();
+    return m.includes('network') || m.includes('fetch') || m.includes('failed to fetch') || m.includes('connection');
+  };
 
   // เข้าสู่ระบบด้วย Email & Password
   const handleSignIn = async () => {
@@ -38,10 +59,25 @@ export const AuthScreen: React.FC = () => {
     try {
       const { session, error } = await signInWithEmail(email.trim(), password);
       if (error) {
-        Alert.alert('เข้าสู่ระบบไม่สำเร็จ', error.message || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+        const errorMsg = error.message || '';
+        if (isNetworkError(errorMsg)) {
+          Alert.alert('โหมดออฟไลน์', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่ายก่อนเข้าสู่ระบบครับ');
+        } else if (errorMsg.toLowerCase().includes('email not confirmed')) {
+          Alert.alert(
+            'กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ ✉️',
+            `ระบบของ Supabase ได้ส่งลิงก์ยืนยันไปยัง ${email.trim()} เรียบร้อยแล้ว\n\n1. กรุณาเปิดกล่องจดหมายของคุณ (หรือโฟลเดอร์จดหมายขยะ/Spam)\n2. กดลิงก์ยืนยันในอีเมล 1 ครั้ง\n3. กลับมากด "เข้าสู่ระบบ" ได้ทันทีครับ\n\n💡 หมายเหตุ: หากต้องการให้สมัครแล้วเข้าได้ทันทีโดยไม่ต้องรอยืนยันอีเมล สามารถปิดการตั้งค่า "Confirm email" ได้ใน Supabase Dashboard`
+          );
+        } else {
+          Alert.alert('เข้าสู่ระบบไม่สำเร็จ', errorMsg || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+        }
       }
     } catch (err: any) {
-      Alert.alert('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถเข้าสู่ระบบได้');
+      const msg = err.message || '';
+      if (isNetworkError(msg)) {
+        Alert.alert('โหมดออฟไลน์', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่ายก่อนเข้าสู่ระบบครับ');
+      } else {
+        Alert.alert('เกิดข้อผิดพลาด', msg || 'ไม่สามารถเข้าสู่ระบบได้');
+      }
     } finally {
       setLoading(false);
     }
@@ -62,30 +98,70 @@ export const AuthScreen: React.FC = () => {
     setLoading(true);
     try {
       const nameToSave = displayName.trim() || email.split('@')[0];
-      const { user, error } = await signUpWithEmail(email.trim(), password, nameToSave);
+      const { user, session, error } = await signUpWithEmail(email.trim(), password, nameToSave);
 
       if (error) {
-        Alert.alert('สร้างบัญชีไม่สำเร็จ', error.message || 'ไม่สามารถสร้างบัญชีได้');
+        const errorMsg = error.message || '';
+        if (isNetworkError(errorMsg)) {
+          Alert.alert('โหมดออฟไลน์', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่ายก่อนสร้างบัญชีครับ');
+        } else if (
+          errorMsg.toLowerCase().includes('already registered') ||
+          errorMsg.toLowerCase().includes('already in use')
+        ) {
+          Alert.alert(
+            'อีเมลนี้มีอยู่ในระบบแล้ว 💡',
+            `อีเมล ${email.trim()} ถูกลงทะเบียนไว้แล้ว หากนี่คืออีเมลของคุณและคุณจำรหัสผ่านไม่ได้ สามารถกด "กู้คืนบัญชีนี้" เพื่อรับลิงก์ตั้งรหัสผ่านเข้าใช้งานได้ทันทีครับ`,
+            [
+              { text: 'ใช้อีเมลอื่น', style: 'cancel' },
+              {
+                text: 'กู้คืนบัญชีนี้',
+                onPress: () => {
+                  setMode('FORGOT_PASSWORD');
+                },
+              },
+            ]
+          );
+        } else {
+          Alert.alert('สร้างบัญชีไม่สำเร็จ', errorMsg || 'ไม่สามารถสร้างบัญชีได้');
+        }
       } else if (user) {
         if (nameToSave) {
           await setUserDisplayName(nameToSave);
         }
-        Alert.alert(
-          'สมัครสมาชิกสำเร็จ 🎉',
-          'บัญชีของคุณถูกสร้างเรียบร้อยแล้วและระบบได้เข้าสู่ระบบพอร์ตส่วนตัวของคุณแล้ว'
-        );
+        if (session) {
+          Alert.alert(
+            'สมัครสมาชิกสำเร็จ 🎉',
+            'ยินดีต้อนรับ! บัญชีของคุณถูกสร้างเรียบร้อยแล้วและเข้าสู่ระบบพอร์ตส่วนตัวของคุณแล้ว'
+          );
+        } else {
+          Alert.alert(
+            'สร้างบัญชีเรียบร้อยแล้ว ✉️',
+            `ระบบได้ส่งอีเมลยืนยันไปยัง ${email.trim()} เรียบร้อยแล้ว กรุณาเปิดอีเมล (หรือดูในโฟลเดอร์ Spam/จดหมายขยะ) และกดปุ่มยืนยันก่อนเข้าสู่ระบบครับ`,
+            [{ text: 'ไปหน้าเข้าสู่ระบบ', onPress: () => setMode('SIGN_IN') }]
+          );
+        }
       }
     } catch (err: any) {
-      Alert.alert('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถสร้างบัญชีได้');
+      const msg = err.message || '';
+      if (isNetworkError(msg)) {
+        Alert.alert('โหมดออฟไลน์', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่ายก่อนสร้างบัญชีครับ');
+      } else {
+        Alert.alert('เกิดข้อผิดพลาด', msg || 'ไม่สามารถสร้างบัญชีได้');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // ขอรีเซ็ตรหัสผ่าน (ลืมรหัสผ่าน)
+  // ขอรีเซ็ตรหัสผ่าน (ลืมรหัสผ่าน) พร้อมระบบ Cooldown ป้องกันการสแปม
   const handleForgotPassword = async () => {
     if (!email.trim()) {
       Alert.alert('กรุณาระบุอีเมล', 'กรุณากรอกอีเมลของคุณเพื่อรับลิงก์ตั้งรหัสผ่านใหม่');
+      return;
+    }
+
+    if (resetCooldown > 0) {
+      Alert.alert('กรุณารอสักครู่', `กรุณารออีก ${resetCooldown} วินาที ก่อนส่งคำขอใหม่อีกครั้ง`);
       return;
     }
 
@@ -93,16 +169,30 @@ export const AuthScreen: React.FC = () => {
     try {
       const { error } = await resetPasswordForEmail(email.trim());
       if (error) {
-        Alert.alert('ไม่สามารถส่งคำขอได้', error.message || 'เกิดข้อผิดพลาดในการส่งลิงก์');
+        const errLower = (error.message || '').toLowerCase();
+        if (isNetworkError(errLower)) {
+          Alert.alert('โหมดออฟไลน์', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่ายก่อนส่งคำขอครับ');
+        } else if (errLower.includes('rate limit') || errLower.includes('60 seconds')) {
+          setResetCooldown(60);
+          Alert.alert('คำขอถี่เกินไป', 'ระบบอนุญาตให้ส่งลิงก์ได้ทุกๆ 60 วินาที กรุณารอสักครู่ก่อนลองใหม่');
+        } else {
+          Alert.alert('ไม่สามารถส่งคำขอได้', error.message || 'เกิดข้อผิดพลาดในการส่งลิงก์');
+        }
       } else {
+        setResetCooldown(60); // เริ่ม Cooldown 60 วินาทีทันทีที่ส่งสำเร็จ
         Alert.alert(
           'ส่งลิงก์เรียบร้อยแล้ว 📩',
           `ระบบได้ส่งลิงก์สำหรับรีเซ็ตรหัสผ่านไปยัง ${email.trim()} เรียบร้อยแล้ว กรุณาตรวจสอบกล่องจดหมายของคุณ`,
-          [{ text: 'ตกลง', onPress: () => setMode('SIGN_IN') }]
+          [{ text: 'ไปหน้าเข้าสู่ระบบ', onPress: () => setMode('SIGN_IN') }]
         );
       }
     } catch (err: any) {
-      Alert.alert('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถส่งลิงก์ได้');
+      const msg = err.message || '';
+      if (isNetworkError(msg)) {
+        Alert.alert('โหมดออฟไลน์', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่ายก่อนส่งคำขอครับ');
+      } else {
+        Alert.alert('เกิดข้อผิดพลาด', msg || 'ไม่สามารถส่งลิงก์ได้');
+      }
     } finally {
       setLoading(false);
     }
@@ -114,10 +204,20 @@ export const AuthScreen: React.FC = () => {
     try {
       const { session, error } = await signInWithDemo();
       if (error) {
-        Alert.alert('เข้าสู่พอร์ตทดลองไม่สำเร็จ', error.message || 'ไม่พบบัญชีพอร์ตทดลองในระบบ');
+        const errorMsg = error.message || '';
+        if (isNetworkError(errorMsg)) {
+          Alert.alert('โหมดออฟไลน์', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่ายก่อนเข้าสู่พอร์ตทดลองครับ');
+        } else {
+          Alert.alert('เข้าสู่พอร์ตทดลองไม่สำเร็จ', errorMsg || 'ไม่พบบัญชีพอร์ตทดลองในระบบ');
+        }
       }
     } catch (err: any) {
-      Alert.alert('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถเข้าสู่พอร์ตทดลองได้');
+      const msg = err.message || '';
+      if (isNetworkError(msg)) {
+        Alert.alert('โหมดออฟไลน์', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่ายก่อนเข้าสู่พอร์ตทดลองครับ');
+      } else {
+        Alert.alert('เกิดข้อผิดพลาด', msg || 'ไม่สามารถเข้าสู่พอร์ตทดลองได้');
+      }
     } finally {
       setDemoLoading(false);
     }
@@ -126,14 +226,17 @@ export const AuthScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
         style={styles.keyboardView}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
           {/* Logo & App Title */}
           <View style={styles.brandHeader}>
             <View style={styles.logoBadge}>
@@ -247,7 +350,11 @@ export const AuthScreen: React.FC = () => {
 
             {/* Submit Action Button */}
             <TouchableOpacity
-              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+              style={[
+                styles.submitButton,
+                (loading || (mode === 'FORGOT_PASSWORD' && resetCooldown > 0)) &&
+                  styles.submitButtonDisabled,
+              ]}
               onPress={
                 mode === 'SIGN_IN'
                   ? handleSignIn
@@ -255,7 +362,7 @@ export const AuthScreen: React.FC = () => {
                   ? handleSignUp
                   : handleForgotPassword
               }
-              disabled={loading || demoLoading}
+              disabled={loading || demoLoading || (mode === 'FORGOT_PASSWORD' && resetCooldown > 0)}
               activeOpacity={0.8}
             >
               {loading ? (
@@ -264,7 +371,10 @@ export const AuthScreen: React.FC = () => {
                 <Text style={styles.submitButtonText}>
                   {mode === 'SIGN_IN' && 'เข้าสู่ระบบ'}
                   {mode === 'SIGN_UP' && 'สร้างบัญชีและเริ่มใช้งาน'}
-                  {mode === 'FORGOT_PASSWORD' && 'ส่งลิงก์รีเซ็ตรหัสผ่าน'}
+                  {mode === 'FORGOT_PASSWORD' &&
+                    (resetCooldown > 0
+                      ? `ส่งใหม่อีกครั้งได้ใน (${resetCooldown}s)`
+                      : 'ส่งลิงก์รีเซ็ตรหัสผ่าน')}
                 </Text>
               )}
             </TouchableOpacity>
@@ -320,8 +430,9 @@ export const AuthScreen: React.FC = () => {
             </Text>
           </View>
         </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
+  </SafeAreaView>
   );
 };
 
@@ -336,13 +447,13 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 20,
-    paddingTop: 30,
-    paddingBottom: 40,
-    justifyContent: 'center',
+    paddingTop: 16,
+    paddingBottom: 160,
   },
   brandHeader: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
+    marginTop: 10,
   },
   logoBadge: {
     width: 64,
