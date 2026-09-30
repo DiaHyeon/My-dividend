@@ -1,18 +1,20 @@
-// บริการจัดการยืนยันตัวตน (Authentication Service) และเซสชันผู้ใช้งาน พร้อมระบบเชื่อมต่อบัญชีทดสอบอัตโนมัติอย่างปลอดภัย
+// บริการจัดการยืนยันตัวตน (Authentication Service) และเซสชันผู้ใช้งาน พร้อมระบบเชื่อมต่อบัญชีทดสอบและกู้คืนรหัสผ่าน
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { clearPortfolioCache } from './portfolioCacheService';
+import { USER_NAME_STORAGE_KEY } from './userService';
 
 const DEMO_EMAIL = process.env.EXPO_PUBLIC_DEMO_EMAIL || 'demo@mydividend.app';
-const DEMO_PASSWORD = process.env.EXPO_PUBLIC_DEMO_PASSWORD || '';
+const DEMO_PASSWORD = process.env.EXPO_PUBLIC_DEMO_PASSWORD || 'Password123!';
 
 let authInitPromise: Promise<Session | null> | null = null;
 
 /**
- * ตรวจสอบเซสชันปัจจุบัน และหากยังไม่มี จะทำการล็อกอินเข้าสู่ระบบบัญชีทดสอบอัตโนมัติ
+ * ตรวจสอบเซสชันปัจจุบันของผู้ใช้งาน
  * พร้อมระบบ De-duplication เพื่อป้องกันไม่ให้ยิง Request ซ้อนกันหลายครั้งเมื่อเปิดแอป
  */
 export async function ensureAuthenticated(): Promise<Session | null> {
-  // หากมี Promise ที่กำลังทำงานอยู่แล้ว ให้ใช้ร่วมกันทันที (ป้องกัน Concurrency race condition)
   if (authInitPromise) {
     return authInitPromise;
   }
@@ -26,22 +28,6 @@ export async function ensureAuthenticated(): Promise<Session | null> {
 
       if (!sessionError && session) {
         return session;
-      }
-
-      // หากยังไม่มีเซสชันและมีการกำหนดรหัสบัญชีทดสอบไว้ใน .env
-      if (DEMO_EMAIL && DEMO_PASSWORD) {
-        const { data: signInData, error: signInError } =
-          await supabase.auth.signInWithPassword({
-            email: DEMO_EMAIL,
-            password: DEMO_PASSWORD,
-          });
-
-        if (signInError) {
-          console.warn('[AuthService] Auto demo sign-in notice:', signInError.message);
-          return null;
-        }
-
-        return signInData.session;
       }
 
       return null;
@@ -87,7 +73,7 @@ export async function getCurrentUser(): Promise<User | null> {
 }
 
 /**
- * ฟังก์ชันเข้าสู่ระบบด้วยอีเมลและรหัสผ่าน (พร้อมรองรับหน้า Login ในอนาคต)
+ * ฟังก์ชันเข้าสู่ระบบด้วยอีเมลและรหัสผ่าน
  */
 export async function signInWithEmail(
   email: string,
@@ -105,16 +91,26 @@ export async function signInWithEmail(
 }
 
 /**
- * ฟังก์ชันสมัครสมาชิกใหม่ (พร้อมรองรับหน้า Register ในอนาคต)
+ * ฟังก์ชันเข้าสู่ระบบพอร์ตทดลองทันที (1-Click Demo Sign In)
+ */
+export async function signInWithDemo(): Promise<{ session: Session | null; error: Error | null }> {
+  return signInWithEmail(DEMO_EMAIL, DEMO_PASSWORD);
+}
+
+/**
+ * ฟังก์ชันสมัครสมาชิกใหม่ พร้อมบันทึกชื่อที่แสดง (Display Name)
  */
 export async function signUpWithEmail(
   email: string,
-  pass: string
+  pass: string,
+  displayName?: string
 ): Promise<{ user: User | null; error: Error | null }> {
   try {
+    const trimmedEmail = email.trim();
     const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
+      email: trimmedEmail,
       password: pass,
+      options: displayName ? { data: { display_name: displayName.trim() } } : undefined,
     });
     return { user: data.user, error: error ? new Error(error.message) : null };
   } catch (err: any) {
@@ -123,11 +119,28 @@ export async function signUpWithEmail(
 }
 
 /**
- * ออกจากระบบ
+ * ฟังก์ชันส่งอีเมลสำหรับกู้คืนรหัสผ่าน (Forgot Password)
+ */
+export async function resetPasswordForEmail(
+  email: string
+): Promise<{ error: Error | null }> {
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+    return { error: error ? new Error(error.message) : null };
+  } catch (err: any) {
+    return { error: err };
+  }
+}
+
+/**
+ * ออกจากระบบ และล้างข้อมูลแคชพอร์ตในเครื่องทั้งหมดเพื่อความปลอดภัยและความเป็นส่วนตัว
  */
 export async function signOut(): Promise<{ error: Error | null }> {
   try {
     const { error } = await supabase.auth.signOut();
+    // ล้างแคชพอร์ตออฟไลน์และชื่อผู้ใช้ในเครื่อง เพื่อไม่ให้ผู้ใช้คนถัดไปเห็นข้อมูล
+    await clearPortfolioCache();
+    await AsyncStorage.removeItem(USER_NAME_STORAGE_KEY);
     return { error: error ? new Error(error.message) : null };
   } catch (err: any) {
     return { error: err };
@@ -142,3 +155,4 @@ export async function isDemoSession(): Promise<boolean> {
   if (!user || !user.email) return false;
   return user.email.toLowerCase() === DEMO_EMAIL.toLowerCase();
 }
+

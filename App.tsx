@@ -1,11 +1,14 @@
 import React, { Component, ReactNode, useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, LogBox, BackHandler } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, LogBox, BackHandler, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Session } from '@supabase/supabase-js';
+import { supabase } from './src/lib/supabase';
 import { Dashboard } from './src/screens/Dashboard';
 import { Portfolio } from './src/screens/Portfolio';
 import { AssetsScreen } from './src/screens/AssetsScreen';
+import { AuthScreen } from './src/screens/AuthScreen';
 import { AssetType } from './src/types/database';
 import { OfflineNoticeToast } from './src/components/OfflineNoticeToast';
 
@@ -210,10 +213,41 @@ function MainNavigator() {
 }
 
 export default function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    // ตรวจสอบเซสชันเริ่มต้น
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+
+    // ฟังเหตุการณ์เปลี่ยนแปลงสถานะการยืนยันตัวตน (Login, Logout, Token Refresh)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   return (
     <SafeAreaProvider>
       <RootErrorBoundary>
-        <MainNavigator />
+        {authLoading ? (
+          <View style={styles.authLoadingContainer}>
+            <ActivityIndicator size="large" color="#10B981" />
+          </View>
+        ) : session ? (
+          <MainNavigator />
+        ) : (
+          <AuthScreen />
+        )}
       </RootErrorBoundary>
     </SafeAreaProvider>
   );
@@ -223,6 +257,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  authLoadingContainer: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorContainer: {
     flex: 1,

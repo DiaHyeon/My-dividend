@@ -50,5 +50,8 @@ Read BRIEF.md before doing anything. It is the single source of truth and contai
 - For monthly dividend payers (`stockService.ts`), project across all 12 monthly distribution dates (`Math.min(frequency, 12)`) with safe calendar month progression avoiding 31st-day overflow.
 - For dynamic currency resolution and multi-currency integrity (`currencyService.ts`), prioritize database-persisted `currency === 'USD'`, live market metadata, and runtime symbol registry, strictly eliminating hardcoded static symbol sets (`KNOWN_US_SYMBOLS`) to support all global US assets and prevent incorrect `.BK` suffixing.
 - For timezone drift protection (`dateUtils.ts`), standardize all local date formatting on `getLocalDateString()` instead of `new Date().toISOString().split('T')[0]`, preventing the 1-day date shift bug occurring across midnight (00:00–06:59 AM UTC+7) in transaction recording, calendar modals, schedule generation, and CSV import/export.
+- For User Authentication and Portfolio Isolation, use `AuthScreen.tsx`, `authService.ts`, and Supabase Row Level Security (RLS) to ensure absolute data isolation between users. On sign out, clear local AsyncStorage portfolio cache and user display name, returning users cleanly to the login screen with password recovery and 1-click demo portfolio access.
+- For Time-of-Day English Greetings, use `userService.ts` to compute dynamic greetings (`Good morning ☀️` / `Good afternoon 🌤️` / `Good evening 🌙, [Name]`), reading user display names from Supabase auth metadata and AsyncStorage with graceful email prefix fallback, paired with a right-aligned sign-out door icon button (`[ 🚪 ]`) on `Dashboard.tsx`.
+
 
 

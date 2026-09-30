@@ -480,6 +480,29 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
 
 ---
 
+### 4.23 User Authentication, Portfolio Isolation & Dynamic Time-of-Day Greeting
+- Handled by: `src/screens/AuthScreen.tsx`, `src/services/authService.ts`, `src/services/userService.ts`, `App.tsx`, `src/screens/Dashboard.tsx`
+- **Absolute Portfolio Data Isolation (RLS)**:
+  - Backed by Supabase PostgreSQL Row Level Security (RLS) policies checking `auth.uid() = user_id` across `assets`, `transactions`, and `dividend_schedules`.
+  - Views (`view_asset_summary`) run with `security_invoker = true`, ensuring users can never inspect or modify assets belonging to other users.
+- **Modern Authentication Flow (`AuthScreen.tsx`)**:
+  - Dark mode FinTech UI matching `#0F172A` theme.
+  - **Sign In**: Email & Password validation with password visibility toggle.
+  - **Sign Up**: Custom Display Name input (`user_metadata.display_name`) + Email + Password.
+  - **Forgot Password**: One-tap password reset request dispatching verification links to user's email via Supabase Auth (`resetPasswordForEmail`).
+  - **1-Click Demo Portfolio Access**: Instant sign-in shortcut into the 10-asset demonstration portfolio (`demo@mydividend.app` / `Password123!`).
+- **Hygiene & Cache Clearance on Sign Out**:
+  - Tapping the right-aligned exit door button (`[ 🚪 ]` `log-out-outline`) prompts native confirmation dialog.
+  - On sign-out, clears local AsyncStorage portfolio cache (`clearPortfolioCache()`) and stored display names, preventing subsequent device users from viewing previous portfolio snapshots during cold-start.
+- **Dynamic English Time-of-Day Greeting (`userService.ts`)**:
+  - Overview screen subtitle dynamically displays device time-based greetings:
+    - `Good morning, [Name] ☀️` (05:00–11:59)
+    - `Good afternoon, [Name] 🌤️` (12:00–16:59)
+    - `Good evening, [Name] 🌙` (17:00–04:59)
+  - Automatically loads custom display name, falling back to capitalized email prefix (e.g. `Somchai`) or `Investor`.
+
+---
+
 ## 5. Mobile & Network Operational Guidelines
 
 ### 5.1 Resolving Expo Go Android Runtime Crashes
@@ -549,6 +572,7 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - `screens/Dashboard.tsx`: Overview Dashboard with net worth hero card, category summary cards, payday radar, 12-month cashflow chart, and passive income goal card
   - `screens/Portfolio.tsx`: Portfolio view with asset allocation donut pie chart, white callout lines, sector breakdown, and cumulative performance benchmark comparison
   - `screens/AssetsScreen.tsx`: Holdings and transaction history management screen with search, sorting, sparkline cards, and single-row minimal dropdown filters
+  - `screens/AuthScreen.tsx`: Modern dark mode authentication screen with sign in, sign up, password reset, and 1-click demo portfolio access
   - `components/AddAssetModal.tsx`: Bottom sheet modal for adding assets, stock lookup autocomplete, USD/THB currency toggle, and live DCA detection
   - `components/EditAssetModal.tsx`: Bottom sheet modal for editing asset parameters and soft deletion
   - `components/ImportCsvModal.tsx`: Bottom sheet modal for CSV portfolio import with file picker, direct paste, smart mapping, and live validation
@@ -561,6 +585,8 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - `components/AdjustDividendModal.tsx`: Minimal bottom sheet modal for manual dividend payout adjustments, actual received verification, special dividend tagging, and DPU overrides
   - `components/AnnualComparisonSheet.tsx`: Bottom sheet modal comparing current projected annual dividend against prior year with special dividend disambiguation
   - `components/OfflineNoticeToast.tsx`: Non-intrusive floating toast capsule notifying users when offline cached data is being displayed
+  - `services/authService.ts`: Authentication service handling Supabase sessions, demo logins, password resets, and clean cache invalidation on sign-out
+  - `services/userService.ts`: User profile service managing custom display names and dynamic English time-of-day greetings
   - `services/privacyService.ts`: Global privacy state management and cross-screen masking synchronization via AsyncStorage
   - `services/portfolioCacheService.ts`: Local offline snapshot caching and instant retrieval for portfolio assets, transactions, and dividend schedules using AsyncStorage with Stale-While-Revalidate support
   - `services/taxService.ts`: Thai bank deposit interest tax calculation engine (20,000 THB annual exemption threshold)

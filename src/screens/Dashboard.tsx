@@ -28,7 +28,8 @@ import { getAllAssetCurrencies, getCachedExchangeRate, isKnownUSSymbol } from '.
 import { calculateScheduleCashPayout } from '../services/taxService';
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
 import { usePrivacyMode } from '../services/privacyService';
-import { ensureAuthenticated } from '../services/authService';
+import { ensureAuthenticated, signOut } from '../services/authService';
+import { getTimeGreeting, getUserDisplayName } from '../services/userService';
 import { syncDailyPricesIfNeeded } from '../services/priceSyncService';
 import { cleanOrphanedReminders, syncAllUpcomingXdReminders } from '../services/notificationService';
 import { calculatePortfolioReturns } from '../services/returnService';
@@ -105,7 +106,30 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [isAdjustModalVisible, setIsAdjustModalVisible] = useState<boolean>(false);
   const [specialScheduleIds, setSpecialScheduleIds] = useState<Set<string>>(new Set());
   const [isAnnualComparisonVisible, setIsAnnualComparisonVisible] = useState<boolean>(false);
+  const [userDisplayName, setUserDisplayName] = useState<string>('Investor');
 
+  const timeGreeting = getTimeGreeting();
+
+  const handleSignOut = useCallback(() => {
+    Alert.alert(
+      'ออกจากระบบ',
+      'คุณต้องการออกจากระบบและสลับบัญชีพอร์ตใช่หรือไม่?',
+      [
+        { text: 'ยกเลิก', style: 'cancel' },
+        {
+          text: 'ออกจากระบบ',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+            } catch (err: any) {
+              Alert.alert('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถออกจากระบบได้');
+            }
+          },
+        },
+      ]
+    );
+  }, []);
 
   const isUSStock = useCallback((item: AssetSummary): boolean => {
     if (item.asset_type !== 'STOCKS') return false;
@@ -120,6 +144,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const loadData = useCallback(async (forceSync = false) => {
     try {
+      // 0. Fetch user display name
+      getUserDisplayName().then((name) => setUserDisplayName(name));
+
       // 0. Instant offline cache restore for 0ms cold-start display
       const cached = await getCachedPortfolio();
       if (cached && cached.assets.length > 0) {
@@ -677,12 +704,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#059669" />
         }
       >
-        {/* Header Title */}
+        {/* Header Title & Sign Out Door Icon */}
         <View style={styles.topHeader}>
-          <View>
+          <View style={styles.headerTitleCol}>
             <Text style={styles.screenTitle}>My Dividend</Text>
-            <Text style={styles.screenSubtitle}>ภาพรวมพอร์ตและการคาดการณ์ปันผล</Text>
+            <Text style={styles.screenSubtitle}>
+              {timeGreeting.greeting}, {userDisplayName} {timeGreeting.icon}
+            </Text>
           </View>
+          <TouchableOpacity
+            style={styles.headerExitBtn}
+            onPress={handleSignOut}
+            activeOpacity={0.7}
+            accessibilityLabel="ออกจากระบบ"
+          >
+            <Ionicons name="log-out-outline" size={22} color="#DC2626" />
+          </TouchableOpacity>
         </View>
 
         {/* 1. Header: Total Portfolio Value & Dual Yield Highlight */}
@@ -1186,6 +1223,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingHorizontal: 4,
   },
+  headerTitleCol: {
+    flex: 1,
+    paddingRight: 12,
+  },
   screenTitle: {
     fontSize: 26,
     fontWeight: '800',
@@ -1196,6 +1237,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
     marginTop: 2,
+    fontWeight: '500',
+  },
+  headerExitBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FECACA',
   },
   headerRightActions: {
     flexDirection: 'row',
