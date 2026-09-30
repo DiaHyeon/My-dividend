@@ -43,3 +43,6 @@ yarn-error.*
 
 # supabase
 supabase/.temp/
+
+# security backup
+.git_backup_security/
