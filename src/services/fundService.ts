@@ -18,7 +18,6 @@ export interface FundSuggestion {
 }
 
 import { invokeStockProxy } from './proxyClient';
-const SEC_API_KEY = process.env.EXPO_PUBLIC_SEC_API_KEY || '';
 
 export type FundShareClassType = 'DIVIDEND' | 'ACCUMULATION' | 'TAX_SAVING' | 'AUTO_REDEEM' | 'GENERAL';
 
@@ -620,7 +619,7 @@ export async function fetchFundNav(
     return null;
   }
 
-  // 1. Try fetching through Supabase Edge Function
+  // Fetch through Supabase Edge Function (stock-proxy)
   try {
     const { data } = await invokeStockProxy({
       action: 'fund-nav',
@@ -635,38 +634,8 @@ export async function fetchFundNav(
         fundClassName: data.fundClassName,
       };
     }
-  } catch (err) {
-    console.warn('Edge function fund-nav notice:', err);
-  }
-
-  // 2. Fallback: Direct call to SEC Open API
-  try {
-    const targetParam = cleanSymbol
-      ? `fund_class_name=${encodeURIComponent(cleanSymbol)}`
-      : `proj_id=${encodeURIComponent(targetProjId!)}`;
-    const directUrl = `https://api.sec.or.th/v2/fund/daily-info/nav?${targetParam}&page_size=100`;
-    const secRes = await fetch(directUrl, {
-      headers: {
-        'Ocp-Apim-Subscription-Key': SEC_API_KEY,
-      },
-    });
-
-    if (secRes.ok && secRes.status !== 204) {
-      const text = await secRes.text();
-      const secData = text ? JSON.parse(text) : {};
-      const items: any[] = secData.items || [];
-      if (items.length > 0) {
-        items.sort((a, b) => (b.nav_date || '').localeCompare(a.nav_date || ''));
-        const latest = items[0];
-        return {
-          latestNav: Number(latest.last_val),
-          navDate: latest.nav_date || '',
-          fundClassName: latest.fund_class_name,
-        };
-      }
-    }
-  } catch (secErr) {
-    console.warn('Direct SEC NAV call notice:', secErr);
+  } catch (err: any) {
+    console.warn('[fundService] Edge function fund-nav notice:', err?.message || err);
   }
 
   return null;
@@ -711,29 +680,7 @@ export async function fetchFundDividendAnalysis(
     console.warn('Edge function fund-dividends notice:', err);
   }
 
-  // 2. Direct fallback to SEC Open API
-  if (items.length === 0) {
-    try {
-      const targetParam = cleanSymbol
-        ? `class_abbr_name=${encodeURIComponent(cleanSymbol)}`
-        : `proj_id=${encodeURIComponent(targetProjId!)}`;
-      const directUrl = `https://api.sec.or.th/v2/fund/daily-info/dividend-history?${targetParam}&page_size=20`;
-      const secRes = await fetch(directUrl, {
-        headers: { 'Ocp-Apim-Subscription-Key': SEC_API_KEY },
-      });
-      if (secRes.ok) {
-        if (secRes.status === 204) {
-          items = [];
-        } else {
-          const text = await secRes.text();
-          const secData = text ? JSON.parse(text) : {};
-          items = secData.items || [];
-        }
-      }
-    } catch (secErr) {
-      console.warn('Direct SEC dividend-history call notice:', secErr);
-    }
-  }
+
 
   if (items.length === 0) {
     return {
@@ -830,40 +777,29 @@ export async function fetchFundCategory(symbol: string): Promise<string | null> 
     return matched.category;
   }
 
-  // 2. Query SEC Open API profiles endpoint
-  try {
-    const directUrl = `https://api.sec.or.th/v2/fund/general-info/profiles?fund_class_name=${encodeURIComponent(clean)}&page_size=2`;
-    const res = await fetch(directUrl, {
-      headers: { 'Ocp-Apim-Subscription-Key': SEC_API_KEY },
-    });
-
-    if (res.ok && res.status !== 204) {
-      const text = await res.text();
-      if (text) {
-        const data = JSON.parse(text);
-        if (data.items && data.items.length > 0) {
-          const item = data.items[0];
-          const desc = (item.policy_desc || '').trim();
-          const isForeign = item.invest_country_flag === 1 || !!item.feederfund_master_fund;
-
-          if (desc.includes('ตราสารหนี้')) {
-            return isForeign ? 'Foreign' : 'FixedIncome';
-          }
-          if (desc.includes('ตราสารทุน')) {
-            return isForeign ? 'Foreign' : 'Equity';
-          }
-          if (desc.includes('ผสม')) return 'Mixed';
-          if (desc.includes('อสังหา')) return 'Property';
-          if (desc.includes('โภคภัณฑ์') || desc.includes('ทอง') || desc.includes('น้ำมัน')) return 'Commodity';
-          if (desc.includes('ตลาดเงิน')) return 'MoneyMarket';
-          if (isForeign) return 'Foreign';
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('fetchFundCategory notice:', err);
+  // 2. Keyword heuristic fallback based on standard Thai mutual fund naming conventions
+  if (clean.includes('BOND') || clean.includes('FIXED') || clean.includes('DEBT') || clean.includes('PLUS') || clean.includes('GOV') || clean.includes('TREASURY')) {
+    return 'FixedIncome';
+  }
+  if (clean.includes('EQ') || clean.includes('DIV') || clean.includes('SET') || clean.includes('INDEX') || clean.includes('GROWTH')) {
+    return 'Equity';
+  }
+  if (clean.includes('MIX') || clean.includes('BALANCED') || clean.includes('MULTI') || clean.includes('TARGET')) {
+    return 'Mixed';
+  }
+  if (clean.includes('PROP') || clean.includes('INFRA') || clean.includes('REIT') || clean.includes('ESTATE')) {
+    return 'Property';
+  }
+  if (clean.includes('GOLD') || clean.includes('OIL') || clean.includes('COMMODITY') || clean.includes('SILVER')) {
+    return 'Commodity';
+  }
+  if (clean.includes('CASH') || clean.includes('MONEY') || clean.includes('LIQUID')) {
+    return 'MoneyMarket';
+  }
+  if (clean.includes('FIF') || clean.includes('US') || clean.includes('GLOBAL') || clean.includes('CHINA') || clean.includes('TECH') || clean.includes('WORLD') || clean.includes('ASIA') || clean.includes('EUROPE') || clean.includes('INDIA') || clean.includes('JAPAN')) {
+    return 'Foreign';
   }
 
-  return null;
+  return 'Other';
 }
 

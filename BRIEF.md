@@ -28,7 +28,7 @@ Technical specification and system architecture document for the My dividend app
 ```bash
 EXPO_PUBLIC_SUPABASE_URL=https://ycflookcrilaujmeillt.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription key
+# SEC_API_KEY is securely configured on Supabase Edge Function Secrets (never exposed to client bundle)
 ```
 
 ---

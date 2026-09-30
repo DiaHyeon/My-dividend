@@ -3,7 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AssetSummary } from '../types/database';
 
 const CACHE_PREFIX = '@sparkline_7d_';
-const SEC_API_KEY = process.env.EXPO_PUBLIC_SEC_API_KEY || '';
 import { invokeStockProxy } from './proxyClient';
 import { isKnownUSSymbol } from './currencyService';
 
@@ -254,48 +253,21 @@ async function fetchYahoo7DayCloses(symbol: string, currency?: string): Promise<
  * ดึงค่า NAV ย้อนหลัง 7 วันจาก SEC Open API สำหรับกองทุนรวมไทย
  */
 async function fetchSEC7DayNav(symbol: string): Promise<number[] | null> {
-  const directUrl = `https://api.sec.or.th/v2/fund/daily-info/nav?fund_class_name=${encodeURIComponent(symbol)}&page_size=14`;
-
   try {
-    const res = await fetch(directUrl, {
-      headers: {
-        'Ocp-Apim-Subscription-Key': SEC_API_KEY,
-      },
-    });
-
-    if (res.ok && res.status !== 204) {
-      const data = await res.json();
-      const items: any[] = data.items || [];
+    const { data } = await invokeStockProxy({ action: 'fund-nav', symbol });
+    if (data) {
+      const items: any[] = data.history || data.items || [];
       if (items.length >= 2) {
         const sorted = [...items].sort((a, b) => (a.nav_date || '').localeCompare(b.nav_date || ''));
         const navs = sorted
           .slice(-7)
           .map((it) => Number(it.last_val))
-          .filter((n) => !isNaN(n) && n > 0);
-
-        if (navs.length >= 2) {
-          return navs;
-        }
+          .filter((n: number) => !isNaN(n) && n > 0);
+        if (navs.length >= 2) return navs;
       }
     }
-  } catch (err) {
-    // Fallback ผ่าน Edge Function
-    try {
-      const { data } = await invokeStockProxy({ action: 'fund-nav', symbol });
-      if (data) {
-        const items: any[] = data.history || data.items || [];
-        if (items.length >= 2) {
-          const sorted = [...items].sort((a, b) => (a.nav_date || '').localeCompare(b.nav_date || ''));
-          const navs = sorted
-            .slice(-7)
-            .map((it) => Number(it.last_val))
-            .filter((n) => !isNaN(n) && n > 0);
-          if (navs.length >= 2) return navs;
-        }
-      }
-    } catch {
-      // ignore
-    }
+  } catch (err: any) {
+    console.warn('[historyService] fetchSEC7DayNav notice:', err?.message || err);
   }
 
   return null;
