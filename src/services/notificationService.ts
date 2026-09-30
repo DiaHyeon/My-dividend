@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { getLocalDateString } from '../utils/dateUtils';
 
 /**
  * Checks whether the app is running inside the Expo Go client app.
@@ -279,7 +280,7 @@ export async function cleanOrphanedReminders(activeHoldings: { symbol: string; n
 export async function syncAllUpcomingXdReminders(): Promise<number> {
   if (Platform.OS === 'web') return 0;
   try {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalDateString();
 
     // Fetch upcoming dividend schedules for active assets
     const { data: schedules, error } = await supabase

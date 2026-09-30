@@ -5,6 +5,8 @@ import { Transaction, AssetSummary } from '../types/database';
 import { isKnownUSSymbol } from './currencyService';
 import { invokeStockProxy } from './proxyClient';
 
+import { getLocalDateString } from '../utils/dateUtils';
+
 export interface StockSplitEvent {
   date: string;          // 'YYYY-MM-DD'
   timestamp: number;
@@ -60,12 +62,12 @@ export async function markSplitAsApplied(assetId: string, splitDate: string): Pr
 /**
  * ดึงประวัติการแตกพาร์ (Stock Splits) ย้อนหลัง 5 ปี จาก Yahoo Finance
  */
-export async function fetchStockSplits(symbol: string): Promise<StockSplitEvent[]> {
+export async function fetchStockSplits(symbol: string, currency?: string): Promise<StockSplitEvent[]> {
   const cleanSym = (symbol || '').trim().toUpperCase();
   if (!cleanSym) return [];
 
   let targetSymbol = cleanSym;
-  const isUS = isKnownUSSymbol(cleanSym);
+  const isUS = currency === 'USD' || isKnownUSSymbol(cleanSym);
   if (!isUS && !targetSymbol.endsWith('.BK') && !targetSymbol.includes('=')) {
     targetSymbol = `${targetSymbol}.BK`;
   }
@@ -76,7 +78,7 @@ export async function fetchStockSplits(symbol: string): Promise<StockSplitEvent[
 
     const list: StockSplitEvent[] = Object.values(rawSplits).map((s: any) => {
       const ts = typeof s.date === 'number' ? s.date * 1000 : Date.now();
-      const dateStr = new Date(ts).toISOString().split('T')[0];
+      const dateStr = getLocalDateString(new Date(ts));
       const num = Number(s.numerator) || 1;
       const den = Number(s.denominator) || 1;
       const ratio = den > 0 ? num / den : 1;
@@ -130,11 +132,12 @@ export async function fetchStockSplits(symbol: string): Promise<StockSplitEvent[
 export async function detectPendingSplits(
   assetId: string,
   symbol: string,
-  transactions: Transaction[]
+  transactions: Transaction[],
+  currency?: string
 ): Promise<SplitDetectionResult | null> {
   if (!transactions || transactions.length === 0) return null;
 
-  const splits = await fetchStockSplits(symbol);
+  const splits = await fetchStockSplits(symbol, currency);
   if (splits.length === 0) return null;
 
   const appliedDates = await getAppliedSplitsForAsset(assetId);

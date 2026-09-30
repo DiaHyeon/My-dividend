@@ -3,11 +3,12 @@ import { supabase } from '../lib/supabase';
 import { AssetSummary, AssetType, Transaction, DividendSchedule } from '../types/database';
 import { isKnownUSSymbol, getCachedExchangeRate, setAssetCurrency, getAllTransactionCurrencyMeta } from './currencyService';
 import { detectSector, setAssetSector } from './sectorService';
-import { fetchStockPrice } from './stockService';
-import { fetchFundNav } from './fundService';
+import { fetchStockPrice, fetchDividendAnalysis } from './stockService';
+import { fetchFundNav, fetchFundDividendAnalysis } from './fundService';
 import { consolidateDuplicateAssets } from './assetConsolidationService';
 import { ensureAuthenticated } from './authService';
 import { syncAllUpcomingXdReminders } from './notificationService';
+import { getLocalDateString } from '../utils/dateUtils';
 
 export interface CsvAssetRow {
   symbol: string;
@@ -58,7 +59,7 @@ function cleanNumber(val: any, defaultValue: number = 0): number {
  */
 function normalizeDate(dateVal: any): string {
   if (!dateVal || String(dateVal).trim() === '') {
-    return new Date().toISOString().split('T')[0];
+    return getLocalDateString();
   }
   const str = String(dateVal).trim();
 
@@ -83,13 +84,13 @@ function normalizeDate(dateVal: any): string {
   try {
     const d = new Date(str);
     if (!isNaN(d.getTime())) {
-      return d.toISOString().split('T')[0];
+      return getLocalDateString(d);
     }
   } catch {
     // fallback
   }
 
-  return new Date().toISOString().split('T')[0];
+  return getLocalDateString();
 }
 
 /**
@@ -420,14 +421,67 @@ export async function importAssetRows(
       }
 
 
-      // 4. บันทึกตารางปันผล (dividend_schedules) ด้วย Native DPU
+      // 4. บันทึกตารางปันผล (dividend_schedules) ในอนาคต 12 เดือนข้างหน้า
       if (item.expected_dpu && item.expected_dpu > 0) {
-        await supabase.from('dividend_schedules').insert({
-          asset_id: assetId,
-          dpu: Number(item.expected_dpu.toFixed(4)),
-          xd_date: item.transaction_date,
-          is_projected: true,
-        });
+        // ตรวจสอบก่อนว่าสินทรัพย์นี้มีตารางปันผลในอนาคตอยู่แล้วหรือไม่
+        const { data: existingScheds } = await supabase
+          .from('dividend_schedules')
+          .select('id')
+          .eq('asset_id', assetId)
+          .eq('is_projected', true);
+
+        if (existingScheds && existingScheds.length > 0) {
+          // หากมีอยู่แล้ว ให้อัปเดต DPU ของกำหนดการเดิม ไม่ต้อง insert ซ้ำ
+          await supabase
+            .from('dividend_schedules')
+            .update({ dpu: Number(item.expected_dpu.toFixed(4)) })
+            .eq('asset_id', assetId)
+            .eq('is_projected', true);
+        } else {
+          // ค้นหารอบวัน XD ในอนาคตจริง 12 เดือนข้างหน้า
+          let futureXdDates: string[] = [];
+
+          if (item.asset_type === 'STOCKS') {
+            try {
+              const divAnalysis = await fetchDividendAnalysis(item.symbol);
+              if (divAnalysis?.hasDividends && divAnalysis.projectedNextXdDates.length > 0) {
+                futureXdDates = divAnalysis.projectedNextXdDates;
+              }
+            } catch {
+              // fallback
+            }
+          } else if (item.asset_type === 'FUNDS') {
+            try {
+              const fundDiv = await fetchFundDividendAnalysis(undefined, item.symbol);
+              if (fundDiv?.hasDividends && fundDiv.projectedNextXdDates.length > 0) {
+                futureXdDates = fundDiv.projectedNextXdDates;
+              }
+            } catch {
+              // fallback
+            }
+          }
+
+          // Fallback: หาก API ไม่มีข้อมูล หรือเป็น CASH ให้สร้างรอบในอนาคต 12 เดือนข้างหน้า
+          if (futureXdDates.length === 0) {
+            const today = new Date();
+            const startMonth = new Date(today.getFullYear(), today.getMonth() + 1, 15);
+            // Default 4 quarterly future cycles
+            futureXdDates = [0, 3, 6, 9].map((offset) => {
+              const d = new Date(startMonth);
+              d.setMonth(d.getMonth() + offset);
+              return getLocalDateString(d);
+            });
+          }
+
+          const schedulesToInsert = futureXdDates.map((dateStr) => ({
+            asset_id: assetId,
+            dpu: Number(item.expected_dpu!.toFixed(4)),
+            xd_date: dateStr,
+            is_projected: true,
+          }));
+
+          await supabase.from('dividend_schedules').insert(schedulesToInsert);
+        }
       }
 
       // 5. บันทึก Sector และ Currency
@@ -519,6 +573,7 @@ export async function exportPortfolioToCsv(
       const meta = txMetas[tx.id];
 
       const currency =
+        asset?.currency ||
         meta?.currency ||
         options?.currencyMap?.[tx.asset_id] ||
         (asset?.asset_type === 'STOCKS' && isKnownUSSymbol(symbol) ? 'USD' : 'THB');
@@ -539,7 +594,7 @@ export async function exportPortfolioToCsv(
         Number(tx.shares || 0).toFixed(4),
         Number(costPrice || 0).toFixed(4),
         currency,
-        tx.transaction_date || new Date().toISOString().split('T')[0],
+        tx.transaction_date || getLocalDateString(),
         Number(dpu || 0).toFixed(6),
         Number(taxRate || 0).toFixed(4),
       ];
@@ -551,6 +606,7 @@ export async function exportPortfolioToCsv(
   // กรณีไม่มีธุรกรรมย่อย ส่งออกรายการสินทรัพย์คงเหลือรวมตามมาตรฐาน
   const rows = assets.map((a) => {
     const currency =
+      a.currency ||
       options?.currencyMap?.[a.id] ||
       (a.asset_type === 'STOCKS' && isKnownUSSymbol(a.symbol) ? 'USD' : 'THB');
     const dpu = scheduleMap.get(a.id) ?? 0;
@@ -569,7 +625,7 @@ export async function exportPortfolioToCsv(
       Number(a.net_shares || 0).toFixed(4),
       Number(a.weighted_average_cost || 0).toFixed(4),
       currency,
-      new Date().toISOString().split('T')[0],
+      getLocalDateString(),
       Number(dpu || 0).toFixed(6),
       Number(taxRate || 0).toFixed(4),
     ];

@@ -28,9 +28,11 @@ import { isKnownUSSymbol, getCachedExchangeRate } from '../services/currencyServ
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
 import { exportPortfolioToCsv } from '../services/csvService';
 import { usePrivacyMode } from '../services/privacyService';
+import { getLocalDateString } from '../utils/dateUtils';
 import { ensureAuthenticated } from '../services/authService';
 import { syncDailyPricesIfNeeded } from '../services/priceSyncService';
 import { calculatePortfolioReturns } from '../services/returnService';
+import { getCachedPortfolio, savePortfolioCache, notifyOffline } from '../services/portfolioCacheService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -120,7 +122,7 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
       transactions,
       schedules: dividendSchedules,
     });
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const filename = `my_dividend_portfolio_${today}.csv`;
 
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -143,11 +145,25 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
   // Fetch Data
   const loadData = useCallback(async (forceSync = false) => {
     try {
-      setLoading(true);
+      // 0. Instant offline cache restore for 0ms cold-start
+      const cached = await getCachedPortfolio();
+      if (cached && cached.assets.length > 0) {
+        setAssets(cached.assets);
+        if (cached.transactions && cached.transactions.length > 0) {
+          setTransactions(cached.transactions);
+        }
+        if (cached.dividendSchedules && cached.dividendSchedules.length > 0) {
+          setDividendSchedules(cached.dividendSchedules);
+        }
+        if (cached.exchangeRate > 0) {
+          setExchangeRate(cached.exchangeRate);
+        }
+        setLoading(false);
+      }
 
       await ensureAuthenticated();
 
-      // 0. Auto-consolidate any duplicate assets if present
+      // 0.1 Auto-consolidate any duplicate assets if present
       await consolidateDuplicateAssets();
 
       // 1. Fetch Assets Summary
@@ -156,29 +172,35 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
         .select('*')
         .order('symbol', { ascending: true });
 
+      if (summaryError) {
+        throw summaryError;
+      }
+
       let loadedAssets = ((summaryData as AssetSummary[]) || []).filter((a) => !a.is_archived);
 
       // 1.1 Sync daily prices if new day or forced by pull-to-refresh
       if (loadedAssets.length > 0) {
-        const pricesUpdated = await syncDailyPricesIfNeeded(loadedAssets, forceSync);
-        if (pricesUpdated) {
-          const { data: refreshedSummary, error: refreshedErr } = await supabase
-            .from('view_asset_summary')
-            .select('*')
-            .order('symbol', { ascending: true });
-          if (!refreshedErr && refreshedSummary) {
-            loadedAssets = ((refreshedSummary as AssetSummary[]) || []).filter((a) => !a.is_archived);
+        try {
+          const pricesUpdated = await syncDailyPricesIfNeeded(loadedAssets, forceSync);
+          if (pricesUpdated) {
+            const { data: refreshedSummary, error: refreshedErr } = await supabase
+              .from('view_asset_summary')
+              .select('*')
+              .order('symbol', { ascending: true });
+            if (!refreshedErr && refreshedSummary) {
+              loadedAssets = ((refreshedSummary as AssetSummary[]) || []).filter((a) => !a.is_archived);
+            }
           }
+        } catch (syncErr) {
+          console.warn('AssetsScreen sync prices failed, continuing with loaded assets:', syncErr);
         }
       }
 
-      if (summaryError) {
-        console.warn('AssetsScreen fetch assets error:', summaryError.message);
-      } else {
-        setAssets(loadedAssets);
-      }
+      setAssets(loadedAssets);
 
       const activeAssetIds = loadedAssets.map((a) => a.id).filter(Boolean);
+      let txDataResult: Transaction[] = [];
+      let schedDataResult: DividendSchedule[] = [];
 
       // 2. Fetch Transactions & Dividend Schedules (scoped to active assets if any exist)
       if (activeAssetIds.length > 0) {
@@ -194,16 +216,14 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
             .in('asset_id', activeAssetIds),
         ]);
 
-        if (txRes.error) {
-          console.warn('AssetsScreen fetch transactions error:', txRes.error.message);
-        } else {
-          setTransactions((txRes.data as Transaction[]) || []);
+        if (!txRes.error && txRes.data) {
+          txDataResult = txRes.data as Transaction[];
+          setTransactions(txDataResult);
         }
 
-        if (schedRes.error) {
-          console.warn('AssetsScreen fetch schedules error:', schedRes.error.message);
-        } else {
-          setDividendSchedules((schedRes.data as DividendSchedule[]) || []);
+        if (!schedRes.error && schedRes.data) {
+          schedDataResult = schedRes.data as DividendSchedule[];
+          setDividendSchedules(schedDataResult);
         }
       } else {
         setTransactions([]);
@@ -213,8 +233,17 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
       // 3. Exchange Rate
       const rate = await getCachedExchangeRate();
       if (rate > 0) setExchangeRate(rate);
+
+      // Save fresh snapshot into local cache
+      await savePortfolioCache({
+        assets: loadedAssets,
+        transactions: txDataResult,
+        dividendSchedules: schedDataResult,
+        exchangeRate: rate > 0 ? rate : 34.0,
+      });
     } catch (err: any) {
-      console.warn('AssetsScreen loadData catch:', err.message);
+      console.warn('AssetsScreen loadData catch:', err?.message || err);
+      notifyOffline('เชื่อมต่อไม่ได้ · แสดงข้อมูลล่าสุดในเครื่อง');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -365,7 +394,8 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
   const hasActiveTxFilter = selectedYear !== 'ALL' || selectedMonth !== 'ALL' || actionFilter !== 'ALL';
 
   const isUSStock = (symbol: string, assetType: AssetType) => {
-    return assetType === 'STOCKS' && isKnownUSSymbol(symbol);
+    const parentAsset = assets.find((a) => a.symbol === symbol && a.asset_type === assetType);
+    return parentAsset?.currency === 'USD' || (assetType === 'STOCKS' && isKnownUSSymbol(symbol));
   };
 
   const formatThaiDate = (dateStr?: string) => {

@@ -3,6 +3,8 @@
  * บริการคำนวณและประเมินภาษีดอกเบี้ยเงินฝากธนาคารตามเกณฑ์ของกรมสรรพากร (เกณฑ์ยกเว้น 20,000 บาท/ปี)
  */
 
+import { getLocalDateString } from '../utils/dateUtils';
+
 export const THAI_SAVINGS_TAX_FREE_LIMIT = 20000; // เกณฑ์ยกเว้นภาษีดอกเบี้ยเงินฝากออมทรัพย์ 20,000 บาทต่อปี
 export const THAI_WITHHOLDING_TAX_RATE = 0.15; // อัตราภาษีหัก ณ ที่จ่าย 15%
 
@@ -224,7 +226,7 @@ export const calculateCashCycleInfo = (
     const diffTime = schedDate.getTime() - depDate.getTime();
     const daysHeld = Math.max(1, Math.round(diffTime / msPerDay));
     return {
-      cycleStartDate: cycleStart.toISOString().split('T')[0],
+      cycleStartDate: getLocalDateString(cycleStart),
       cycleEndDate: scheduleDateStr,
       daysInCycle: cycleDays,
       daysHeld,
@@ -235,7 +237,7 @@ export const calculateCashCycleInfo = (
 
   // Full standard cycle
   return {
-    cycleStartDate: cycleStart.toISOString().split('T')[0],
+    cycleStartDate: getLocalDateString(cycleStart),
     cycleEndDate: scheduleDateStr,
     daysInCycle: cycleDays,
     daysHeld: cycleDays,

@@ -106,7 +106,7 @@ export async function fetch7DayPriceHistory(
   let fetchedPoints: number[] | null = null;
 
   if (assetType === 'STOCKS') {
-    fetchedPoints = await fetchYahoo7DayCloses(symbol);
+    fetchedPoints = await fetchYahoo7DayCloses(symbol, item.currency);
   } else if (assetType === 'FUNDS') {
     fetchedPoints = await fetchSEC7DayNav(symbol);
   }
@@ -180,12 +180,12 @@ export async function clear7DayHistoryCache(): Promise<void> {
 /**
  * ดึงราคาปิด 7 วันย้อนหลังจาก Yahoo Finance สำหรับหุ้น (US & SET/mai/REITs)
  */
-async function fetchYahoo7DayCloses(symbol: string): Promise<number[] | null> {
+async function fetchYahoo7DayCloses(symbol: string, currency?: string): Promise<number[] | null> {
   const cleanSym = (symbol || '').trim().toUpperCase();
   if (!cleanSym) return null;
 
   let targetSymbol = cleanSym;
-  const isUS = isKnownUSSymbol(cleanSym);
+  const isUS = currency === 'USD' || isKnownUSSymbol(cleanSym);
 
   // หุ้นไทยใน SET, mai, กองรีท และกองทุนโครงสร้างพื้นฐานจะต่อท้ายด้วย .BK
   if (!isUS && !targetSymbol.endsWith('.BK') && !targetSymbol.includes('=')) {

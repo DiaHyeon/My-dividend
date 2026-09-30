@@ -9,6 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { getLocalDateString } from '../utils/dateUtils';
 
 export interface CalendarPickerModalProps {
   visible: boolean;
@@ -131,7 +132,7 @@ export const CalendarPickerModal: React.FC<CalendarPickerModalProps> = ({
       ? 'เลือกวัน XD คาดการณ์'
       : 'เลือกวันที่');
 
-  const todayIso = new Date().toISOString().split('T')[0];
+  const todayIso = getLocalDateString();
 
   return (
     <Modal

@@ -85,31 +85,66 @@ export async function syncBenchmarkReturns(force: boolean = false): Promise<bool
     await Promise.all(
       targetBenchmarks.map(async (bm) => {
         try {
-          const { data } = await invokeStockProxy({
-            action: 'quote',
-            symbol: bm.symbol,
-          });
+          // 1. ลองดึงข้อมูลราคาปิดย้อนหลังจริง 1 ปีจาก Yahoo Finance เพื่อคำนวณผลตอบแทนแท้จริง
+          let realReturns: Record<TimeframeType, number> | null = null;
+          try {
+            const histUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(bm.symbol)}?interval=1mo&range=1y`;
+            const histRes = await fetch(histUrl);
+            if (histRes.ok) {
+              const json = await histRes.json();
+              const closes: number[] = (json?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [])
+                .filter((c: any) => typeof c === 'number' && !isNaN(c) && c > 0);
+              if (closes.length >= 2) {
+                const latest = closes[closes.length - 1];
+                const getPct = (pastVal: number) => Number((((latest - pastVal) / pastVal) * 100).toFixed(1));
+                const close1M = closes.length >= 2 ? closes[closes.length - 2] : closes[0];
+                const close3M = closes.length >= 4 ? closes[closes.length - 4] : closes[0];
+                const close6M = closes.length >= 7 ? closes[closes.length - 7] : closes[0];
+                const close1Y = closes[0];
+                realReturns = {
+                  '1M': getPct(close1M),
+                  '3M': getPct(close3M),
+                  '6M': getPct(close6M),
+                  '1Y': getPct(close1Y),
+                  'ALL': getPct(close1Y),
+                };
+              }
+            }
+          } catch {
+            // fallback to quote proxy
+          }
 
-          if (data && data.chart?.result?.[0]?.meta) {
-            const meta = data.chart.result[0].meta;
-            const current = Number(meta.regularMarketPrice) || 0;
-            const prevClose = Number(meta.chartPreviousClose) || current;
-            const dayChangePct = prevClose > 0 ? ((current - prevClose) / prevClose) * 100 : 0;
+          if (realReturns) {
+            memoryBenchmarkReturns[bm.id] = realReturns;
+            isBenchmarkLiveMap[bm.id] = true;
+            updatedAny = true;
+          } else {
+            // 2. Fallback ผ่าน Supabase Edge Function
+            const { data } = await invokeStockProxy({
+              action: 'quote',
+              symbol: bm.symbol,
+            });
 
-            if (current > 0) {
-              const base = BENCHMARK_BASELINE_RETURNS[bm.id];
-              // Adjust baseline returns by real day change for realistic live tracking
-              const adjusted: Record<TimeframeType, number> = {
-                '1M': Number((base['1M'] + dayChangePct * 0.2).toFixed(1)),
-                '3M': Number((base['3M'] + dayChangePct * 0.3).toFixed(1)),
-                '6M': Number((base['6M'] + dayChangePct * 0.5).toFixed(1)),
-                '1Y': Number((base['1Y'] + dayChangePct * 0.7).toFixed(1)),
-                'ALL': Number((base['ALL'] + dayChangePct * 0.8).toFixed(1)),
-              };
+            if (data && data.chart?.result?.[0]?.meta) {
+              const meta = data.chart.result[0].meta;
+              const current = Number(meta.regularMarketPrice) || 0;
+              const prevClose = Number(meta.chartPreviousClose) || current;
+              const dayChangePct = prevClose > 0 ? ((current - prevClose) / prevClose) * 100 : 0;
 
-              memoryBenchmarkReturns[bm.id] = adjusted;
-              isBenchmarkLiveMap[bm.id] = true;
-              updatedAny = true;
+              if (current > 0) {
+                const base = BENCHMARK_BASELINE_RETURNS[bm.id];
+                const adjusted: Record<TimeframeType, number> = {
+                  '1M': Number((base['1M'] + dayChangePct * 0.2).toFixed(1)),
+                  '3M': Number((base['3M'] + dayChangePct * 0.3).toFixed(1)),
+                  '6M': Number((base['6M'] + dayChangePct * 0.5).toFixed(1)),
+                  '1Y': Number((base['1Y'] + dayChangePct * 0.7).toFixed(1)),
+                  'ALL': Number((base['ALL'] + dayChangePct * 0.8).toFixed(1)),
+                };
+
+                memoryBenchmarkReturns[bm.id] = adjusted;
+                isBenchmarkLiveMap[bm.id] = true;
+                updatedAny = true;
+              }
             }
           }
         } catch (err: any) {
@@ -193,8 +228,7 @@ export function getBenchmarkComparison(
   const portfolioData: ChartPoint[] = [];
   for (let i = 0; i < numPoints; i++) {
     const progress = i / (numPoints - 1);
-    const fluctuation = i > 0 && i < numPoints - 1 ? Math.sin(i * 1.5) * 0.4 : 0;
-    const val = Math.round((currentReturn * Math.pow(progress, 1.2) + fluctuation) * 10) / 10;
+    const val = Math.round((currentReturn * progress) * 10) / 10;
     portfolioData.push({
       value: val,
       label: i % 2 === 0 || i === numPoints - 1 ? labels[i] : undefined,
@@ -205,8 +239,7 @@ export function getBenchmarkComparison(
   const benchmarkData: ChartPoint[] = [];
   for (let i = 0; i < numPoints; i++) {
     const progress = i / (numPoints - 1);
-    const fluctuation = i > 0 && i < numPoints - 1 ? Math.cos(i * 1.3) * 0.4 : 0;
-    const val = Math.round((benchmarkReturn * Math.pow(progress, 1.1) + fluctuation) * 10) / 10;
+    const val = Math.round((benchmarkReturn * progress) * 10) / 10;
     benchmarkData.push({
       value: val,
     });

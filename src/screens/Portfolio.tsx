@@ -33,6 +33,7 @@ import {
   getBenchmarkComparison,
   syncBenchmarkReturns,
 } from '../services/benchmarkService';
+import { getCachedPortfolio, savePortfolioCache, notifyOffline } from '../services/portfolioCacheService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -70,6 +71,8 @@ export const Portfolio: React.FC<PortfolioProps> = ({
 
   const isUSStock = useCallback((item: AssetSummary): boolean => {
     if (item.asset_type !== 'STOCKS') return false;
+    if (item.currency === 'USD') return true;
+    if (item.currency === 'THB') return false;
     if (currencyMap[item.id] === 'USD') return true;
     if (currencyMap[item.id] === 'THB') return false;
     if (isKnownUSSymbol(item.symbol)) return true;
@@ -79,9 +82,22 @@ export const Portfolio: React.FC<PortfolioProps> = ({
 
   const loadData = useCallback(async (forceSync = false) => {
     try {
+      // 0. Instant offline cache restore for 0ms cold-start
+      const cached = await getCachedPortfolio();
+      if (cached && cached.assets.length > 0) {
+        setAssets(cached.assets);
+        if (cached.dividendSchedules && cached.dividendSchedules.length > 0) {
+          setDividendSchedules(cached.dividendSchedules);
+        }
+        if (cached.exchangeRate > 0) {
+          setExchangeRate(cached.exchangeRate);
+        }
+        setLoading(false);
+      }
+
       await ensureAuthenticated();
 
-      // 0. Auto-consolidate any duplicate assets if present
+      // 0.1 Auto-consolidate any duplicate assets if present
       await consolidateDuplicateAssets();
 
       // 1. Fetch assets summary view
@@ -90,30 +106,37 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         .select('*')
         .order('created_at', { ascending: false });
 
+      if (summaryError) {
+        throw summaryError;
+      }
+
       let loadedAssets = ((summaryData as AssetSummary[]) || []).filter((a) => !a.is_archived);
 
       // 1.1 Sync daily prices if new day or forced by pull-to-refresh
       if (loadedAssets.length > 0) {
-        const pricesUpdated = await syncDailyPricesIfNeeded(loadedAssets, forceSync);
-        if (pricesUpdated) {
-          const { data: refreshedSummary, error: refreshedErr } = await supabase
-            .from('view_asset_summary')
-            .select('*')
-            .order('created_at', { ascending: false });
-          if (!refreshedErr && refreshedSummary) {
-            loadedAssets = ((refreshedSummary as AssetSummary[]) || []).filter((a) => !a.is_archived);
+        try {
+          const pricesUpdated = await syncDailyPricesIfNeeded(loadedAssets, forceSync);
+          if (pricesUpdated) {
+            const { data: refreshedSummary, error: refreshedErr } = await supabase
+              .from('view_asset_summary')
+              .select('*')
+              .order('created_at', { ascending: false });
+            if (!refreshedErr && refreshedSummary) {
+              loadedAssets = ((refreshedSummary as AssetSummary[]) || []).filter((a) => !a.is_archived);
+            }
           }
+        } catch (syncErr) {
+          console.warn('Portfolio sync prices failed, continuing with loaded assets:', syncErr);
         }
       }
 
-      if (!summaryError && summaryData) {
-        setAssets(loadedAssets);
-      }
+      setAssets(loadedAssets);
 
       // Background sync benchmark indices (SET, S&P 500, NASDAQ) without blocking UI
       syncBenchmarkReturns(forceSync).catch(() => {});
 
       const activeAssetIds = loadedAssets.map((a) => a.id).filter(Boolean);
+      let schedulesData: DividendSchedule[] = [];
 
       // 2. Fetch dividend schedules only for active assets
       if (activeAssetIds.length > 0) {
@@ -124,7 +147,8 @@ export const Portfolio: React.FC<PortfolioProps> = ({
           .order('xd_date', { ascending: true });
 
         if (!divError && divData) {
-          setDividendSchedules(divData as DividendSchedule[]);
+          schedulesData = divData as DividendSchedule[];
+          setDividendSchedules(schedulesData);
         }
       } else {
         setDividendSchedules([]);
@@ -137,8 +161,16 @@ export const Portfolio: React.FC<PortfolioProps> = ({
       ]);
       setExchangeRate(rate);
       setCurrencyMap(currencies);
+
+      // Save fresh snapshot into local cache
+      await savePortfolioCache({
+        assets: loadedAssets,
+        dividendSchedules: schedulesData,
+        exchangeRate: rate,
+      });
     } catch (err: any) {
-      console.warn('Portfolio loadData error:', err.message);
+      console.warn('Portfolio loadData error:', err?.message || err);
+      notifyOffline('เชื่อมต่อไม่ได้ · แสดงข้อมูลล่าสุดในเครื่อง');
     } finally {
       setLoading(false);
       setRefreshing(false);

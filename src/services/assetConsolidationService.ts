@@ -121,6 +121,9 @@ export async function consolidateDuplicateAssets(): Promise<ConsolidationResult>
       consolidatedSymbols.push(symbol);
     }
 
+    // กวาดล้าง dividend_schedules ที่มี xd_date ซ้ำกันในทุกสินทรัพย์
+    await cleanDuplicateDividendSchedules();
+
     if (mergedCount > 0) {
       console.log(`[Consolidation] Successfully consolidated ${mergedCount} duplicate assets for:`, consolidatedSymbols);
     }
@@ -129,5 +132,50 @@ export async function consolidateDuplicateAssets(): Promise<ConsolidationResult>
   } catch (err: any) {
     console.warn('[Consolidation] Error during consolidation:', err.message);
     return { mergedCount: 0, consolidatedSymbols: [] };
+  }
+}
+
+/**
+ * ล้างแถว dividend_schedules ที่มี xd_date ซ้ำกันสำหรับ asset_id เดียวกัน ให้เหลือเพียง 1 รายการล่าสุด
+ */
+export async function cleanDuplicateDividendSchedules(assetId?: string): Promise<number> {
+  try {
+    let query = supabase
+      .from('dividend_schedules')
+      .select('id, asset_id, xd_date, created_at')
+      .order('created_at', { ascending: false });
+
+    if (assetId) {
+      query = query.eq('asset_id', assetId);
+    }
+
+    const { data: scheds, error } = await query;
+    if (error || !scheds || scheds.length === 0) return 0;
+
+    const seen = new Set<string>();
+    const dupIds: string[] = [];
+
+    for (const s of scheds) {
+      const key = `${s.asset_id}__${s.xd_date}`;
+      if (seen.has(key)) {
+        dupIds.push(s.id);
+      } else {
+        seen.add(key);
+      }
+    }
+
+    if (dupIds.length > 0) {
+      // Delete in batches of 50 to avoid query size limits
+      for (let i = 0; i < dupIds.length; i += 50) {
+        const batch = dupIds.slice(i, i + 50);
+        await supabase.from('dividend_schedules').delete().in('id', batch);
+      }
+      console.log(`[Consolidation] Cleaned ${dupIds.length} duplicate dividend schedules`);
+      return dupIds.length;
+    }
+    return 0;
+  } catch (err: any) {
+    console.warn('[Consolidation] Error cleaning duplicate dividend schedules:', err.message);
+    return 0;
   }
 }

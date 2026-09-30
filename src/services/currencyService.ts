@@ -6,40 +6,46 @@ import { fetchExchangeRate } from './stockService';
 const ASSET_CURRENCY_STORAGE_KEY = '@my_dividend_asset_currencies';
 const EXCHANGE_RATE_STORAGE_KEY = '@my_dividend_cached_exchange_rate';
 
-// Popular US symbols list for instant heuristic identification
-const KNOWN_US_SYMBOLS = new Set([
-  'AAPL', 'MSFT', 'NVDA', 'AMD', 'INTC', 'GOOGL', 'GOOG', 'AMZN', 'META',
-  'TSLA', 'KO', 'PEP', 'JNJ', 'V', 'MA', 'WMT', 'COST', 'JPM', 'O', 'DIS',
-  'SCHD', 'SPY', 'QQQ', 'VOO', 'TSM', 'MCD', 'AVGO', 'CRM', 'ORCL', 'NFLX',
-  'BAC', 'WFC', 'C', 'GS', 'MS', 'XOM', 'CVX', 'COP', 'SHEL', 'UNH', 'LLY',
-  'ABBV', 'MRK', 'TMO', 'PFE', 'NKE', 'SBUX', 'HD', 'LOW', 'PG', 'CL',
-  'CAT', 'HON', 'GE', 'LIN', 'BND', 'TLT', 'VNQ', 'JEPI', 'JEPQ',
-]);
+// Dynamic in-memory registry of symbol currencies discovered from API lookups, DB, or transactions
+const dynamicCurrencySymbolsMap = new Map<string, 'THB' | 'USD'>();
 
-const KNOWN_TH_SYMBOLS = new Set([
-  'PTT', 'PTTEP', 'CPALL', 'BDMS', 'SCB', 'KBANK', 'AOT', 'ADVANC', 'DELTA',
-  'GULF', 'TRUE', 'BBL', 'KTB', 'SCC', 'BH', 'INTUCH', 'OR', 'CPN', 'MINT',
-  'HANA', 'KCE', 'CCET', 'EA', 'SPRC', 'IRPC', 'BANPU', 'RATCH', 'EGCO',
-  'TTB', 'TISCO', 'KKP', 'BCH', 'PR9', 'CHG', 'VIBHA', 'CPF', 'CBG', 'OSP',
-  'CRC', 'HMPRO', 'GLOBAL', 'DOHOME', 'BEM', 'BTS', 'AAV', 'IVL', 'TU',
-]);
+/**
+ * Registers a symbol's verified currency into the runtime dynamic cache.
+ */
+export function registerSymbolCurrency(symbol: string, currency: 'THB' | 'USD'): void {
+  if (!symbol) return;
+  dynamicCurrencySymbolsMap.set(symbol.trim().toUpperCase(), currency);
+}
 
 /**
  * Checks whether an asset is a US stock based on:
- * 1. Explicit asset type (CASH is always THB)
- * 2. Saved preference in AsyncStorage
- * 3. Known US ticker symbols
- * 4. Withholding tax rate (15% indicates US W-8BEN treaty)
+ * 1. Explicit currency parameter ('USD')
+ * 2. Explicit asset type (CASH is always THB)
+ * 3. Saved preference in database or AsyncStorage
+ * 4. Dynamic registry of verified symbols
+ * 5. Withholding tax rate (15% indicates US W-8BEN treaty)
  */
 export async function isUSStockAsset(
   symbol: string,
   assetType?: AssetType,
   taxRate?: number,
-  assetId?: string
+  assetId?: string,
+  currency?: 'THB' | 'USD'
 ): Promise<boolean> {
   if (assetType === 'CASH') return false;
+  if (currency === 'USD') return true;
+  if (currency === 'THB') return false;
 
   const upper = (symbol || '').trim().toUpperCase();
+
+  // If Thai characters or .BK suffix, it's definitively Thai
+  if (upper.endsWith('.BK') || /[\u0E00-\u0E7F]/.test(upper)) {
+    return false;
+  }
+
+  // Check dynamic registry
+  if (dynamicCurrencySymbolsMap.get(upper) === 'USD') return true;
+  if (dynamicCurrencySymbolsMap.get(upper) === 'THB') return false;
 
   // If saved explicitly for this asset ID
   if (assetId) {
@@ -48,28 +54,24 @@ export async function isUSStockAsset(
     if (saved === 'THB') return false;
   }
 
-  // Known symbol lookup
-  if (KNOWN_US_SYMBOLS.has(upper)) return true;
-  if (KNOWN_TH_SYMBOLS.has(upper)) return false;
-
   // Tax rate heuristic: 15% is the standard US withholding tax under W-8BEN
   if (taxRate !== undefined && Math.abs(taxRate - 0.15) < 0.005) {
+    dynamicCurrencySymbolsMap.set(upper, 'USD');
     return true;
-  }
-
-  // If Thai characters are present, it's definitely Thai
-  if (/[\u0E00-\u0E7F]/.test(upper)) {
-    return false;
   }
 
   return false;
 }
 
 /**
- * Synchronous check for known US symbol without async lookup.
+ * Synchronous check for US symbol without async lookup.
+ * Uses dynamic runtime registry and ticker conventions (no .BK suffix, non-Thai).
  */
 export function isKnownUSSymbol(symbol: string): boolean {
-  return KNOWN_US_SYMBOLS.has((symbol || '').trim().toUpperCase());
+  if (!symbol) return false;
+  const upper = symbol.trim().toUpperCase();
+  if (upper.endsWith('.BK') || /[\u0E00-\u0E7F]/.test(upper)) return false;
+  return dynamicCurrencySymbolsMap.get(upper) === 'USD';
 }
 
 /**

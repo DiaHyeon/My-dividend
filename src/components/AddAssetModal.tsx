@@ -25,6 +25,7 @@ import { ensureAuthenticated } from '../services/authService';
 import { CashAssetForm } from './CashAssetForm';
 import { CalendarPickerModal } from './CalendarPickerModal';
 import { SectorPickerModal } from './SectorPickerModal';
+import { getLocalDateString } from '../utils/dateUtils';
 
 interface AddAssetModalProps {
   visible?: boolean;
@@ -70,7 +71,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
   const [xdDate, setXdDate] = useState(() => {
     const nextMonth = new Date();
     nextMonth.setDate(nextMonth.getDate() + 30);
-    return nextMonth.toISOString().split('T')[0];
+    return getLocalDateString(nextMonth);
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [suggestions, setSuggestions] = useState<(StockSuggestion | FundSuggestion)[]>([]);
@@ -88,8 +89,8 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
   const [interestRate, setInterestRate] = useState<string>('1.5');
   const [interestFrequency, setInterestFrequency] = useState<'MONTHLY' | 'SEMI_ANNUAL' | 'ANNUAL'>('MONTHLY');
   const [isAutoCashTax, setIsAutoCashTax] = useState(true);
-  const [depositDate, setDepositDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
-  const [purchaseDate, setPurchaseDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [depositDate, setDepositDate] = useState<string>(() => getLocalDateString());
+  const [purchaseDate, setPurchaseDate] = useState<string>(() => getLocalDateString());
   const [isCalendarVisible, setIsCalendarVisible] = useState(false);
   const [calendarTarget, setCalendarTarget] = useState<'purchaseDate' | 'xdDate'>('purchaseDate');
   const [isSectorPickerVisible, setIsSectorPickerVisible] = useState(false);
@@ -189,11 +190,11 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     setInterestRate('1.5');
     setInterestFrequency('MONTHLY');
     setIsAutoCashTax(true);
-    setDepositDate(new Date().toISOString().split('T')[0]);
-    setPurchaseDate(new Date().toISOString().split('T')[0]);
+    setDepositDate(getLocalDateString());
+    setPurchaseDate(getLocalDateString());
     const nextMonth = new Date();
     nextMonth.setDate(nextMonth.getDate() + 30);
-    setXdDate(nextMonth.toISOString().split('T')[0]);
+    setXdDate(getLocalDateString(nextMonth));
     setIsCalendarVisible(false);
     setIsSectorPickerVisible(false);
     setIsReviewVisible(false);
@@ -220,7 +221,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     // Reset default projected XD date
     const nextMonth = new Date();
     nextMonth.setDate(nextMonth.getDate() + 30);
-    setXdDate(nextMonth.toISOString().split('T')[0]);
+    setXdDate(getLocalDateString(nextMonth));
 
     if (newType === 'CASH') {
       setCurrency('THB');
@@ -229,7 +230,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       setDepositAmount('');
       setInterestRate('1.5');
       setInterestFrequency('MONTHLY');
-      setDepositDate(new Date().toISOString().split('T')[0]);
+      setDepositDate(getLocalDateString());
       const evalResult = evaluateCashTax(0, 1.5, 'DigitalSavings');
       setTaxRatePercent(evalResult.suggestedTaxRatePercent.toString());
     } else if (newType === 'FUNDS') {
@@ -274,7 +275,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     const effectiveDate =
       purchaseDate && purchaseDate.trim()
         ? purchaseDate.trim()
-        : new Date().toISOString().split('T')[0];
+        : getLocalDateString();
     const purchaseYear = effectiveDate.substring(0, 4);
 
     let remainingRounds = 0;
@@ -582,7 +583,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         }
 
         // Insert into transactions table with resilient fallback for exchange_rate
-        const todayDate = (depositDate && depositDate.trim()) || new Date().toISOString().split('T')[0];
+        const todayDate = (depositDate && depositDate.trim()) || getLocalDateString();
         const txPayload: any = {
           asset_id: asset.id,
           type: 'BUY',
@@ -603,8 +604,16 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         if (txError) throw new Error(txError.message || 'ไม่สามารถบันทึกยอดเงินฝากได้');
 
 
-        // Insert interest schedules
+        // Insert interest schedules (clean previous projected schedules first if existing cash asset)
         if (!isNaN(parsedRate) && parsedRate > 0) {
+          if (isExistingCash) {
+            await supabase
+              .from('dividend_schedules')
+              .delete()
+              .eq('asset_id', asset.id)
+              .eq('is_projected', true);
+          }
+
           const currentYear = new Date().getFullYear();
           const schedules: any[] = [];
           const annualDpu = parsedRate / 100;
@@ -615,7 +624,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
               schedules.push({
                 asset_id: asset.id,
                 dpu: Number((annualDpu / 12).toFixed(6)),
-                xd_date: d.toISOString().split('T')[0],
+                xd_date: getLocalDateString(d),
                 is_projected: true,
               });
             }
@@ -659,7 +668,14 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         onSuccess?.();
       } catch (err: any) {
         setIsReviewVisible(false);
-        Alert.alert('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถบันทึกเงินฝากได้');
+        const isNetworkErr = err?.message?.toLowerCase().includes('network') ||
+                             err?.message?.toLowerCase().includes('fetch') ||
+                             err?.message?.toLowerCase().includes('connection');
+        if (isNetworkErr) {
+          Alert.alert('โหมดออฟไลน์', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาเชื่อมต่อเครือข่ายก่อนบันทึกข้อมูล');
+        } else {
+          Alert.alert('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถบันทึกเงินฝากได้');
+        }
       } finally {
         setIsSubmitting(false);
       }
@@ -757,7 +773,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       }
 
       // 2. Insert BUY record to transactions table with resilient fallback for exchange_rate
-      const todayDate = new Date().toISOString().split('T')[0];
+      const todayDate = getLocalDateString();
       const effectiveTxDate = purchaseDate && purchaseDate.trim() ? purchaseDate.trim() : todayDate;
       const txPayload: any = {
         asset_id: asset.id,
@@ -800,38 +816,56 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         });
       }
 
-      // 3. Insert projected DPU to dividend_schedules if (STOCKS or FUNDS) and DPU > 0 (store native DPU for Floating FX)
+      // 3. Insert or update projected DPU to dividend_schedules if (STOCKS or FUNDS) and DPU > 0
       if ((assetType === 'STOCKS' || assetType === 'FUNDS') && parsedDpu > 0) {
         const targetXdDate = xdDate || effectiveTxDate;
 
-        if (dividendAnalysis?.hasDividends && dividendAnalysis.projectedNextXdDates.length > 1) {
-          // Multi-cycle projected schedule (quarterly / semi-annual)
-          const schedules = dividendAnalysis.projectedNextXdDates.map((dateStr) => ({
-            asset_id: asset.id,
-            dpu: Number(parsedDpu.toFixed(4)),
-            xd_date: dateStr,
-            is_projected: true,
-          }));
+        // Check if schedules already exist for this asset
+        const { data: existingScheds } = await supabase
+          .from('dividend_schedules')
+          .select('id')
+          .eq('asset_id', asset.id);
 
-          const { error: divError } = await supabase.from('dividend_schedules').insert(schedules);
-          if (divError) {
-            console.warn('Dividend schedule multi-insert notice:', divError.message);
-          } else {
-            await scheduleXdReminder(trimmedSymbol, dividendAnalysis.projectedNextXdDates[0]);
-          }
+        const hasExisting = existingScheds && existingScheds.length > 0;
+
+        if (isExisting && hasExisting) {
+          // Asset already has schedules. Do NOT duplicate schedules on DCA accumulation!
+          // Only sync projected DPU if user updated the value
+          await supabase
+            .from('dividend_schedules')
+            .update({ dpu: Number(parsedDpu.toFixed(4)) })
+            .eq('asset_id', asset.id)
+            .eq('is_projected', true);
         } else {
-          // Single schedule
-          const { error: divError } = await supabase.from('dividend_schedules').insert({
-            asset_id: asset.id,
-            dpu: Number(parsedDpu.toFixed(4)),
-            xd_date: targetXdDate,
-            is_projected: true,
-          });
+          if (dividendAnalysis?.hasDividends && dividendAnalysis.projectedNextXdDates.length > 1) {
+            // Multi-cycle projected schedule (quarterly / semi-annual)
+            const schedules = dividendAnalysis.projectedNextXdDates.map((dateStr) => ({
+              asset_id: asset.id,
+              dpu: Number(parsedDpu.toFixed(4)),
+              xd_date: dateStr,
+              is_projected: true,
+            }));
 
-          if (divError) {
-            console.warn('Dividend schedule insert notice:', divError.message);
+            const { error: divError } = await supabase.from('dividend_schedules').insert(schedules);
+            if (divError) {
+              console.warn('Dividend schedule multi-insert notice:', divError.message);
+            } else {
+              await scheduleXdReminder(trimmedSymbol, dividendAnalysis.projectedNextXdDates[0]);
+            }
           } else {
-            await scheduleXdReminder(trimmedSymbol, targetXdDate);
+            // Single schedule
+            const { error: divError } = await supabase.from('dividend_schedules').insert({
+              asset_id: asset.id,
+              dpu: Number(parsedDpu.toFixed(4)),
+              xd_date: targetXdDate,
+              is_projected: true,
+            });
+
+            if (divError) {
+              console.warn('Dividend schedule insert notice:', divError.message);
+            } else {
+              await scheduleXdReminder(trimmedSymbol, targetXdDate);
+            }
           }
         }
       }
@@ -855,7 +889,14 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       onSuccess?.();
     } catch (err: any) {
       setIsReviewVisible(false);
-      Alert.alert('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถบันทึกข้อมูลได้');
+      const isNetworkErr = err?.message?.toLowerCase().includes('network') ||
+                           err?.message?.toLowerCase().includes('fetch') ||
+                           err?.message?.toLowerCase().includes('connection');
+      if (isNetworkErr) {
+        Alert.alert('โหมดออฟไลน์', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาเชื่อมต่อเครือข่ายก่อนบันทึกข้อมูล');
+      } else {
+        Alert.alert('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถบันทึกข้อมูลได้');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -1673,7 +1714,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
               <View style={styles.reviewRow}>
                 <Text style={styles.reviewRowLabel}>วันที่ทำรายการ</Text>
                 <Text style={styles.reviewRowValBold}>
-                  {formatReviewDate(assetType === 'CASH' ? (depositDate || new Date().toISOString().split('T')[0]) : (purchaseDate || new Date().toISOString().split('T')[0]))}
+                  {formatReviewDate(assetType === 'CASH' ? (depositDate || getLocalDateString()) : (purchaseDate || getLocalDateString()))}
                 </Text>
               </View>
 

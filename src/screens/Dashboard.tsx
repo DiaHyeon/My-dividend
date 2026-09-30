@@ -32,6 +32,8 @@ import { ensureAuthenticated } from '../services/authService';
 import { syncDailyPricesIfNeeded } from '../services/priceSyncService';
 import { cleanOrphanedReminders, syncAllUpcomingXdReminders } from '../services/notificationService';
 import { calculatePortfolioReturns } from '../services/returnService';
+import { getCachedPortfolio, savePortfolioCache, notifyOffline } from '../services/portfolioCacheService';
+import { getLocalDateString } from '../utils/dateUtils';
 
 const MONTH_NAMES = [
   'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
@@ -107,6 +109,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const isUSStock = useCallback((item: AssetSummary): boolean => {
     if (item.asset_type !== 'STOCKS') return false;
+    if (item.currency === 'USD') return true;
+    if (item.currency === 'THB') return false;
     if (currencyMap[item.id] === 'USD') return true;
     if (currencyMap[item.id] === 'THB') return false;
     if (isKnownUSSymbol(item.symbol)) return true;
@@ -116,9 +120,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const loadData = useCallback(async (forceSync = false) => {
     try {
+      // 0. Instant offline cache restore for 0ms cold-start display
+      const cached = await getCachedPortfolio();
+      if (cached && cached.assets.length > 0) {
+        setAssets(cached.assets);
+        if (cached.transactions && cached.transactions.length > 0) {
+          setTransactions(cached.transactions);
+        }
+        if (cached.dividendSchedules && cached.dividendSchedules.length > 0) {
+          setDividendSchedules(cached.dividendSchedules);
+        }
+        if (cached.exchangeRate > 0) {
+          setExchangeRate(cached.exchangeRate);
+        }
+        setLoading(false);
+      }
+
       await ensureAuthenticated();
 
-      // 0. Auto-consolidate any duplicate assets if present
+      // 0.1 Auto-consolidate any duplicate assets if present
       await consolidateDuplicateAssets();
 
       // 1. Fetch assets summary view
@@ -127,29 +147,35 @@ export const Dashboard: React.FC<DashboardProps> = ({
         .select('*')
         .order('created_at', { ascending: false });
 
+      if (summaryError) {
+        throw summaryError;
+      }
+
       let loadedAssets = ((summaryData as AssetSummary[]) || []).filter((a) => !a.is_archived);
 
       // 1.1 Sync daily prices if new day or forced by pull-to-refresh
       if (loadedAssets.length > 0) {
-        const pricesUpdated = await syncDailyPricesIfNeeded(loadedAssets, forceSync);
-        if (pricesUpdated) {
-          const { data: refreshedSummary, error: refreshedErr } = await supabase
-            .from('view_asset_summary')
-            .select('*')
-            .order('created_at', { ascending: false });
-          if (!refreshedErr && refreshedSummary) {
-            loadedAssets = ((refreshedSummary as AssetSummary[]) || []).filter((a) => !a.is_archived);
+        try {
+          const pricesUpdated = await syncDailyPricesIfNeeded(loadedAssets, forceSync);
+          if (pricesUpdated) {
+            const { data: refreshedSummary, error: refreshedErr } = await supabase
+              .from('view_asset_summary')
+              .select('*')
+              .order('created_at', { ascending: false });
+            if (!refreshedErr && refreshedSummary) {
+              loadedAssets = ((refreshedSummary as AssetSummary[]) || []).filter((a) => !a.is_archived);
+            }
           }
+        } catch (syncErr) {
+          console.warn('Sync prices failed, continuing with loaded assets:', syncErr);
         }
       }
 
-      if (summaryError) {
-        console.warn('Error fetching view_asset_summary:', summaryError.message);
-      } else {
-        setAssets(loadedAssets);
-      }
+      setAssets(loadedAssets);
 
       const activeAssetIds = loadedAssets.map((a) => a.id).filter(Boolean);
+      let txDataResult: Transaction[] = [];
+      let schedulesData: DividendSchedule[] = [];
 
       if (activeAssetIds.length > 0) {
         // 2. Fetch transactions only for active assets with essential columns for XD cutoff calculations
@@ -159,14 +185,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
           .in('asset_id', activeAssetIds)
           .order('transaction_date', { ascending: true });
 
-        if (txError) {
-          console.warn('Error fetching transactions:', txError.message);
-        } else {
-          setTransactions((txData as Transaction[]) || []);
+        if (!txError && txData) {
+          txDataResult = txData as Transaction[];
+          setTransactions(txDataResult);
         }
 
         // 3. Fetch dividend schedules only for active assets (with resilient is_special fallback)
-        let schedulesData: DividendSchedule[] = [];
         const { data: divDataWithSpecial, error: divSpecialError } = await supabase
           .from('dividend_schedules')
           .select('id, asset_id, dpu, xd_date, payment_date, is_projected, is_special')
@@ -182,9 +206,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             .in('asset_id', activeAssetIds)
             .order('xd_date', { ascending: true });
 
-          if (divError) {
-            console.warn('Error fetching dividend_schedules:', divError.message);
-          } else {
+          if (!divError && divData) {
             schedulesData = (divData as DividendSchedule[]) || [];
           }
         }
@@ -205,12 +227,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
       setCurrencyMap(currencies);
       setSpecialScheduleIds(specialIds);
 
+      // Save fresh snapshot into local cache for offline viewing
+      await savePortfolioCache({
+        assets: loadedAssets,
+        transactions: txDataResult,
+        dividendSchedules: schedulesData,
+        exchangeRate: rate,
+      });
+
       // Clean orphaned reminders for archived/deleted assets and sync upcoming XD reminders
       cleanOrphanedReminders(loadedAssets)
         .then(() => syncAllUpcomingXdReminders())
         .catch(() => {});
     } catch (err: any) {
-      console.warn('Load data error:', err.message);
+      console.warn('Dashboard loadData catch:', err?.message || err);
+      // Notify user via offline toast if network request failed
+      notifyOffline('เชื่อมต่อไม่ได้ · แสดงข้อมูลล่าสุดในเครื่อง');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -470,7 +502,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         shares: eligibleShares,
         netAmount: netDividend,
         xdDate: schedule.xd_date,
-        paymentDate: schedule.payment_date || payoutDateObj.toISOString().split('T')[0],
+        paymentDate: schedule.payment_date || getLocalDateString(payoutDateObj),
         isInterest: isCashAsset,
         taxRate,
         isSpecial: isSpecialItem,
@@ -549,7 +581,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         assetId: schedule.asset_id,
         symbol: parentAsset.symbol,
         assetType: parentAsset.asset_type,
-        dateStr: schedule.payment_date || payoutDateObj.toISOString().split('T')[0],
+        dateStr: schedule.payment_date || getLocalDateString(payoutDateObj),
         diffDays: diffPay,
         amount: netDividend,
         isInterest: isCashAsset,
@@ -605,7 +637,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           text: 'ยืนยันเงินเข้าแล้ว',
           onPress: async () => {
             try {
-              const todayStr = new Date().toISOString().split('T')[0];
+              const todayStr = getLocalDateString();
               const { error } = await supabase
                 .from('dividend_schedules')
                 .update({

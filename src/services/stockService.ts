@@ -8,6 +8,7 @@ export interface StockSuggestion {
 }
 
 import { invokeStockProxy } from './proxyClient';
+import { getLocalDateString } from '../utils/dateUtils';
 
 export function normalizeExchange(rawExch: string): string {
   const upper = (rawExch || '').toUpperCase();
@@ -392,7 +393,7 @@ export async function fetchDividendAnalysis(
   const payouts: DividendPayout[] = Object.values(rawDividends)
     .map((d: any) => {
       const ts = typeof d.date === 'number' ? d.date * 1000 : Date.now();
-      const dateStr = new Date(ts).toISOString().split('T')[0];
+      const dateStr = getLocalDateString(new Date(ts));
       return {
         amount: Number(d.amount) || 0,
         timestamp: ts,
@@ -454,11 +455,20 @@ export async function fetchDividendAnalysis(
     cursor.setMonth(cursor.getMonth() + intervalMonths);
   }
 
-  // Collect schedule dates for the next 12 months
-  for (let i = 0; i < Math.min(frequency, 4); i++) {
-    projectedNextXdDates.push(cursor.toISOString().split('T')[0]);
-    cursor = new Date(cursor);
-    cursor.setMonth(cursor.getMonth() + intervalMonths);
+  // Collect schedule dates for the next 12 months (up to 12 cycles for monthly dividend payers)
+  const maxCycles = Math.min(frequency, 12);
+  const origDay = new Date(lastXdDate).getDate();
+
+  for (let i = 0; i < maxCycles; i++) {
+    projectedNextXdDates.push(getLocalDateString(cursor));
+
+    // Safely advance month avoiding 31st day overflow (e.g. Jan 31 -> Feb 28)
+    const nextTotalMonth = cursor.getMonth() + intervalMonths;
+    const nextYear = cursor.getFullYear() + Math.floor(nextTotalMonth / 12);
+    const normalizedMonth = ((nextTotalMonth % 12) + 12) % 12;
+    const maxDaysInNextMonth = new Date(nextYear, normalizedMonth + 1, 0).getDate();
+    const safeDay = Math.min(origDay, maxDaysInNextMonth);
+    cursor = new Date(nextYear, normalizedMonth, safeDay);
   }
 
   return {

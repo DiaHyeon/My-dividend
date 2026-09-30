@@ -3,6 +3,7 @@
  */
 
 import { DividendAnalysis } from './stockService';
+import { getLocalDateString } from '../utils/dateUtils';
 
 export interface FundSuggestion {
   symbol: string;        // Clean ticker (e.g. 'K-USA', 'SCBDV', 'B-INNOTECH')
@@ -791,7 +792,7 @@ export async function fetchFundDividendAnalysis(
   for (let i = 0; i < freq; i++) {
     const d = new Date(baseDate);
     d.setMonth(d.getMonth() + (i * stepMonths));
-    projectedDates.push(d.toISOString().split('T')[0]);
+    projectedDates.push(getLocalDateString(d));
   }
 
   const rawHistory = items.map((it) => {

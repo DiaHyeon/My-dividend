@@ -25,6 +25,7 @@ import { getAssetCurrency, setAssetCurrency, getCachedExchangeRate } from '../se
 import { CashAssetForm } from './CashAssetForm';
 import { CalendarPickerModal } from './CalendarPickerModal';
 import { SectorPickerModal } from './SectorPickerModal';
+import { getLocalDateString } from '../utils/dateUtils';
 
 interface EditAssetModalProps {
   visible: boolean;
@@ -86,6 +87,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
   const [splitDetection, setSplitDetection] = useState<SplitDetectionResult | null>(null);
   const [isCheckingSplit, setIsCheckingSplit] = useState(false);
   const [isApplyingSplit, setIsApplyingSplit] = useState(false);
+  const [txCount, setTxCount] = useState<number>(1);
 
   // Initialize values when asset changes or modal becomes visible
   useEffect(() => {
@@ -154,7 +156,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
           setExpectedDpu('0');
           const nextMonth = new Date();
           nextMonth.setDate(nextMonth.getDate() + 30);
-          setXdDate(nextMonth.toISOString().split('T')[0]);
+          setXdDate(getLocalDateString(nextMonth));
           setExistingScheduleId(null);
         }
       } catch (err: any) {
@@ -166,33 +168,35 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
 
     loadSchedules();
 
-    // Check for pending stock splits (only applicable for STOCKS)
-    const checkSplits = async () => {
-      if (asset.asset_type !== 'STOCKS') {
-        setSplitDetection(null);
-        return;
-      }
-      setIsCheckingSplit(true);
+    // Check transaction count and pending stock splits
+    const checkTransactionsAndSplits = async () => {
       try {
         const { data: txs, error: txErr } = await supabase
           .from('transactions')
           .select('*')
           .eq('asset_id', asset.id);
 
-        if (!txErr && txs && txs.length > 0) {
-          const result = await detectPendingSplits(asset.id, asset.symbol, txs as Transaction[]);
-          setSplitDetection(result);
+        if (!txErr && txs) {
+          setTxCount(txs.length);
+          if (asset.asset_type === 'STOCKS' && txs.length > 0) {
+            setIsCheckingSplit(true);
+            const result = await detectPendingSplits(asset.id, asset.symbol, txs as Transaction[], asset.currency);
+            setSplitDetection(result);
+          } else {
+            setSplitDetection(null);
+          }
         } else {
+          setTxCount(1);
           setSplitDetection(null);
         }
       } catch (e) {
-        console.warn('Error checking pending splits:', e);
+        console.warn('Error checking transactions/splits:', e);
       } finally {
         setIsCheckingSplit(false);
       }
     };
 
-    checkSplits();
+    checkTransactionsAndSplits();
   }, [asset, visible]);
 
   // Handle switching currency toggle in Edit Modal
@@ -343,17 +347,19 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
         throw new Error(assetError.message || 'ไม่สามารถอัปเดตสินทรัพย์ได้');
       }
 
-      // 2. Update or Insert Transaction (to update net_shares & average cost in view_asset_summary)
+      // 2. Update Transaction (ONLY if single transaction and values were changed, NEVER delete DCA transactions)
       const { data: existingTxs, error: txFetchError } = await supabase
         .from('transactions')
         .select('*')
         .eq('asset_id', asset.id)
         .order('created_at', { ascending: true });
 
-      if (!txFetchError && existingTxs && existingTxs.length > 0) {
-        if (existingTxs.length === 1) {
-          // Single transaction: update directly
-          const primaryTx = existingTxs[0];
+      if (!txFetchError && existingTxs && existingTxs.length === 1) {
+        // Single transaction: update directly if values changed
+        const primaryTx = existingTxs[0];
+        const oldShares = Number(primaryTx.shares) || 0;
+        const oldPrice = Number(primaryTx.price_per_share) || 0;
+        if (Math.abs(oldShares - parsedShares) > 0.0001 || Math.abs(oldPrice - convertedCostPrice) > 0.0001) {
           const { error: txUpdateError } = await supabase
             .from('transactions')
             .update({
@@ -365,30 +371,10 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
           if (txUpdateError) {
             console.warn('Transaction update error:', txUpdateError.message);
           }
-        } else {
-          // Multiple DCA transactions: consolidate cleanly into single record with new total and cost
-          const primaryTx = existingTxs[0];
-          const otherTxIds = existingTxs.slice(1).map((t) => t.id);
-
-          if (otherTxIds.length > 0) {
-            await supabase.from('transactions').delete().in('id', otherTxIds);
-          }
-
-          const { error: txUpdateError } = await supabase
-            .from('transactions')
-            .update({
-              shares: Number(parsedShares.toFixed(4)),
-              price_per_share: Number(convertedCostPrice.toFixed(4)),
-            })
-            .eq('id', primaryTx.id);
-
-          if (txUpdateError) {
-            console.warn('Transaction consolidate error:', txUpdateError.message);
-          }
         }
-      } else {
+      } else if (!txFetchError && (!existingTxs || existingTxs.length === 0)) {
         // If no existing transaction, insert one
-        const todayDate = new Date().toISOString().split('T')[0];
+        const todayDate = getLocalDateString();
         await supabase.from('transactions').insert({
           asset_id: asset.id,
           type: 'BUY',
@@ -397,10 +383,12 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
           transaction_date: todayDate,
         });
       }
+      // Note: If existingTxs.length > 1 (DCA positions), transactions are NEVER deleted or overwritten!
+      // Multi-buy DCA history is preserved safely, and can be edited in Transaction History.
 
       // 3. Update or Insert Dividend Schedule (STOCKS & FUNDS)
       if (assetType === 'STOCKS' || assetType === 'FUNDS') {
-        const targetXdDate = xdDate.trim() || new Date().toISOString().split('T')[0];
+        const targetXdDate = xdDate.trim() || getLocalDateString();
 
         if (existingScheduleId) {
           await supabase
@@ -438,7 +426,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
               schedules.push({
                 asset_id: asset.id,
                 dpu: Number((annualDpu / 12).toFixed(6)),
-                xd_date: d.toISOString().split('T')[0],
+                xd_date: getLocalDateString(d),
                 is_projected: true,
               });
             }
@@ -900,6 +888,15 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                     />
                   </View>
                 </View>
+
+                {txCount > 1 && (
+                  <View style={styles.dcaNoticeCard}>
+                    <Ionicons name="information-circle" size={15} color="#0284C7" style={{ marginRight: 6 }} />
+                    <Text style={styles.dcaNoticeText}>
+                      สินทรัพย์นี้มีประวัติซื้อสะสม (DCA) {txCount} ไม้ ยอดหุ้นและต้นทุนนี้คือยอดเฉลี่ยรวม (หากต้องการแก้ไขเฉพาะไม้ ให้แก้ไขที่แท็บประวัติรายการ)
+                    </Text>
+                  </View>
+                )}
 
                 {/* Live Calculation Preview Card */}
                 <View style={styles.previewCard}>
@@ -1752,6 +1749,24 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  dcaNoticeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  dcaNoticeText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#0369A1',
+    lineHeight: 16,
   },
 });
 

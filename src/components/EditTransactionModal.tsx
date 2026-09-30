@@ -19,10 +19,12 @@ import { AssetType, Transaction } from '../types/database';
 import { CalendarPickerModal } from './CalendarPickerModal';
 import { isKnownUSSymbol, getTransactionCurrencyMeta, saveTransactionCurrencyMeta } from '../services/currencyService';
 import { cancelRemindersForSymbol } from '../services/notificationService';
+import { getLocalDateString } from '../utils/dateUtils';
 
 export interface EnrichedTransaction extends Transaction {
   symbol: string;
   asset_type: AssetType;
+  currency?: 'THB' | 'USD';
 }
 
 interface EditTransactionModalProps {
@@ -49,40 +51,71 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
 
   // Currency state
   const isDeposit = transaction?.asset_type === 'CASH';
-  const isUS = !isDeposit && transaction ? isKnownUSSymbol(transaction.symbol) : false;
+  const [isUS, setIsUS] = useState<boolean>(false);
   const [currencyMode, setCurrencyMode] = useState<'THB' | 'USD'>('THB');
 
   useEffect(() => {
     if (!transaction || !visible) return;
 
     setShares(transaction.shares ? transaction.shares.toString() : '');
-    setTxDate(transaction.transaction_date || new Date().toISOString().split('T')[0]);
+    setTxDate(transaction.transaction_date || getLocalDateString());
 
     let isCancelled = false;
     const rate = exchangeRate > 0 ? exchangeRate : 34.00;
     const rawPrice = Number(transaction.price_per_share) || 0;
 
-    getTransactionCurrencyMeta(transaction.id).then((meta) => {
+    const resolveCurrency = async () => {
+      let effectiveCurrency: 'THB' | 'USD' = 'THB';
+      const meta = await getTransactionCurrencyMeta(transaction.id);
       if (isCancelled) return;
+
+      if (meta && meta.currency) {
+        effectiveCurrency = meta.currency;
+      } else if (transaction.currency) {
+        effectiveCurrency = transaction.currency;
+      } else if (!isDeposit) {
+        // Query asset currency from DB
+        try {
+          const { data: assetData } = await supabase
+            .from('assets')
+            .select('currency')
+            .eq('id', transaction.asset_id)
+            .single();
+          if (assetData?.currency) {
+            effectiveCurrency = assetData.currency as 'THB' | 'USD';
+          } else if (isKnownUSSymbol(transaction.symbol)) {
+            effectiveCurrency = 'USD';
+          }
+        } catch {
+          if (isKnownUSSymbol(transaction.symbol)) {
+            effectiveCurrency = 'USD';
+          }
+        }
+      }
+
+      const isUsDetected = effectiveCurrency === 'USD';
+      setIsUS(isUsDetected);
+      setCurrencyMode(effectiveCurrency);
+
       if (meta && meta.originalPrice > 0) {
-        setCurrencyMode(meta.currency);
         setPricePerShare(meta.originalPrice.toString());
       } else {
-        setCurrencyMode(isUS ? 'USD' : 'THB');
         if (isDeposit) {
           setPricePerShare('1');
-        } else if (isUS && rate > 0) {
+        } else if (isUsDetected && rate > 0) {
           setPricePerShare((rawPrice / rate).toFixed(2));
         } else {
           setPricePerShare(rawPrice.toString());
         }
       }
-    });
+    };
+
+    resolveCurrency();
 
     return () => {
       isCancelled = true;
     };
-  }, [transaction, visible, exchangeRate, isUS, isDeposit]);
+  }, [transaction, visible, exchangeRate, isDeposit]);
 
   if (!transaction) return null;
 

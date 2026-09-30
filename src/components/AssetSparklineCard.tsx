@@ -128,9 +128,10 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
 
   const isUS = useMemo(
     () =>
-      item.asset_type === 'STOCKS' &&
-      (isKnownUSSymbol(item.symbol) || Math.abs(Number(item.tax_rate) - 0.15) < 0.005),
-    [item.symbol, item.asset_type, item.tax_rate]
+      item.currency === 'USD' ||
+      (item.asset_type === 'STOCKS' &&
+        (isKnownUSSymbol(item.symbol) || Math.abs(Number(item.tax_rate) - 0.15) < 0.005)),
+    [item.currency, item.symbol, item.asset_type, item.tax_rate]
   );
   const isCash = item.asset_type === 'CASH';
   const isFund = item.asset_type === 'FUNDS';

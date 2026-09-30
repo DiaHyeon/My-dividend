@@ -43,7 +43,7 @@ export function calculatePortfolioReturns(
     const isCashAsset = asset.asset_type === 'CASH';
     const isUS =
       asset.asset_type === 'STOCKS' &&
-      (isKnownUSSymbol(asset.symbol) || Math.abs(Number(asset.tax_rate) - 0.15) < 0.005);
+      (asset.currency === 'USD' || isKnownUSSymbol(asset.symbol) || Math.abs(Number(asset.tax_rate) - 0.15) < 0.005);
     const taxRate =
       asset.tax_rate !== undefined && asset.tax_rate !== null
         ? Number(asset.tax_rate)

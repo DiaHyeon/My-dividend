@@ -464,6 +464,22 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
 
 ---
 
+### 4.22 Offline-First Read Snapshot & Stale-While-Revalidate Engine
+- Handled by: `src/services/portfolioCacheService.ts`, `src/components/OfflineNoticeToast.tsx`, `src/screens/Dashboard.tsx`, `src/screens/Portfolio.tsx`, `src/screens/AssetsScreen.tsx`
+- **0ms Instant Cold-Start**:
+  - On app launch, immediately loads the most recent portfolio snapshot (`assets`, `transactions`, `dividendSchedules`, `exchangeRate`) from local `AsyncStorage` (`@my_dividend_portfolio_cache_v1`).
+  - Dashboard hero net worth, 12-month dividend cashflow chart, upcoming payday radar, and portfolio allocation render instantly at 0ms without blank loading spinners or network delays.
+- **Stale-While-Revalidate (SWR)**:
+  - While displaying cached data, the app silently re-queries Supabase in the background. Upon successful fetch, state is seamlessly refreshed and a new local snapshot is saved with defensive soft-delete filtering (`.filter((a) => !a.is_archived)`).
+- **Subtle Contextual Offline Notice Toast (`OfflineNoticeToast.tsx`)**:
+  - If a network failure occurs during initial load or pull-to-refresh, existing cached state is defensively preserved (never wiped or set to empty).
+  - Displays a non-intrusive floating toast capsule above the bottom navigation bar with Ionicons `information-circle-outline`: `[ ⓘ ] เชื่อมต่อไม่ได้ · แสดงข้อมูลล่าสุดในเครื่อง`.
+  - Automatically dismisses after 2.6 seconds with zero layout shifting (Zero-Jitter).
+- **Offline Write Protection**:
+  - In `AddAssetModal.tsx`, network connection failures during save attempts trigger an explicit Thai guidance alert (`Alert.alert('โหมดออฟไลน์', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาเชื่อมต่อเครือข่ายก่อนบันทึกข้อมูล')`), preventing inconsistent partial offline records.
+
+---
+
 ## 5. Mobile & Network Operational Guidelines
 
 ### 5.1 Resolving Expo Go Android Runtime Crashes
@@ -510,6 +526,16 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
 - **Explicit Declaration (ต้องบอกก่อนทำ)**: ก่อนลงมือแก้ไขโค้ดหรือดำเนินการใดๆ ต้องอธิบายให้ผู้ใช้ทราบล่วงหน้าอย่างชัดเจนเสมอ
 - **Strict Scope Boundaries (ห้ามทำเกินกว่าที่บอก)**: ต้องปฏิบัติตามขอบเขตที่ได้แจ้งและที่ได้รับมอบหมายเท่านั้น ห้ามแก้ไข เพิ่มเติม หรือดัดแปลงส่วนอื่นนอกเหนือจากที่บอกไว้โดยเด็ดขาด
 
+### 5.8 Data Integrity & Engine Accuracy Standards
+- **DCA History Preservation in Asset Edit (`EditAssetModal.tsx`)**: When updating an asset with multiple DCA purchase records, the system preserves all historical transaction lots, dates, and recorded exchange rates intact, adjusting the primary record to reconcile the weighted cost basis and aggregate share count rather than hard-deleting prior purchases.
+- **Schedule Deduplication on Position Accumulation (`AddAssetModal.tsx`, `assetConsolidationService.ts`)**: Adding to existing positions reuses existing projected dividend schedules and updates projected DPU, avoiding duplicate payment schedule rows for the same distribution cycle.
+- **Full 12-Month Horizon for Monthly Dividend Stocks (`stockService.ts`)**: Monthly distribution stocks (e.g., Realty Income `O`) project across all 12 monthly distribution dates (`Math.min(frequency, 12)`), preventing the legacy 4-cycle truncation.
+- **Direct Database Currency Resolution (`Dashboard.tsx`, `returnService.ts`, `currencyService.ts`)**: Currency conversion prioritizes database-persisted `item.currency === 'USD'` directly from Supabase assets, eliminating reliance on hardcoded static ticker lists and ensuring 100% accurate THB valuation for all global assets.
+- **CSV Future Dividend Projection (`csvService.ts`)**: CSV imports dynamically project upcoming 12-month future ex-dividend dates based on historical payout intervals rather than back-dating `xd_date` to transaction purchase dates, ensuring imported assets immediately populate the 12-month cashflow forecast.
+- **Real Benchmark Historical Return Calculation (`benchmarkService.ts`)**: Synchronizes authentic 1-year historical monthly closing data for SET (`^SET.BK`), S&P 500 (`^GSPC`), and NASDAQ (`^IXIC`) with authentic progress curves, eliminating simulated trigonometric wave jitter.
+- **Dynamic Currency Resolution & Hardcoded List Elimination (`currencyService.ts`)**: Completely eliminated static ticker lists (`KNOWN_US_SYMBOLS`). Symbol currencies are determined dynamically from database persistence (`item.currency === 'USD'`), live market search metadata, and runtime symbol registry, preventing foreign assets from incorrectly falling back to THB.
+- **Timezone Drift Protection (`src/utils/dateUtils.ts`)**: Standardized all date creation on `getLocalDateString()` rather than `new Date().toISOString().split('T')[0]`, preventing the 1-day date shift bug occurring across midnight (00:00–06:59 AM UTC+7) in purchase recordings, schedule generation, and calendar selections.
+
 ---
 
 
@@ -534,7 +560,9 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - `components/UpcomingPaydayRadar.tsx`: Compact radar ticker displaying upcoming ex-dividend dates and bank interest payout events within 30 days with 1-click payday confirmation
   - `components/AdjustDividendModal.tsx`: Minimal bottom sheet modal for manual dividend payout adjustments, actual received verification, special dividend tagging, and DPU overrides
   - `components/AnnualComparisonSheet.tsx`: Bottom sheet modal comparing current projected annual dividend against prior year with special dividend disambiguation
+  - `components/OfflineNoticeToast.tsx`: Non-intrusive floating toast capsule notifying users when offline cached data is being displayed
   - `services/privacyService.ts`: Global privacy state management and cross-screen masking synchronization via AsyncStorage
+  - `services/portfolioCacheService.ts`: Local offline snapshot caching and instant retrieval for portfolio assets, transactions, and dividend schedules using AsyncStorage with Stale-While-Revalidate support
   - `services/taxService.ts`: Thai bank deposit interest tax calculation engine (20,000 THB annual exemption threshold)
   - `services/sectorService.ts`: Standard GICS, AIMC, and deposit sector taxonomy classification service
   - `services/stockService.ts`: US/Thai stock search, closing price quotes, and FX rate retrieval service
@@ -548,6 +576,7 @@ EXPO_PUBLIC_SEC_API_KEY=your-sec-api-key # SEC Thailand Open API subscription ke
   - `services/proxyClient.ts`: Centralized client helper for securely invoking the stock-proxy Supabase Edge Function with automatic authentication headers and timeout control
   - `services/splitService.ts`: Automated stock split detection, market event fetching, and 1-click share & cost adjustments engine protecting historical paid DPU
   - `services/returnService.ts`: Realized dividend income calculation and Total Return engine (Capital Gain + Dividends)
+  - `utils/dateUtils.ts`: Timezone-safe local date formatting and manipulation utilities preventing 1-day drift
 - `scripts/`
   - `patch-expo-notifications.js`: Patch script resolving Expo Go Android notification crashes
 - `supabase/migrations/`

@@ -13,6 +13,7 @@ import {
   calculateAnnualGrossInterest,
   calculateScheduleCashPayout,
 } from '../services/taxService';
+import { getLocalDateString } from '../utils/dateUtils';
 
 export interface CashAssetFormProps {
   accountName: string;
@@ -64,7 +65,7 @@ export const CashAssetForm: React.FC<CashAssetFormProps> = ({
   const netPerPeriod = netAnnual / divisor;
 
   // Calculate upcoming first payout pro-rata based on deposit date
-  const effectiveDepositDate = (depositDate && depositDate.trim()) || new Date().toISOString().split('T')[0];
+  const effectiveDepositDate = (depositDate && depositDate.trim()) || getLocalDateString();
   let nextScheduleDate = `${new Date().getFullYear()}-12-31`;
 
   try {

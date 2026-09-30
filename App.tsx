@@ -7,6 +7,7 @@ import { Dashboard } from './src/screens/Dashboard';
 import { Portfolio } from './src/screens/Portfolio';
 import { AssetsScreen } from './src/screens/AssetsScreen';
 import { AssetType } from './src/types/database';
+import { OfflineNoticeToast } from './src/components/OfflineNoticeToast';
 
 // ปิดหน้าต่างแจ้งเตือน LogBox ทั้งหมดบนหน้าจอมือถือ
 LogBox.ignoreAllLogs(true);
@@ -144,6 +145,9 @@ function MainNavigator() {
           />
         </View>
       </View>
+
+      {/* Floating Offline Status Toast */}
+      <OfflineNoticeToast />
 
       {/* Modern Docked Bottom Navigation Bar */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
