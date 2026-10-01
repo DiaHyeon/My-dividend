@@ -89,8 +89,8 @@
 | :--- | :--- | :--- | :--- | :--- |
 | `icon.png` | `assets/icon.png` | มาพร้อมกับเทมเพลต `create-expo-app` (commit `bfde910`) | MIT (Expo Default Asset) | **ต้องตรวจสอบ**: ควรเปลี่ยนเป็นโลโก้ของแอปจริงก่อนเผยแพร่บน Google Play |
 | `android-icon-foreground.png` | `assets/android-icon-foreground.png` | เทมเพลต `create-expo-app` | MIT (Expo) | **ต้องตรวจสอบ**: ควรเปลี่ยนให้เข้ากับโลโก้แอปจริง |
-| `android-icon-background.png` | `assets/android-icon-background.png` | เทมเพลต `create-expo-app` | MIT (Expo) | เข้ากันได้ |
-| `android-icon-monochrome.png` | `assets/android-icon-monochrome.png` | เทมเพลต `create-expo-app` | MIT (Expo) | เข้ากันได้ |
+| `android-icon-background.png` | `assets/android-icon-background.png` | ลบออกจากโปรเจกต์แล้ว | - | ลบออกแล้ว |
+| `android-icon-monochrome.png` | `assets/android-icon-monochrome.png` | ลบออกจากโปรเจกต์แล้ว | - | ลบออกแล้ว |
 | `splash-icon.png` | `assets/splash-icon.png` | เทมเพลต `create-expo-app` | MIT (Expo) | เข้ากันได้ |
 | `favicon.png` | `assets/favicon.png` | เทมเพลต `create-expo-app` | MIT (Expo) | เข้ากันได้ |
 | `expo-qr.png` | `assets/expo-qr.png` | เพิ่มใน commit `ab85bfe` | **ต้องตรวจสอบ**: ไม่พบการเรียกใช้งานในโค้ด | ปลอดภัย (ไม่ได้ใช้ในแอป) |
