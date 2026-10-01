@@ -20,10 +20,8 @@
       "package": "com.mydividend.app",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#0F172A",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0F172A"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -37,7 +35,6 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
           "color": "#10B981"
         }
       ],

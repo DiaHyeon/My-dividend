@@ -10,9 +10,15 @@ import { getLocalDateString } from '../utils/dateUtils';
  * Expo Go on Android removed native push/notification channel support in SDK 53-57,
  * whereas standalone production builds (APK/AAB) have full native notification support.
  */
-export const isRunningInExpoGo =
-  Constants?.executionEnvironment === ExecutionEnvironment.StoreClient ||
-  Constants?.appOwnership === 'expo';
+let inExpoGo = false;
+try {
+  inExpoGo =
+    Constants?.executionEnvironment === ExecutionEnvironment.StoreClient ||
+    Constants?.appOwnership === 'expo';
+} catch {
+  inExpoGo = false;
+}
+export const isRunningInExpoGo = inExpoGo;
 
 // Configure in-app notification behavior safely (only when supported)
 if (!isRunningInExpoGo && Platform.OS !== 'web') {

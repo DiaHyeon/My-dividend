@@ -218,10 +218,15 @@ export default function App() {
 
   useEffect(() => {
     // ตรวจสอบเซสชันเริ่มต้น
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setAuthLoading(false);
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setSession(session);
+        setAuthLoading(false);
+      })
+      .catch((err) => {
+        console.warn('Initial session check error:', err);
+        setAuthLoading(false);
+      });
 
     // ฟังเหตุการณ์เปลี่ยนแปลงสถานะการยืนยันตัวตน (Login, Logout, Token Refresh)
     const {
