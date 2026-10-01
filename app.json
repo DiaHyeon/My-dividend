@@ -45,6 +45,12 @@
     ],
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ab139262-a8a9-4acb-86bf-e2e3ad1e6f29"
+      }
+    },
+    "owner": "dia0"
   }
 }
