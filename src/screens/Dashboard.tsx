@@ -31,7 +31,7 @@ import { usePrivacyMode } from '../services/privacyService';
 import { ensureAuthenticated, signOut } from '../services/authService';
 import { getTimeGreeting, getUserDisplayName } from '../services/userService';
 import { syncDailyPricesIfNeeded } from '../services/priceSyncService';
-import { cleanOrphanedReminders, syncAllUpcomingXdReminders } from '../services/notificationService';
+import { cleanOrphanedReminders, syncAllUpcomingXdReminders, checkAndPromptNotificationPermission } from '../services/notificationService';
 import { calculatePortfolioReturns } from '../services/returnService';
 import { getCachedPortfolio, savePortfolioCache, notifyOffline } from '../services/portfolioCacheService';
 import { getLocalDateString } from '../utils/dateUtils';
@@ -265,6 +265,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       // Clean orphaned reminders for archived/deleted assets and sync upcoming XD reminders
       cleanOrphanedReminders(loadedAssets)
         .then(() => syncAllUpcomingXdReminders())
+        .then(() => checkAndPromptNotificationPermission())
         .catch(() => {});
     } catch (err: any) {
       console.warn('Dashboard loadData catch:', err?.message || err);

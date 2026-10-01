@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { Platform, Alert, Linking } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
@@ -52,9 +52,9 @@ export async function initNotificationChannel(): Promise<void> {
 }
 
 /**
- * Request notification permissions from user
+ * Request notification permissions from user with optional smart guidance prompt
  */
-export async function requestNotificationPermissions(): Promise<boolean> {
+export async function requestNotificationPermissions(showPromptIfDenied: boolean = false): Promise<boolean> {
   if (Platform.OS === 'web' || isRunningInExpoGo) {
     return false;
   }
@@ -66,10 +66,39 @@ export async function requestNotificationPermissions(): Promise<boolean> {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
+
+    if (finalStatus !== 'granted' && showPromptIfDenied && Platform.OS === 'android') {
+      const GUIDANCE_KEY = '@my_dividend_notif_guidance_shown_v1';
+      const hasShown = await AsyncStorage.getItem(GUIDANCE_KEY);
+      if (!hasShown) {
+        await AsyncStorage.setItem(GUIDANCE_KEY, 'true');
+        Alert.alert(
+          '🔔 เปิดการแจ้งเตือนวัน XD',
+          'เพื่อให้ระบบสามารถแจ้งเตือนล่วงหน้า 1 วันตอน 08:30 น. ก่อนวันขึ้นเครื่องหมายเงินปันผล กรุณาอนุญาตการแจ้งเตือนในการตั้งค่าตัวเครื่อง (และเลือกการใช้แบตเตอรี่เป็น "ไม่จำกัด" เพื่อความแม่นยำ)',
+          [
+            { text: 'ไว้ทีหลัง', style: 'cancel' },
+            {
+              text: 'ไปที่การตั้งค่า',
+              onPress: () => {
+                Linking.openSettings().catch(() => {});
+              },
+            },
+          ]
+        );
+      }
+    }
+
     return finalStatus === 'granted';
   } catch {
     return false;
   }
+}
+
+/**
+ * Checks and prompts user to grant notification permissions if not yet enabled
+ */
+export async function checkAndPromptNotificationPermission(): Promise<void> {
+  await requestNotificationPermissions(true);
 }
 
 /**

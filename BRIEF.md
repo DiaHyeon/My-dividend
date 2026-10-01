@@ -562,13 +562,19 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - **Dynamic Currency Resolution & Hardcoded List Elimination (`currencyService.ts`)**: Completely eliminated static ticker lists (`KNOWN_US_SYMBOLS`). Symbol currencies are determined dynamically from database persistence (`item.currency === 'USD'`), live market search metadata, and runtime symbol registry, preventing foreign assets from incorrectly falling back to THB.
 - **Timezone Drift Protection (`src/utils/dateUtils.ts`)**: Standardized all date creation on `getLocalDateString()` rather than `new Date().toISOString().split('T')[0]`, preventing the 1-day date shift bug occurring across midnight (00:00–06:59 AM UTC+7) in purchase recordings, schedule generation, and calendar selections.
 
----
+### 5.9 Standalone Android APK Build & EAS Configuration (`eas.json`)
+- **EAS Build Architecture**: Configured via `eas.json` with a dedicated `preview` profile specifying `"buildType": "apk"` for direct installation on Android devices without Google Play Store intermediation, and a `production` profile with `"buildType": "app-bundle"` (AAB) for official store releases.
+- **Dark Mode Splash Screen (`app.json`)**: Configured `"splash"` with `./assets/splash-icon.png`, `"resizeMode": "contain"`, and `#0F172A` background color, completely eliminating launch screen white flash artifacts.
+- **Android 13/14+ Notification Permission & Settings Guidance**: `notificationService.ts` verifies permission status via `requestNotificationPermissions(true)`. If ungranted, provides an interactive Thai guidance alert with a direct shortcut to system settings (`Linking.openSettings()`), enabling one-tap exact alarm and unconstrained battery optimization configuration.
+- **Unified Remote Database Schema (`005_unified_schema_update.sql`)**: Applied and verified on Supabase Cloud, providing native database columns for `assets.sector`, `assets.currency`, `transactions.exchange_rate`, and `dividend_schedules.is_special`, with clean `DROP VIEW IF EXISTS public.view_asset_summary CASCADE` ensuring zero schema-cache errors.
 
+---
 
 ## 6. Project File Structure
 - `App.tsx`: Root Application Component with `RootErrorBoundary` and bottom tab navigation (`Overview`, `Portfolio`, `Holdings`)
 - `index.ts`: Application entry point registering Root Component with Expo
-- `app.json`: Expo configuration, Android permissions, and plugin registry
+- `app.json`: Expo configuration, Android permissions, splash screen, and plugin registry
+- `eas.json`: Expo Application Services (EAS) Build configuration file for compiling standalone Android APK and AAB packages
 - `src/`
   - `types/database.ts`: TypeScript Database Definitions for Supabase
   - `lib/supabase.ts`: Supabase Client initialization with AsyncStorage persistence

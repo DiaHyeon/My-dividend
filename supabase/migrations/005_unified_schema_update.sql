@@ -13,7 +13,10 @@ ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS exchange_rate NUMERIC(1
 ALTER TABLE public.dividend_schedules ADD COLUMN IF NOT EXISTS is_special BOOLEAN NOT NULL DEFAULT false;
 
 -- 4. อัปเดต View view_asset_summary ให้ดึง sector และ currency ออกมาโดยอัตโนมัติ
-CREATE OR REPLACE VIEW public.view_asset_summary
+-- (ต้อง DROP VIEW เดิมก่อนเพื่อป้องกัน Error 42P16 จากการแทรกคอลัมน์ใหม่ในตำแหน่งเดิม โดยข้อมูลจริงไม่สูญหาย)
+DROP VIEW IF EXISTS public.view_asset_summary CASCADE;
+
+CREATE VIEW public.view_asset_summary
 WITH (security_invoker = true)
 AS
 WITH asset_calc AS (
@@ -118,3 +121,7 @@ SELECT
     ELSE 0.0000
   END::NUMERIC(15, 4) AS unrealized_pl_percent
 FROM asset_calc ac;
+
+-- ให้สิทธิ์อ่าน View แก่ผู้ใช้ที่ล็อกอินและเดโม
+GRANT SELECT ON public.view_asset_summary TO authenticated, anon;
+
