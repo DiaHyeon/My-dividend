@@ -34,6 +34,7 @@ import {
   syncBenchmarkReturns,
 } from '../services/benchmarkService';
 import { getCachedPortfolio, savePortfolioCache, notifyOffline } from '../services/portfolioCacheService';
+import { portfolioEvents } from '../services/eventService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -179,6 +180,10 @@ export const Portfolio: React.FC<PortfolioProps> = ({
 
   useEffect(() => {
     loadData();
+    const unsubscribe = portfolioEvents.subscribe(() => {
+      loadData();
+    });
+    return unsubscribe;
   }, [loadData]);
 
   const onRefresh = () => {

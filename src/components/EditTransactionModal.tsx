@@ -20,6 +20,7 @@ import { CalendarPickerModal } from './CalendarPickerModal';
 import { isKnownUSSymbol, getTransactionCurrencyMeta, saveTransactionCurrencyMeta } from '../services/currencyService';
 import { cancelRemindersForSymbol } from '../services/notificationService';
 import { getLocalDateString } from '../utils/dateUtils';
+import { portfolioEvents } from '../services/eventService';
 
 export interface EnrichedTransaction extends Transaction {
   symbol: string;
@@ -184,6 +185,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       });
 
       Alert.alert('สำเร็จ', `อัปเดตรายการ ${transaction.symbol} เรียบร้อยแล้ว`);
+      portfolioEvents.emitRefresh();
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -240,6 +242,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
               } else {
                 Alert.alert('สำเร็จ', 'ลบรายการเรียบร้อยแล้ว ระบบคำนวณต้นทุนเฉลี่ยและยอดคงเหลือใหม่ให้อัตโนมัติ');
               }
+              portfolioEvents.emitRefresh();
               onSuccess();
               onClose();
             } catch (err: any) {

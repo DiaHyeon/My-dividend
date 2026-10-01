@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { portfolioEvents } from '../services/eventService';
 
 const SPECIAL_SCHEDULES_STORAGE_KEY = '@my_dividend_special_schedules';
 
@@ -181,6 +182,7 @@ export const AdjustDividendModal: React.FC<AdjustDividendModalProps> = ({
         }
       }
 
+      portfolioEvents.emitRefresh();
       onSuccess();
       onClose();
     } catch (err: any) {

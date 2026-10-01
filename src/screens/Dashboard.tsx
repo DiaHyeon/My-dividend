@@ -35,6 +35,7 @@ import { cleanOrphanedReminders, syncAllUpcomingXdReminders, checkAndPromptNotif
 import { calculatePortfolioReturns } from '../services/returnService';
 import { getCachedPortfolio, savePortfolioCache, notifyOffline } from '../services/portfolioCacheService';
 import { getLocalDateString } from '../utils/dateUtils';
+import { portfolioEvents } from '../services/eventService';
 
 const MONTH_NAMES = [
   'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
@@ -295,6 +296,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }
     };
     loadGoal();
+
+    const unsubscribe = portfolioEvents.subscribe(() => {
+      loadData();
+    });
+    return () => {
+      unsubscribe();
+    };
   }, [loadData]);
 
   const onRefresh = () => {

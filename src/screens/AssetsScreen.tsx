@@ -33,6 +33,7 @@ import { ensureAuthenticated } from '../services/authService';
 import { syncDailyPricesIfNeeded } from '../services/priceSyncService';
 import { calculatePortfolioReturns } from '../services/returnService';
 import { getCachedPortfolio, savePortfolioCache, notifyOffline } from '../services/portfolioCacheService';
+import { portfolioEvents } from '../services/eventService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -252,6 +253,10 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
 
   useEffect(() => {
     loadData();
+    const unsubscribe = portfolioEvents.subscribe(() => {
+      loadData();
+    });
+    return unsubscribe;
   }, [loadData]);
 
   const onRefresh = useCallback(() => {

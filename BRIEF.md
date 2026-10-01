@@ -7,7 +7,7 @@ Technical specification and system architecture document for the My dividend app
 - **Project Name**: My dividend
 - **Target Platforms**: Android Mobile (tested and previewed via Expo Go) and Web Preview
 - **Core Stack**: Expo SDK 57 (React Native 0.86, React 19), TypeScript, Supabase (PostgreSQL, Row Level Security)
-- **Primary Goal**: A streamlined, minimalist portfolio tracking and dividend management application categorizing 3 primary asset classes (Stocks, Mutual Funds, Cash/Fixed Income). It features 12-month net dividend and interest forecasting after withholding tax, advance ex-dividend (XD) reminders, automated US and Thai (SET) stock lookups with latest closing prices, Thai mutual fund NAV and dividend history integration via SEC Open API v2, and dual-currency purchase recording (USD to THB real-time conversion).
+- **Primary Goal**: A streamlined, minimalist Dividend Tracker & Holding application designed specifically for Buy & Hold investors, categorizing 3 primary asset classes (Stocks, Mutual Funds, Cash/Fixed Income). It features 12-month net dividend and interest forecasting after withholding tax with automated rolling schedule renewals, advance ex-dividend (XD) reminders, real-time cross-tab state synchronization, authentic benchmark performance comparisons, automated US and Thai (SET) stock lookups with latest closing prices, Thai mutual fund NAV and dividend history integration via SEC Open API v2, and dual-currency purchase recording (USD to THB real-time conversion).
 
 ---
 
@@ -558,7 +558,9 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - **Full 12-Month Horizon for Monthly Dividend Stocks (`stockService.ts`)**: Monthly distribution stocks (e.g., Realty Income `O`) project across all 12 monthly distribution dates (`Math.min(frequency, 12)`), preventing the legacy 4-cycle truncation.
 - **Direct Database Currency Resolution (`Dashboard.tsx`, `returnService.ts`, `currencyService.ts`)**: Currency conversion prioritizes database-persisted `item.currency === 'USD'` directly from Supabase assets, eliminating reliance on hardcoded static ticker lists and ensuring 100% accurate THB valuation for all global assets.
 - **CSV Future Dividend Projection (`csvService.ts`)**: CSV imports dynamically project upcoming 12-month future ex-dividend dates based on historical payout intervals rather than back-dating `xd_date` to transaction purchase dates, ensuring imported assets immediately populate the 12-month cashflow forecast.
-- **Real Benchmark Historical Return Calculation (`benchmarkService.ts`)**: Synchronizes authentic 1-year historical monthly closing data for SET (`^SET.BK`), S&P 500 (`^GSPC`), and NASDAQ (`^IXIC`) with authentic progress curves, eliminating simulated trigonometric wave jitter.
+- **Real Benchmark Historical Return Calculation & Authentic Curves (`benchmarkService.ts`)**: Synchronizes authentic 1-year historical monthly closing data for SET (`^SET.BK`), S&P 500 (`^GSPC`), and NASDAQ (`^IXIC`) via Supabase Edge Function to avoid web CORS issues, plotting authentic historical monthly curves rather than straight lines, and models realistic market-beta trajectory for portfolio comparison.
+- **Cross-Tab Real-time Event Bus (`eventService.ts`)**: Provides lightweight pub-sub event distribution (`portfolioEvents.emitRefresh()` / `subscribe()`) that automatically and silently refreshes all permanently mounted screens (`Dashboard`, `Portfolio`, `AssetsScreen`) whenever an asset, transaction, or schedule is modified, preserving zero-latency tab switching and scroll positions.
+- **Rolling Dividend Schedule Auto-Renewal (`priceSyncService.ts`)**: Evaluates active holdings during daily sync and automatically rolls forward the next 12 months of projected dividend schedules whenever upcoming schedules drop below 2 cycles, preventing the 12-month cashflow chart from ever drying up to 0 over multi-year holding.
 - **Dynamic Currency Resolution & Hardcoded List Elimination (`currencyService.ts`)**: Completely eliminated static ticker lists (`KNOWN_US_SYMBOLS`). Symbol currencies are determined dynamically from database persistence (`item.currency === 'USD'`), live market search metadata, and runtime symbol registry, preventing foreign assets from incorrectly falling back to THB.
 - **Timezone Drift Protection (`src/utils/dateUtils.ts`)**: Standardized all date creation on `getLocalDateString()` rather than `new Date().toISOString().split('T')[0]`, preventing the 1-day date shift bug occurring across midnight (00:00–06:59 AM UTC+7) in purchase recordings, schedule generation, and calendar selections.
 
@@ -611,6 +613,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - `services/proxyClient.ts`: Centralized client helper for securely invoking the stock-proxy Supabase Edge Function with automatic authentication headers and timeout control
   - `services/splitService.ts`: Automated stock split detection, market event fetching, and 1-click share & cost adjustments engine protecting historical paid DPU
   - `services/returnService.ts`: Realized dividend income calculation and Total Return engine (Capital Gain + Dividends)
+  - `services/eventService.ts`: Lightweight pub-sub event emitter for real-time cross-tab portfolio synchronization without unmounting screens
   - `utils/dateUtils.ts`: Timezone-safe local date formatting and manipulation utilities preventing 1-day drift
 - `scripts/`
   - `patch-expo-notifications.js`: Patch script resolving Expo Go Android notification crashes

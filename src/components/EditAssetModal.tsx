@@ -26,6 +26,7 @@ import { CashAssetForm } from './CashAssetForm';
 import { CalendarPickerModal } from './CalendarPickerModal';
 import { SectorPickerModal } from './SectorPickerModal';
 import { getLocalDateString } from '../utils/dateUtils';
+import { portfolioEvents } from '../services/eventService';
 
 interface EditAssetModalProps {
   visible: boolean;
@@ -468,6 +469,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
         ? ` (ราคาแปลงจาก $${parsedCostPrice.toFixed(2)} เป็น ฿${convertedCostPrice.toFixed(2)})`
         : '';
       Alert.alert('สำเร็จ', `แก้ไขข้อมูลสินทรัพย์ ${trimmedSymbol} เรียบร้อยแล้ว${alertDetail}`);
+      portfolioEvents.emitRefresh();
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -501,6 +503,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                 `ปรับสัดส่วนการแตกพาร์ ${split.splitRatioStr} เรียบร้อยแล้ว (${res.updatedCount} รายการ) จำนวนหุ้นใหม่: ${res.newShares.toFixed(2)} หุ้น`
               );
               setSplitDetection(null);
+              portfolioEvents.emitRefresh();
               onSuccess();
               onClose();
             } catch (err: any) {
@@ -543,6 +546,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
               await cancelRemindersForSymbol(asset.symbol);
 
               Alert.alert('สำเร็จ', `ลบ ${asset.symbol} ออกจากพอร์ตแล้ว`);
+              portfolioEvents.emitRefresh();
               onSuccess();
               onClose();
             } catch (err: any) {

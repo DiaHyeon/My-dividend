@@ -22,6 +22,7 @@ import {
   ParseResult,
   ImportSummary,
 } from '../services/csvService';
+import { portfolioEvents } from '../services/eventService';
 
 interface ImportCsvModalProps {
   visible: boolean;
@@ -151,6 +152,7 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
         setImportProgress(progress);
       });
       setImportSummary(summary);
+      portfolioEvents.emitRefresh();
       onSuccess();
     } catch (err: any) {
       Alert.alert('นำเข้าล้มเหลว', err.message || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล');

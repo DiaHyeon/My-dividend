@@ -26,6 +26,7 @@ import { CashAssetForm } from './CashAssetForm';
 import { CalendarPickerModal } from './CalendarPickerModal';
 import { SectorPickerModal } from './SectorPickerModal';
 import { getLocalDateString } from '../utils/dateUtils';
+import { portfolioEvents } from '../services/eventService';
 
 interface AddAssetModalProps {
   visible?: boolean;
@@ -665,6 +666,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         Alert.alert('สำเร็จ', alertMsg);
         resetForm();
         handleClose();
+        portfolioEvents.emitRefresh();
         onSuccess?.();
       } catch (err: any) {
         setIsReviewVisible(false);
@@ -886,6 +888,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       Alert.alert('สำเร็จ', alertMsg);
       resetForm();
       handleClose();
+      portfolioEvents.emitRefresh();
       onSuccess?.();
     } catch (err: any) {
       setIsReviewVisible(false);
