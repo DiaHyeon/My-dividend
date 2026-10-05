@@ -5,8 +5,8 @@ import { supabase } from '../lib/supabase';
 import { clearPortfolioCache } from './portfolioCacheService';
 import { USER_NAME_STORAGE_KEY } from './userService';
 
-const DEMO_EMAIL = process.env.EXPO_PUBLIC_DEMO_EMAIL || 'demo@mydividend.app';
-const DEMO_PASSWORD = process.env.EXPO_PUBLIC_DEMO_PASSWORD || 'Password123!';
+const DEMO_EMAIL = process.env.EXPO_PUBLIC_DEMO_EMAIL || '';
+const DEMO_PASSWORD = process.env.EXPO_PUBLIC_DEMO_PASSWORD || '';
 
 let authInitPromise: Promise<Session | null> | null = null;
 

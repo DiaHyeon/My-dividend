@@ -462,24 +462,43 @@ export const Dashboard: React.FC<DashboardProps> = ({
       let hasPartial = false;
       let partialLabel = '';
 
-      eligibleTxs.forEach((t) => {
-        if (t.type !== 'BUY') return;
-        const txAmount = Number(t.shares) || 0;
-        if (txAmount <= 0) return;
+      const hasWithdrawals = eligibleTxs.some((t) => t.type === 'SELL');
+      if (hasWithdrawals) {
+        // เมื่อมีการถอนเงินต้น ให้คิดดอกเบี้ยจากยอดเงินต้นคงเหลือสุทธิ (eligibleShares)
+        const firstDepDate = eligibleTxs.find((t) => t.type === 'BUY')?.transaction_date || schedule.xd_date;
         const res = calculateScheduleCashPayout(
-          txAmount,
+          eligibleShares,
           annualRatePct,
           taxRate,
-          t.transaction_date,
+          firstDepDate,
           schedule.xd_date,
           freq
         );
-        totalCashNet += res.netInterest;
+        totalCashNet = res.netInterest;
         if (res.isPartialCycle) {
           hasPartial = true;
           partialLabel = res.daysLabel;
         }
-      });
+      } else {
+        eligibleTxs.forEach((t) => {
+          if (t.type !== 'BUY') return;
+          const txAmount = Number(t.shares) || 0;
+          if (txAmount <= 0) return;
+          const res = calculateScheduleCashPayout(
+            txAmount,
+            annualRatePct,
+            taxRate,
+            t.transaction_date,
+            schedule.xd_date,
+            freq
+          );
+          totalCashNet += res.netInterest;
+          if (res.isPartialCycle) {
+            hasPartial = true;
+            partialLabel = res.daysLabel;
+          }
+        });
+      }
 
       if (totalCashNet <= 0) return;
       netDividend = totalCashNet;

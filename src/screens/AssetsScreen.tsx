@@ -51,6 +51,7 @@ interface EnrichedTransaction extends Transaction {
   symbol: string;
   asset_type: AssetType;
   current_price: number;
+  currency?: 'THB' | 'USD';
 }
 
 const MONTH_NAMES = [
@@ -101,7 +102,7 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
   // Transaction Filters
   const [selectedYear, setSelectedYear] = useState<string>('ALL');
   const [selectedMonth, setSelectedMonth] = useState<string>('ALL');
-  const [actionFilter, setActionFilter] = useState<'ALL' | 'BUY' | 'CASH'>('ALL');
+  const [actionFilter, setActionFilter] = useState<'ALL' | 'BUY' | 'SELL' | 'CASH'>('ALL');
   const [activePicker, setActivePicker] = useState<'YEAR' | 'MONTH' | 'TYPE' | null>(null);
 
   // Modals
@@ -200,35 +201,47 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
       setAssets(loadedAssets);
 
       const activeAssetIds = loadedAssets.map((a) => a.id).filter(Boolean);
-      let txDataResult: Transaction[] = [];
+
+      // 2. Fetch Transactions (all user transactions for audit ledger, including archived/sold positions)
+      // and Dividend Schedules (scoped to active holdings for forward projections)
+      let txDataResult: (Transaction & { assets?: any })[] = [];
       let schedDataResult: DividendSchedule[] = [];
 
-      // 2. Fetch Transactions & Dividend Schedules (scoped to active assets if any exist)
-      if (activeAssetIds.length > 0) {
+      try {
         const [txRes, schedRes] = await Promise.all([
           supabase
             .from('transactions')
-            .select('*')
-            .in('asset_id', activeAssetIds)
+            .select('*, assets(id, symbol, asset_type, current_price, currency)')
             .order('transaction_date', { ascending: false }),
-          supabase
-            .from('dividend_schedules')
-            .select('*')
-            .in('asset_id', activeAssetIds),
+          activeAssetIds.length > 0
+            ? supabase
+                .from('dividend_schedules')
+                .select('*')
+                .in('asset_id', activeAssetIds)
+            : Promise.resolve({ data: [], error: null }),
         ]);
 
         if (!txRes.error && txRes.data) {
-          txDataResult = txRes.data as Transaction[];
+          txDataResult = txRes.data as any[];
           setTransactions(txDataResult);
+        } else if (txRes.error) {
+          console.warn('Transactions join query error, retrying without join:', txRes.error);
+          const fallbackTxRes = await supabase
+            .from('transactions')
+            .select('*')
+            .order('transaction_date', { ascending: false });
+          if (!fallbackTxRes.error && fallbackTxRes.data) {
+            txDataResult = fallbackTxRes.data as any[];
+            setTransactions(txDataResult);
+          }
         }
 
         if (!schedRes.error && schedRes.data) {
           schedDataResult = schedRes.data as DividendSchedule[];
           setDividendSchedules(schedDataResult);
         }
-      } else {
-        setTransactions([]);
-        setDividendSchedules([]);
+      } catch (fetchErr) {
+        console.warn('Error fetching transactions/schedules in AssetsScreen:', fetchErr);
       }
 
       // 3. Exchange Rate
@@ -280,13 +293,14 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
 
   // Enriched Transactions with Symbol & Asset Type
   const enrichedTransactions: EnrichedTransaction[] = useMemo(() => {
-    return transactions.map((tx) => {
-      const asset = assetMap.get(tx.asset_id);
+    return transactions.map((tx: any) => {
+      const parentAsset = assetMap.get(tx.asset_id) || tx.assets;
       return {
         ...tx,
-        symbol: asset?.symbol || 'Unknown',
-        asset_type: asset?.asset_type || 'STOCKS',
-        current_price: Number(asset?.current_price) || 0,
+        symbol: tx.assets?.symbol || parentAsset?.symbol || 'Unknown',
+        asset_type: (tx.assets?.asset_type || parentAsset?.asset_type || 'STOCKS') as AssetType,
+        current_price: Number(tx.assets?.current_price) || Number(parentAsset?.current_price) || 0,
+        currency: tx.assets?.currency || parentAsset?.currency,
       };
     });
   }, [transactions, assetMap]);
@@ -359,7 +373,8 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
 
       // Action / Type filter
       if (actionFilter === 'BUY' && (tx.type !== 'BUY' || tx.asset_type === 'CASH')) return false;
-      if (actionFilter === 'CASH' && tx.asset_type !== 'CASH') return false;
+      if (actionFilter === 'SELL' && tx.type !== 'SELL') return false;
+      if (actionFilter === 'CASH' && (tx.asset_type !== 'CASH' || tx.type === 'SELL')) return false;
 
       // Year filter
       if (selectedYear !== 'ALL') {
@@ -398,7 +413,8 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
 
   const hasActiveTxFilter = selectedYear !== 'ALL' || selectedMonth !== 'ALL' || actionFilter !== 'ALL';
 
-  const isUSStock = (symbol: string, assetType: AssetType) => {
+  const isUSStock = (symbol: string, assetType: AssetType, txCurrency?: 'THB' | 'USD') => {
+    if (txCurrency === 'USD') return true;
     const parentAsset = assets.find((a) => a.symbol === symbol && a.asset_type === assetType);
     return parentAsset?.currency === 'USD' || (assetType === 'STOCKS' && isKnownUSSymbol(symbol));
   };
@@ -725,6 +741,8 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                     ? 'ทุกประเภท'
                     : actionFilter === 'BUY'
                     ? 'ซื้อหุ้น/กองทุน'
+                    : actionFilter === 'SELL'
+                    ? 'ขาย/ถอน'
                     : 'เงินฝาก'}
                 </Text>
                 <Ionicons
@@ -784,7 +802,7 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
               </View>
             ) : (
               filteredTransactions.map((tx) => {
-                const isUS = isUSStock(tx.symbol, tx.asset_type);
+                const isUS = isUSStock(tx.symbol, tx.asset_type, tx.currency);
                 const rate = exchangeRate > 0 ? exchangeRate : 34.00;
                 const totalTHB = Number(tx.shares) * Number(tx.price_per_share);
                 const priceUSD = isUS ? Number(tx.price_per_share) / rate : 0;
@@ -811,16 +829,30 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                         <View
                           style={[
                             styles.actionBadge,
-                            isDeposit ? styles.depositBadge : styles.buyBadge,
+                            tx.type === 'SELL'
+                              ? styles.sellBadge
+                              : isDeposit
+                              ? styles.depositBadge
+                              : styles.buyBadge,
                           ]}
                         >
                           <Text
                             style={[
                               styles.actionBadgeText,
-                              isDeposit ? styles.depositBadgeText : styles.buyBadgeText,
+                              tx.type === 'SELL'
+                                ? styles.sellBadgeText
+                                : isDeposit
+                                ? styles.depositBadgeText
+                                : styles.buyBadgeText,
                             ]}
                           >
-                            {isDeposit ? 'ฝากเงิน (DEPOSIT)' : 'ซื้อ (BUY)'}
+                            {tx.type === 'SELL'
+                              ? isDeposit
+                                ? 'ถอนเงิน (WITHDRAW)'
+                                : 'ขาย (SELL)'
+                              : isDeposit
+                              ? 'ฝากเงิน (DEPOSIT)'
+                              : 'ซื้อ (BUY)'}
                           </Text>
                         </View>
                         <View style={styles.editTxIconBox}>
@@ -1024,6 +1056,12 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                     label: 'ซื้อหุ้น / กองทุน (BUY)',
                     sub: 'รายการซื้อหุ้นไทย หุ้นสหรัฐ และกองทุนรวม',
                     icon: 'trending-up-outline',
+                  },
+                  {
+                    key: 'SELL',
+                    label: 'ขาย / ถอนเงิน (SELL / WITHDRAW)',
+                    sub: 'รายการขายหุ้น กองทุน และถอนเงินฝาก',
+                    icon: 'trending-down-outline',
                   },
                   {
                     key: 'CASH',

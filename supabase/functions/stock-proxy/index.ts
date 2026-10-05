@@ -47,17 +47,14 @@ serve(async (req: Request) => {
   const apiKeyHeader = req.headers.get("apikey") || "";
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
 
-  const expectedAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
-  const expectedServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const expectedAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+  const expectedServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
   let isAuthorized = false;
   if (expectedAnonKey || expectedServiceKey) {
     if (expectedAnonKey && (apiKeyHeader === expectedAnonKey || token === expectedAnonKey)) {
       isAuthorized = true;
     } else if (expectedServiceKey && (apiKeyHeader === expectedServiceKey || token === expectedServiceKey)) {
-      isAuthorized = true;
-    } else if (token && token.split(".").length === 3) {
-      // Valid JWT token format from Supabase Auth session
       isAuthorized = true;
     }
   } else {
@@ -221,7 +218,7 @@ serve(async (req: Request) => {
 
     // 6. Action: Fund NAV from SEC Thailand Open API
     if (action === "fund-nav") {
-      const projId = (reqBody.projId || reqBody.proj_id || "").trim().slice(0, 50);
+      let projId = (reqBody.projId || reqBody.proj_id || "").trim().slice(0, 50);
       const cleanSymbol = (reqBody.symbol || "").trim().toUpperCase().slice(0, 50);
       if (!projId && !cleanSymbol) {
         return new Response(JSON.stringify({ error: "Missing projId or symbol parameter" }), {
@@ -243,6 +240,24 @@ serve(async (req: Request) => {
         );
       }
 
+      // If projId is missing, resolve projId quickly via general-info/profiles (200ms) to avoid slow full-table scan on SEC database
+      if (!projId && cleanSymbol) {
+        try {
+          const profileUrl = `https://api.sec.or.th/v2/fund/general-info/profiles?fund_class_name=${encodeURIComponent(cleanSymbol)}&page_size=1`;
+          const profileRes = await fetchWithTimeout(profileUrl, {
+            headers: { "Ocp-Apim-Subscription-Key": secKey },
+          }, 5000);
+          if (profileRes.ok && profileRes.status !== 204) {
+            const profileData = await profileRes.json();
+            if (profileData.items && profileData.items[0]?.proj_id) {
+              projId = profileData.items[0].proj_id;
+            }
+          }
+        } catch {
+          // ignore, proceed with fallback
+        }
+      }
+
       const targetParam = projId
         ? `proj_id=${encodeURIComponent(projId)}`
         : `fund_class_name=${encodeURIComponent(cleanSymbol)}`;
@@ -252,7 +267,7 @@ serve(async (req: Request) => {
         headers: {
           "Ocp-Apim-Subscription-Key": secKey,
         },
-      });
+      }, 15000);
 
       if (!res.ok) {
         if (res.status === 429) {
@@ -329,7 +344,7 @@ serve(async (req: Request) => {
         headers: {
           "Ocp-Apim-Subscription-Key": secKey,
         },
-      });
+      }, 15000);
 
       if (!res.ok) {
         if (res.status === 429) {

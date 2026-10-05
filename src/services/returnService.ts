@@ -97,20 +97,34 @@ export function calculatePortfolioReturns(
         const divisor = freq === 'MONTHLY' ? 12 : freq === 'SEMI_ANNUAL' ? 2 : 1;
         const annualRatePct = dpu * divisor * 100;
 
-        eligibleTxs.forEach((t) => {
-          if (t.type !== 'BUY') return;
-          const txAmount = Number(t.shares) || 0;
-          if (txAmount <= 0) return;
+        const hasWithdrawals = eligibleTxs.some((t) => t.type === 'SELL');
+        if (hasWithdrawals) {
+          const firstDepDate = eligibleTxs.find((t) => t.type === 'BUY')?.transaction_date || schedule.xd_date;
           const res = calculateScheduleCashPayout(
-            txAmount,
+            eligibleShares,
             annualRatePct,
             taxRate,
-            t.transaction_date,
+            firstDepDate,
             schedule.xd_date,
             freq
           );
-          payoutNet += res.netInterest;
-        });
+          payoutNet = res.netInterest;
+        } else {
+          eligibleTxs.forEach((t) => {
+            if (t.type !== 'BUY') return;
+            const txAmount = Number(t.shares) || 0;
+            if (txAmount <= 0) return;
+            const res = calculateScheduleCashPayout(
+              txAmount,
+              annualRatePct,
+              taxRate,
+              t.transaction_date,
+              schedule.xd_date,
+              freq
+            );
+            payoutNet += res.netInterest;
+          });
+        }
       } else {
         const effectiveRate = isUS && exchangeRate > 0 ? exchangeRate : 1.0;
         payoutNet = eligibleShares * dpu * effectiveRate * (1 - taxRate);

@@ -11,35 +11,11 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://ycflookcrilaujmeillt.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljZmxvb2tjcmlsYXVqbWVpbGx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5OTc4MTEsImV4cCI6MjEwNDU3MzgxMX0.UO1R-vDnd2M09dm32V-pHPzObV6d-gEAXum5entMHsE",
-        "EXPO_PUBLIC_DEMO_EMAIL": "demo@mydividend.app",
-        "EXPO_PUBLIC_DEMO_PASSWORD": "Password123!"
-      }
-    },
-    "Preview": {
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://ycflookcrilaujmeillt.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljZmxvb2tjcmlsYXVqbWVpbGx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5OTc4MTEsImV4cCI6MjEwNDU3MzgxMX0.UO1R-vDnd2M09dm32V-pHPzObV6d-gEAXum5entMHsE",
-        "EXPO_PUBLIC_DEMO_EMAIL": "demo@mydividend.app",
-        "EXPO_PUBLIC_DEMO_PASSWORD": "Password123!"
       }
     },
     "production": {
       "android": {
-        "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://ycflookcrilaujmeillt.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljZmxvb2tjcmlsYXVqbWVpbGx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5OTc4MTEsImV4cCI6MjEwNDU3MzgxMX0.UO1R-vDnd2M09dm32V-pHPzObV6d-gEAXum5entMHsE",
-        "EXPO_PUBLIC_DEMO_EMAIL": "demo@mydividend.app",
-        "EXPO_PUBLIC_DEMO_PASSWORD": "Password123!"
+        "buildType": "app-bundle"
       }
     }
   },

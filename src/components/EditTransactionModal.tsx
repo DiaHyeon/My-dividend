@@ -199,7 +199,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   const handleDelete = async () => {
     Alert.alert(
       'ยืนยันการลบรายการ',
-      `คุณแน่ใจหรือไม่ที่จะลบรายการ ${transaction.type === 'BUY' ? 'ซื้อ' : 'ธุรกรรม'} ${transaction.symbol} จำนวน ${parsedShares.toLocaleString()} ${isDeposit ? 'บาท' : 'หุ้น'} ของวันที่ ${txDate}?`,
+      `คุณแน่ใจหรือไม่ที่จะลบรายการ ${transaction.type === 'SELL' ? (isDeposit ? 'ถอนเงิน' : 'ขาย') : (isDeposit ? 'ฝากเงิน' : 'ซื้อ')} ${transaction.symbol} จำนวน ${parsedShares.toLocaleString()} ${isDeposit ? 'บาท' : 'หุ้น'} ของวันที่ ${txDate}?`,
       [
         { text: 'ยกเลิก', style: 'cancel' },
         {
@@ -273,9 +273,33 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
             <View>
               <View style={styles.headerTitleRow}>
                 <Text style={styles.sheetTitle}>แก้ไขรายการธุรกรรม</Text>
-                <View style={[styles.typeBadge, isDeposit ? styles.typeBadgeCash : styles.typeBadgeBuy]}>
-                  <Text style={[styles.typeBadgeText, isDeposit ? styles.typeBadgeTextCash : styles.typeBadgeTextBuy]}>
-                    {isDeposit ? 'เงินฝาก (DEPOSIT)' : 'ซื้อ (BUY)'}
+                <View
+                  style={[
+                    styles.typeBadge,
+                    transaction.type === 'SELL'
+                      ? styles.typeBadgeSell
+                      : isDeposit
+                      ? styles.typeBadgeCash
+                      : styles.typeBadgeBuy,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.typeBadgeText,
+                      transaction.type === 'SELL'
+                        ? styles.typeBadgeTextSell
+                        : isDeposit
+                        ? styles.typeBadgeTextCash
+                        : styles.typeBadgeTextBuy,
+                    ]}
+                  >
+                    {transaction.type === 'SELL'
+                      ? isDeposit
+                        ? 'ถอนเงิน (WITHDRAW)'
+                        : 'ขาย (SELL)'
+                      : isDeposit
+                      ? 'เงินฝาก (DEPOSIT)'
+                      : 'ซื้อ (BUY)'}
                   </Text>
                 </View>
               </View>
@@ -477,6 +501,9 @@ const styles = StyleSheet.create({
   typeBadgeBuy: {
     backgroundColor: '#EFF6FF',
   },
+  typeBadgeSell: {
+    backgroundColor: '#FEF2F2',
+  },
   typeBadgeCash: {
     backgroundColor: '#ECFDF5',
   },
@@ -486,6 +513,9 @@ const styles = StyleSheet.create({
   },
   typeBadgeTextBuy: {
     color: '#2563EB',
+  },
+  typeBadgeTextSell: {
+    color: '#DC2626',
   },
   typeBadgeTextCash: {
     color: '#059669',

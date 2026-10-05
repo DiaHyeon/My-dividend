@@ -619,7 +619,7 @@ export async function fetchFundNav(
     return null;
   }
 
-  // Fetch through Supabase Edge Function (stock-proxy)
+  // 1. Fetch through Supabase Edge Function (stock-proxy)
   try {
     const { data } = await invokeStockProxy({
       action: 'fund-nav',
@@ -665,7 +665,7 @@ export async function fetchFundDividendAnalysis(
 
   let items: any[] = [];
 
-  // 1. Try Edge function
+  // 1. Fetch through Supabase Edge Function (stock-proxy)
   try {
     const { data } = await invokeStockProxy({
       action: 'fund-dividends',
@@ -679,8 +679,6 @@ export async function fetchFundDividendAnalysis(
   } catch (err) {
     console.warn('Edge function fund-dividends notice:', err);
   }
-
-
 
   if (items.length === 0) {
     return {

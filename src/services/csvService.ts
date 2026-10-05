@@ -20,6 +20,7 @@ export interface CsvAssetRow {
   transaction_date: string;
   tax_rate?: number;
   expected_dpu?: number;
+  type?: 'BUY' | 'SELL';
 }
 
 export interface ValidationIssue {
@@ -179,12 +180,12 @@ export function parseAndValidateCsv(csvContent: string): ParseResult {
     }
 
     // ค้นหาคอลัมน์ Asset Type
-    const typeKey = Object.keys(row).find((k) =>
-      ['asset_type', 'type', 'ประเภท', 'หมวดหมู่', 'category'].includes(k)
+    const assetTypeKey = Object.keys(row).find((k) =>
+      ['asset_type', 'asset type', 'หมวดหมู่', 'category'].includes(k)
     );
     let assetType: AssetType = inferAssetType(rawSymbol);
-    if (typeKey && row[typeKey]) {
-      const rawType = String(row[typeKey]).trim().toUpperCase();
+    if (assetTypeKey && row[assetTypeKey]) {
+      const rawType = String(row[assetTypeKey]).trim().toUpperCase();
       if (['STOCK', 'STOCKS', 'หุ้น'].includes(rawType)) assetType = 'STOCKS';
       else if (['FUND', 'FUNDS', 'กองทุน', 'กองทุนรวม'].includes(rawType)) assetType = 'FUNDS';
       else if (['CASH', 'เงินฝาก', 'DEPOSIT', 'ธนาคาร'].includes(rawType)) assetType = 'CASH';
@@ -270,6 +271,18 @@ export function parseAndValidateCsv(csvContent: string): ParseResult {
       currentPrice = cleanNumber(row[currentPriceKey]);
     }
 
+    // ค้นหาคอลัมน์ Type (BUY หรือ SELL)
+    const txTypeKey = Object.keys(row).find((k) =>
+      ['type', 'transaction_type', 'action', 'ประเภท', 'รายการ', 'side'].includes(k)
+    );
+    let txType: 'BUY' | 'SELL' = 'BUY';
+    if (txTypeKey && row[txTypeKey]) {
+      const rawType = String(row[txTypeKey]).trim().toUpperCase();
+      if (rawType === 'SELL' || rawType === 'ขาย' || rawType === 'ถอน' || rawType === 'WITHDRAW') {
+        txType = 'SELL';
+      }
+    }
+
     validRows.push({
       symbol: rawSymbol.toUpperCase(),
       asset_type: assetType,
@@ -280,6 +293,7 @@ export function parseAndValidateCsv(csvContent: string): ParseResult {
       transaction_date: transactionDate,
       tax_rate: taxRate,
       expected_dpu: expectedDpu !== undefined ? Number(expectedDpu.toFixed(4)) : undefined,
+      type: txType,
     });
   });
 
@@ -392,7 +406,7 @@ export async function importAssetRows(
       // 3. บันทึกธุรกรรมการซื้อเข้าตาราง transactions (พร้อม Resilient Fallback สำหรับ exchange_rate)
       const txPayload: any = {
         asset_id: assetId,
-        type: 'BUY',
+        type: item.type || 'BUY',
         shares: Number(item.shares.toFixed(4)),
         price_per_share: Number(convertedCost.toFixed(4)),
         transaction_date: item.transaction_date,
@@ -515,11 +529,11 @@ export async function importAssetRows(
  */
 export function generateCsvTemplate(): string {
   return [
-    'symbol,asset_type,shares,cost_price,currency,transaction_date,expected_dpu',
-    'PTT,STOCKS,1000,32.50,THB,2024-01-15,2.00',
-    'AAPL,STOCKS,10,185.00,USD,2024-02-01,0.96',
-    'SCBDV,FUNDS,500.25,12.4500,THB,2024-03-10,0.50',
-    'Kept By Krungsri,CASH,50000,1.00,THB,2024-01-01,0.0175',
+    'symbol,asset_type,shares,cost_price,currency,transaction_date,expected_dpu,type',
+    'PTT,STOCKS,1000,32.50,THB,2024-01-15,2.00,BUY',
+    'AAPL,STOCKS,10,185.00,USD,2024-02-01,0.96,BUY',
+    'SCBDV,FUNDS,500.25,12.4500,THB,2024-03-10,0.50,BUY',
+    'Kept By Krungsri,CASH,50000,1.00,THB,2024-01-01,0.0175,BUY',
   ].join('\n');
 }
 
@@ -559,6 +573,7 @@ export async function exportPortfolioToCsv(
     'transaction_date',
     'expected_dpu',
     'tax_rate',
+    'type',
   ];
 
   // ถ้ามีรายการธุรกรรมย่อย (Transactions) ให้ส่งออกทุกไม้เพื่อรักษาวันที่และต้นทุนแต่ละรอบ
@@ -597,6 +612,7 @@ export async function exportPortfolioToCsv(
         tx.transaction_date || getLocalDateString(),
         Number(dpu || 0).toFixed(6),
         Number(taxRate || 0).toFixed(4),
+        tx.type || 'BUY',
       ];
     });
 
@@ -628,6 +644,7 @@ export async function exportPortfolioToCsv(
       getLocalDateString(),
       Number(dpu || 0).toFixed(6),
       Number(taxRate || 0).toFixed(4),
+      'BUY',
     ];
   });
 

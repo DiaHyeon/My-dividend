@@ -310,6 +310,23 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 ---
 
+### 4.12.2 Thai Mutual Funds & Server-Side SEC Open API Engine (สำนักงาน ก.ล.ต.)
+- Handled by: `src/services/fundService.ts`, `supabase/functions/stock-proxy/index.ts`, `src/components/AddAssetModal.tsx`, `src/components/EditAssetModal.tsx`
+- **Zero Client Secret Exposure (Server-Side Secrets)**:
+  - `SEC_API_KEY` is hosted exclusively in **Supabase Edge Function Secrets** (`Deno.env.get("SEC_API_KEY")`).
+  - No secret keys are stored in client `.env` files or compiled JavaScript bundles, eliminating all risks of credential leakage or APK reverse-engineering.
+- **Fast ProjId Auto-Resolution & Timeout Guard**:
+  - Automatically queries `/v2/fund/general-info/profiles` (200ms) to resolve the SEC project identifier (`proj_id`) before querying `/v2/fund/daily-info/nav`, preventing slow 15–20 second full-table scans when querying by ticker alone.
+- **Instant NAV & Dividend Auto-Population**:
+  - In `AddAssetModal.tsx`, selecting or typing a mutual fund automatically fetches the latest NAV (`last_val`) and update date (`nav_date`) from ก.ล.ต., pre-populating both `currentPrice` and default `costPrice`.
+  - Automatically retrieves distribution events from `/v2/fund/daily-info/dividend-history`, analyzes payout frequency (Annual, Semi-Annual, Quarterly), and projects 12-month forward schedules with ex-dividend (XD) dates in `dividend_schedules`.
+- **Share Class & Policy Auto-Detection**:
+  - Disambiguates share classes with visual badges: Dividend (`🟡 D`), Accumulation (`⚪ A`), and Tax-Saving (`🟣 SSF/RMF/TESG`).
+  - Automatically classifies investment segments (Equity, Fixed Income, Foreign, Property, Mixed) from fund policy and naming heuristics.
+  - Locks currency to THB (฿) and hides redundant USD toggles, keeping the interface clean and tailored for Thai mutual fund investors.
+
+---
+
 ### 4.13 Position Accumulation & DCA Consolidation Engine
 - Handled by: `src/services/assetConsolidationService.ts`, `src/components/AddAssetModal.tsx`
 - **Portfolio Model Rule**:
@@ -336,6 +353,22 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
      - If it is the **only remaining transaction** for that asset, deleting it automatically archives the asset (`is_archived: true`) so no empty 0-share ghost card clutters the Dashboard.
      - If multiple transactions exist, the specific transaction is deleted and `view_asset_summary` automatically recalculates `net_shares`, `total_cost`, and `weighted_average_cost`.
   5. **Safe Multi-DCA Asset Editing**: In `EditAssetModal.tsx`, editing an asset with multiple DCA transactions consolidates all prior records into a single consolidated record with the new shares and cost basis, preventing duplicate transaction inflation.
+
+---
+
+### 4.13.2 Minimalist Asset Selling & Cash Withdrawal Engine (SELL & WITHDRAW)
+- Handled by: `src/components/SellAssetModal.tsx`, `src/components/EditAssetModal.tsx`, `src/screens/AssetsScreen.tsx`, `src/components/EditTransactionModal.tsx`
+- **Rationale**: To support realistic Buy & Hold portfolio rebalancing, asset trimming, and cash principal withdrawals without losing historical DCA buy records or corrupting cost basis calculations.
+- **Key Features**:
+  1. **Direct Access via Edit Modal**: Tapping an asset card opens `EditAssetModal.tsx`, featuring a dedicated secondary action button (`[ 📉 ขาย ]` for Stocks/Funds or `[ 💸 ถอน ]` for Cash deposits).
+  2. **Minimalist Quick Presets**: Built-in 25%, 50%, 75%, and 100% (ทั้งหมด) preset pills for effortless calculation.
+  3. **Strict Validation Guard**: Prevents over-selling (`sellShares <= net_shares`) with immediate red hint warnings and submit disabling.
+  4. **Pro-Rata Average Cost & YoC Protection**: In accordance with SQL View `view_asset_summary`, recording a `SELL` transaction decreases `net_shares` while preserving authentic `weighted_average_cost` (`total_buy_cost / total_buy_shares`), keeping Yield on Cost (YoC) and remaining cost basis mathematically sound.
+  5. **Auto-Archive on Full Exit (100%)**: Selling 100% of holdings automatically soft-deletes the asset (`is_archived: true`) and cancels pending XD reminders to prevent 0-share ghost cards.
+  6. **Transparent Ledger Tracking & 100% Exit Preservation**: Records `type: 'SELL'` in `transactions`, appearing cleanly in Transaction History with `[ ขาย (SELL) ]` or `[ ถอนเงิน (WITHDRAW) ]` badges and filter support. In `AssetsScreen.tsx`, transaction history queries user transactions directly from `transactions` with joined asset metadata (`assets(id, symbol, asset_type, current_price, currency)`), ensuring that 100% sold-out or archived assets (`is_archived: true`, such as fully liquidated funds or stocks) remain permanently visible in the historical transaction timeline.
+  7. **Dual-Currency USD/THB Input**: Supports minimal USD ($) and THB (฿) currency switching for US Stocks in `SellAssetModal.tsx`, providing live THB conversion preview and persisting original USD prices in transaction metadata.
+  8. **Accurate Cash Withdrawal Interest**: Accounts for withdrawals by calculating subsequent period interest on net remaining principal (`eligibleShares = deposit - withdraw`) in `Dashboard.tsx` and `returnService.ts`.
+  9. **Full Backup & Restore CSV Parity**: Includes `type` (BUY / SELL) in `exportPortfolioToCsv` and `parseAndValidateCsv`, ensuring 100% accurate portfolio recreation upon CSV restore.
 
 ---
 
@@ -570,6 +603,15 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - **Android 13/14+ Notification Permission & Settings Guidance**: `notificationService.ts` verifies permission status via `requestNotificationPermissions(true)`. If ungranted, provides an interactive Thai guidance alert with a direct shortcut to system settings (`Linking.openSettings()`), enabling one-tap exact alarm and unconstrained battery optimization configuration.
 - **Unified Remote Database Schema (`005_unified_schema_update.sql`)**: Applied and verified on Supabase Cloud, providing native database columns for `assets.sector`, `assets.currency`, `transactions.exchange_rate`, and `dividend_schedules.is_special`, with clean `DROP VIEW IF EXISTS public.view_asset_summary CASCADE` ensuring zero schema-cache errors.
 
+### 5.10 Security, Key Hygiene & Edge Function Auth Guard Architecture
+- **Zero Client Credential Leakage**:
+  - Eliminated all hardcoded Supabase URLs and Anon Keys from `src/lib/supabase.ts` and `src/services/proxyClient.ts`.
+  - Removed plaintext environment blocks from `eas.json` and fallback demo passwords from `src/services/authService.ts`. All credentials are read strictly from local `.env` (client) or Supabase Secrets (server).
+  - SEC Thailand API Key (`SEC_API_KEY`) is stored strictly in Supabase Edge Function Secrets and never exposed in client bundles.
+- **Edge Function Auth Guard Hardening**:
+  - In `supabase/functions/stock-proxy/index.ts`, closed the dummy JWT token bypass (`split('.').length === 3`).
+  - Auth Guard strictly validates incoming `apikey` and `Authorization` headers against server-side `SUPABASE_ANON_KEY` or `SUPABASE_SERVICE_ROLE_KEY`, ensuring only legitimate authorized requests can access upstream Yahoo Finance and SEC APIs.
+
 ---
 
 ## 6. Project File Structure
@@ -586,6 +628,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - `screens/AuthScreen.tsx`: Modern dark mode authentication screen with sign in, sign up, password reset, and 1-click demo portfolio access
   - `components/AddAssetModal.tsx`: Bottom sheet modal for adding assets, stock lookup autocomplete, USD/THB currency toggle, and live DCA detection
   - `components/EditAssetModal.tsx`: Bottom sheet modal for editing asset parameters and soft deletion
+  - `components/SellAssetModal.tsx`: Minimal bottom sheet modal for recording asset sales (SELL) and cash principal withdrawals (WITHDRAW) with 25-100% presets, over-sell validation, and automatic soft deletion upon 100% exit
   - `components/ImportCsvModal.tsx`: Bottom sheet modal for CSV portfolio import with file picker, direct paste, smart mapping, and live validation
   - `components/AssetSparklineCard.tsx`: FinTech asset holding card with 7-day closing price sparkline area chart and Once-a-Day EOD caching
   - `components/CashAssetForm.tsx`: Modular form component for bank deposits, interest payout cycles, and pro-rata tax calculations

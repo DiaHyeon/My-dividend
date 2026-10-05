@@ -25,6 +25,7 @@ import { getAssetCurrency, setAssetCurrency, getCachedExchangeRate } from '../se
 import { CashAssetForm } from './CashAssetForm';
 import { CalendarPickerModal } from './CalendarPickerModal';
 import { SectorPickerModal } from './SectorPickerModal';
+import { SellAssetModal } from './SellAssetModal';
 import { getLocalDateString } from '../utils/dateUtils';
 import { portfolioEvents } from '../services/eventService';
 
@@ -83,6 +84,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
   const [priceFeedback, setPriceFeedback] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSellModalVisible, setIsSellModalVisible] = useState(false);
 
   // Stock Split Detection State
   const [splitDetection, setSplitDetection] = useState<SplitDetectionResult | null>(null);
@@ -1025,22 +1027,40 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                 )}
               </TouchableOpacity>
 
-              {/* Prominent Red Delete Button as requested */}
-              <TouchableOpacity
-                style={[styles.deleteButtonRed, isDeleting && styles.buttonDisabled]}
-                onPress={handleDelete}
-                disabled={isSubmitting || isDeleting}
-                activeOpacity={0.85}
-              >
-                {isDeleting ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
-                    <Text style={styles.deleteButtonRedText}>ลบสินทรัพย์ออกจากพอร์ต</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+              {/* Secondary Action Row: Sell / Withdraw & Delete Asset */}
+              <View style={styles.secondaryActionRow}>
+                <TouchableOpacity
+                  style={[styles.sellButton, (isSubmitting || isDeleting) && styles.buttonDisabled]}
+                  onPress={() => setIsSellModalVisible(true)}
+                  disabled={isSubmitting || isDeleting}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons
+                    name={assetType === 'CASH' ? 'cash-outline' : 'trending-down-outline'}
+                    size={17}
+                    color="#D97706"
+                  />
+                  <Text style={styles.sellButtonText}>
+                    {assetType === 'CASH' ? 'ถอน' : 'ขาย'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.deleteButtonRedSmall, isDeleting && styles.buttonDisabled]}
+                  onPress={handleDelete}
+                  disabled={isSubmitting || isDeleting}
+                  activeOpacity={0.85}
+                >
+                  {isDeleting ? (
+                    <ActivityIndicator color="#DC2626" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="trash-outline" size={17} color="#DC2626" />
+                      <Text style={styles.deleteButtonRedSmallText}>ลบสินทรัพย์</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={{ height: 24 }} />
@@ -1063,6 +1083,19 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
         selectedSector={selectedSector}
         onSelectSector={(secId) => setSelectedSector(secId)}
         onClose={() => setIsSectorPickerVisible(false)}
+      />
+
+      <SellAssetModal
+        visible={isSellModalVisible}
+        asset={asset}
+        currency={currency}
+        exchangeRate={exchangeRate}
+        onClose={() => setIsSellModalVisible(false)}
+        onSuccess={() => {
+          setIsSellModalVisible(false);
+          onSuccess();
+          onClose();
+        }}
       />
     </Modal>
   );
@@ -1771,6 +1804,45 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#0369A1',
     lineHeight: 16,
+  },
+  secondaryActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  sellButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
+    paddingVertical: 12,
+  },
+  sellButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  deleteButtonRedSmall: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 14,
+    paddingVertical: 12,
+  },
+  deleteButtonRedSmallText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#DC2626',
   },
 });
 

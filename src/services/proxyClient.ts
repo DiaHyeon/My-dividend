@@ -1,7 +1,7 @@
 // A centralized client helper for securely invoking the stock-proxy Supabase Edge Function with automatic authentication headers, request timeouts, and error handling.
 import { supabase } from '../lib/supabase';
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://ycflookcrilaujmeillt.supabase.co';
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 const FUNCTION_NAME = 'stock-proxy';
 const PROXY_URL = `${SUPABASE_URL}/functions/v1/${FUNCTION_NAME}`;
