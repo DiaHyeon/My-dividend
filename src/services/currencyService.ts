@@ -75,6 +75,23 @@ export function isKnownUSSymbol(symbol: string): boolean {
 }
 
 /**
+ * ฟังก์ชันมาตรฐานสำหรับตรวจสอบว่าสินทรัพย์เป็นหุ้นสหรัฐฯ (US Stock) หรือไม่
+ * ใช้กฎ: ต้องเป็น STOCKS, ตรวจสอบ currency ใน DB/Map ก่อน, แล้วจึงตรวจ dynamic registry/ticker convention
+ * ไม่ใช้ tax_rate ในการตัดสินสกุลเงิน เพื่อความเที่ยงตรงของข้อมูล
+ */
+export function resolveIsUSStock(
+  item: { asset_type?: string; symbol?: string; id?: string; currency?: string },
+  currencyMap: Record<string, 'THB' | 'USD'> = {}
+): boolean {
+  if (item.asset_type && item.asset_type !== 'STOCKS') return false;
+  if (item.currency === 'USD') return true;
+  if (item.currency === 'THB') return false;
+  if (item.id && currencyMap[item.id] === 'USD') return true;
+  if (item.id && currencyMap[item.id] === 'THB') return false;
+  return isKnownUSSymbol(item.symbol || '');
+}
+
+/**
  * Retrieves the currency ('USD' | 'THB') of a specific asset.
  */
 export async function getAssetCurrency(

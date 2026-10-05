@@ -10,7 +10,7 @@ import {
 import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { AssetSummary } from '../types/database';
-import { isKnownUSSymbol, getAssetAverageCostUSD } from '../services/currencyService';
+import { resolveIsUSStock, getAssetAverageCostUSD } from '../services/currencyService';
 import { fetch7DayPriceHistory, HistoryResult } from '../services/historyService';
 import { usePrivacyMode } from '../services/privacyService';
 
@@ -127,11 +127,8 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
   };
 
   const isUS = useMemo(
-    () =>
-      item.currency === 'USD' ||
-      (item.asset_type === 'STOCKS' &&
-        (isKnownUSSymbol(item.symbol) || Math.abs(Number(item.tax_rate) - 0.15) < 0.005)),
-    [item.currency, item.symbol, item.asset_type, item.tax_rate]
+    () => resolveIsUSStock(item),
+    [item.currency, item.symbol, item.asset_type, item.id]
   );
   const isCash = item.asset_type === 'CASH';
   const isFund = item.asset_type === 'FUNDS';

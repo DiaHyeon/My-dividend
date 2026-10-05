@@ -372,8 +372,51 @@ serve(async (req: Request) => {
       });
     }
 
+    // 8. Action: Sync funds catalog from SEC Open API (30-day periodic cycle)
+    if (action === "sync-funds") {
+      const secKey = Deno.env.get("SEC_API_KEY") || "";
+      if (!secKey) {
+        return new Response(
+          JSON.stringify({ error: "SEC_API_KEY is not configured in server environment secrets", synced: 0 }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      try {
+        const profileUrl = "https://api.sec.or.th/v2/fund/general-info/profiles?page_size=500";
+        const res = await fetchWithTimeout(profileUrl, {
+          headers: { "Ocp-Apim-Subscription-Key": secKey },
+        }, 15000);
+
+        if (!res.ok) {
+          return new Response(
+            JSON.stringify({ error: `SEC Sync error: ${res.statusText}`, synced: 0 }),
+            { status: res.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const text = await res.text();
+        const profileData = text ? JSON.parse(text) : { items: [] };
+        const items = profileData.items || [];
+
+        return new Response(
+          JSON.stringify({
+            synced: items.length,
+            timestamp: new Date().toISOString(),
+            items: items.slice(0, 100),
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (syncErr: any) {
+        return new Response(
+          JSON.stringify({ error: syncErr.message || "Failed to sync SEC funds", synced: 0 }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     return new Response(
-      JSON.stringify({ error: "Invalid action. Supported actions: 'search' | 'quote' | 'dividends' | 'fund-nav' | 'fund-dividends' | 'history-7d'" }),
+      JSON.stringify({ error: "Invalid action. Supported actions: 'search' | 'quote' | 'dividends' | 'fund-nav' | 'fund-dividends' | 'history-7d' | 'sync-funds'" }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {

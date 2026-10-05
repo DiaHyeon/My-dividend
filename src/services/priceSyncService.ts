@@ -1,12 +1,14 @@
 // บริการซิงค์และอัปเดตราคาตลาดประจำวัน (Daily Market Price Sync) สำหรับหุ้นและกองทุนรวม พร้อมระบบต่ออายุรอบเงินปันผลอัตโนมัติ (Rolling Schedules)
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
-import { AssetSummary } from '../types/database';
+import { AssetSummary, DividendSchedule } from '../types/database';
 import { fetchStockPrice } from './stockService';
 import { fetchFundNav } from './fundService';
-import { getAssetCurrency, getCachedExchangeRate } from './currencyService';
+import { getAssetCurrency, getCachedExchangeRate, resolveIsUSStock } from './currencyService';
 import { clear7DayHistoryCache } from './historyService';
-import { getLocalDateString } from '../utils/dateUtils';
+import { getLocalDateString, estimatePayoutDate, computeLearnedPayoutLag } from '../utils/dateUtils';
+import { detectCashFrequency } from './taxService';
+import { getSpecialScheduleIds } from '../components/AdjustDividendModal';
 
 const LAST_SYNC_DATE_KEY = '@my_dividend_last_price_sync_date';
 
@@ -56,10 +58,13 @@ export async function rollExpiredDividendSchedulesIfNeeded(assets: AssetSummary[
   const oneYearAheadKey = getLocalDateString(oneYearAhead);
 
   try {
+    const specialIds = await getSpecialScheduleIds().catch(() => new Set<string>());
+    const isSpecialSched = (s: any) => Boolean(s.is_special) || specialIds.has(s.id);
+
     const activeAssetIds = activeAssets.map((a) => a.id);
     const { data: allSchedules, error } = await supabase
       .from('dividend_schedules')
-      .select('id, asset_id, dpu, xd_date, payment_date, is_projected')
+      .select('*')
       .in('asset_id', activeAssetIds)
       .order('xd_date', { ascending: true });
 
@@ -85,27 +90,48 @@ export async function rollExpiredDividendSchedulesIfNeeded(assets: AssetSummary[
       const existingList = schedulesByAsset.get(asset.id) || [];
       const futureSchedules = existingList.filter((s) => s.xd_date >= todayKey);
 
-      // ถ้ามีรอบปันผลในอนาคตเหลืออย่างน้อย 2 รอบแล้ว ถือว่ามีข้อมูลเพียงพอ ไม่ต้องต่อรอบเพิ่ม
-      if (futureSchedules.length >= 2) {
+      // ตรวจสอบว่ามีรอบปันผลที่ครอบคลุมถึงช่วงปลายของกรอบ 12 เดือนข้างหน้าหรือไม่ (อย่างน้อย 9 เดือนข้างหน้า)
+      const hasCoverageUntilLateHorizon = futureSchedules.some((s) => {
+        const schedTime = new Date(s.xd_date).getTime();
+        const nineMonthsAhead = new Date(today.getFullYear(), today.getMonth() + 9, 1).getTime();
+        return schedTime >= nineMonthsAhead;
+      });
+
+      if (hasCoverageUntilLateHorizon && futureSchedules.length >= 2) {
         continue;
       }
 
       const existingDates = new Set(existingList.map((s) => s.xd_date));
 
       if (asset.asset_type === 'CASH') {
-        // สำหรับ CASH: ตรวจสอบรอบดอกเบี้ยปลายปีหรือครึ่งปี
+        // สำหรับ CASH: ตรวจสอบว่าเป็นรอบรายเดือนหรือกึ่งปีโดยใช้ detectCashFrequency
+        const isMonthlyCash = detectCashFrequency(existingList.map((s) => s.xd_date)) === 'MONTHLY';
         const currentYear = today.getFullYear();
-        const candidateDates = [
-          `${currentYear}-06-30`,
-          `${currentYear}-12-31`,
-          `${currentYear + 1}-06-30`,
-          `${currentYear + 1}-12-31`,
-        ];
+        const candidateDates: string[] = [];
+
+        if (isMonthlyCash) {
+          for (const yr of [currentYear, currentYear + 1]) {
+            for (let m = 0; m < 12; m++) {
+              candidateDates.push(`${yr}-${String(m + 1).padStart(2, '0')}-28`);
+            }
+          }
+        } else {
+          candidateDates.push(
+            `${currentYear}-06-30`,
+            `${currentYear}-12-31`,
+            `${currentYear + 1}-06-30`,
+            `${currentYear + 1}-12-31`
+          );
+        }
 
         // หา DPU จากงวดเดิมหรือจากอัตราดอกเบี้ยปัจจุบัน
         const prevSched = existingList[existingList.length - 1];
         const annualRate = Number(asset.current_price) || 0.015;
-        const dpuToUse = prevSched && Number(prevSched.dpu) > 0 ? Number(prevSched.dpu) : Number((annualRate / 2).toFixed(6));
+        const dpuToUse = prevSched && Number(prevSched.dpu) > 0
+          ? Number(prevSched.dpu)
+          : isMonthlyCash
+          ? Number((annualRate / 12).toFixed(6))
+          : Number((annualRate / 2).toFixed(6));
 
         for (const cDate of candidateDates) {
           if (cDate >= todayKey && cDate <= oneYearAheadKey && !existingDates.has(cDate)) {
@@ -122,31 +148,63 @@ export async function rollExpiredDividendSchedulesIfNeeded(assets: AssetSummary[
         // สำหรับ STOCKS และ FUNDS:
         if (existingList.length === 0) continue;
 
-        // หางวดล่าสุดที่มี DPU > 0
-        const validScheds = existingList.filter((s) => Number(s.dpu) > 0);
+        // หางวดปกติล่าสุดที่มี DPU > 0 (ไม่รวมงวดพิเศษ)
+        const validScheds = existingList.filter((s) => Number(s.dpu) > 0 && !isSpecialSched(s));
         if (validScheds.length === 0) continue;
 
         const latestSched = validScheds[validScheds.length - 1];
         const latestDpu = Number(latestSched.dpu);
 
-        // ตรวจสอบความถี่ (Frequency) จากจำนวนงวดในอดีต
-        const stepMonths = existingList.length >= 10 ? 1 : existingList.length >= 4 ? 3 : existingList.length >= 2 ? 6 : 12;
-
-        let currentDateStr = latestSched.xd_date;
-        let guard = 0;
-        while (guard < 16) {
-          guard++;
-          currentDateStr = addMonthsSafe(currentDateStr, stepMonths);
-          if (currentDateStr > oneYearAheadKey) break;
-
-          if (currentDateStr >= todayKey && !existingDates.has(currentDateStr)) {
+        // กลยุทธ์ที่ 1 (Same-Month Next-Year Roll):
+        // สำหรับงวดปกติที่ผ่านมาแล้วหรือกำลังจะหมดอายุ ให้ Roll ไปเป็นเดือนเดิมของปีถัดไป (+12 เดือน)
+        // เพื่อรักษาเดือนที่ขึ้นเครื่องหมายจริงของบริษัทไว้ได้อย่างแม่นยำ
+        let generatedAny = false;
+        for (const pastSched of validScheds) {
+          if (isSpecialSched(pastSched)) continue;
+          const nextYearDate = addMonthsSafe(pastSched.xd_date, 12);
+          if (nextYearDate >= todayKey && nextYearDate <= oneYearAheadKey && !existingDates.has(nextYearDate)) {
             newSchedulesToInsert.push({
               asset_id: asset.id,
-              dpu: latestDpu,
-              xd_date: currentDateStr,
+              dpu: Number(pastSched.dpu) > 0 ? Number(pastSched.dpu) : latestDpu,
+              xd_date: nextYearDate,
               is_projected: true,
             });
-            existingDates.add(currentDateStr);
+            existingDates.add(nextYearDate);
+            generatedAny = true;
+          }
+        }
+
+        // กลยุทธ์ที่ 2 (Fallback กรณีเป็นสินทรัพย์ใหม่ที่มีแค่งวดเดียว หรือยังไม่มีรอบในอนาคต):
+        // ตรวจสอบความถี่จากจำนวนงวดในรอบ 365 วันล่าสุด (Trailing 1 Year Count) เท่านั้น
+        // ห้ามใช้ existingList.length รวมทั้งหมด เพื่อป้องกันตัวเลขสะสมข้ามปีเพี้ยน
+        const futureCount = Array.from(existingDates).filter((d) => d >= todayKey && d <= oneYearAheadKey).length;
+        if (!generatedAny && futureCount < 2) {
+          const oneYearAgoDate = new Date(today);
+          oneYearAgoDate.setFullYear(today.getFullYear() - 1);
+          const oneYearAgoKey = getLocalDateString(oneYearAgoDate);
+
+          const trailingScheds = validScheds.filter((s) => s.xd_date >= oneYearAgoKey && s.xd_date <= todayKey);
+          const trailingCount = trailingScheds.length;
+
+          const stepMonths =
+            trailingCount >= 10 ? 1 : trailingCount >= 3 ? 3 : trailingCount >= 2 ? 6 : 12;
+
+          let currentDateStr = latestSched.xd_date;
+          let guard = 0;
+          while (guard < 16) {
+            guard++;
+            currentDateStr = addMonthsSafe(currentDateStr, stepMonths);
+            if (currentDateStr > oneYearAheadKey) break;
+
+            if (currentDateStr >= todayKey && !existingDates.has(currentDateStr)) {
+              newSchedulesToInsert.push({
+                asset_id: asset.id,
+                dpu: latestDpu,
+                xd_date: currentDateStr,
+                is_projected: true,
+              });
+              existingDates.add(currentDateStr);
+            }
           }
         }
       }
@@ -316,6 +374,23 @@ export async function syncDailyPricesIfNeeded(
       console.warn('Roll expired dividend schedules notice:', schedErr);
     }
 
+    // 4.1 Auto-lock past foreign dividend schedules FX rates for unconfirmed payouts
+    try {
+      const activeList = assets.filter((a) => a.id && !a.is_archived);
+      const activeIds = activeList.map((a) => a.id).filter(Boolean);
+      if (activeIds.length > 0) {
+        const { data: allSchedules } = await supabase
+          .from('dividend_schedules')
+          .select('*')
+          .in('asset_id', activeIds);
+        if (allSchedules && allSchedules.length > 0) {
+          await autoLockPastForeignDividendRates(activeList, allSchedules as DividendSchedule[], fxRate);
+        }
+      }
+    } catch (fxErr) {
+      console.warn('Auto-lock foreign dividend rates notice:', fxErr);
+    }
+
     // 5. Record successful sync date for today only if at least one quote succeeded or no eligible assets
     if (successfulFetchCount > 0 || eligibleAssets.length === 0) {
       await AsyncStorage.setItem(LAST_SYNC_DATE_KEY, todayKey);
@@ -328,4 +403,82 @@ export async function syncDailyPricesIfNeeded(
   } finally {
     isSyncInProgress = false;
   }
+}
+
+/**
+ * ตรวจสอบและ Auto-Lock อัตราแลกเปลี่ยน (received_fx_rate) สำหรับเงินปันผลต่างประเทศที่ถึงวันจ่ายเงินแล้ว
+ * ป้องกันยอดเงินปันผลในอดีตผันผวนตามค่าเงินบาทในอนาคต หากผู้ใช้ไม่ได้กดปุ่มยืนยันด้วยตนเอง
+ */
+export async function autoLockPastForeignDividendRates(
+  assets: AssetSummary[],
+  schedules: DividendSchedule[],
+  exchangeRate: number
+): Promise<number> {
+  if (!exchangeRate || exchangeRate <= 0) return 0;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const schedulesByAsset = new Map<string, DividendSchedule[]>();
+  schedules.forEach((s) => {
+    const list = schedulesByAsset.get(s.asset_id) || [];
+    list.push(s);
+    schedulesByAsset.set(s.asset_id, list);
+  });
+
+  const assetMap = new Map<string, AssetSummary>();
+  assets.forEach((a) => assetMap.set(a.id, a));
+
+  const toLock: { schedule: DividendSchedule; lockedRate: number }[] = [];
+  const lockedRate = Number(exchangeRate.toFixed(4));
+
+  for (const s of schedules) {
+    const parentAsset = assetMap.get(s.asset_id);
+    if (!parentAsset) continue;
+
+    const isUS = resolveIsUSStock(parentAsset);
+    if (!isUS) continue;
+
+    // ถ้ามีการล็อกเรทแล้ว ไม่ต้องล็อกซ้ำ
+    if (s.received_fx_rate && Number(s.received_fx_rate) > 0) continue;
+
+    const assetScheds = schedulesByAsset.get(s.asset_id) || [];
+    const learnedLag = computeLearnedPayoutLag(assetScheds);
+    const payoutDateObj = estimatePayoutDate(s.xd_date, s.payment_date, {
+      isUS: true,
+      learnedLagDays: learnedLag,
+    });
+    if (!payoutDateObj) continue;
+    payoutDateObj.setHours(0, 0, 0, 0);
+
+    // ถ้าวันจ่ายเงินผ่านไปแล้ว (<= today) ให้ Auto-Lock เรท
+    if (payoutDateObj.getTime() <= today.getTime()) {
+      toLock.push({ schedule: s, lockedRate });
+    }
+  }
+
+  if (toLock.length === 0) return 0;
+
+  let lockedCount = 0;
+  for (const item of toLock) {
+    try {
+      const { error } = await supabase
+        .from('dividend_schedules')
+        .update({
+          received_fx_rate: item.lockedRate,
+          is_projected: false,
+        })
+        .eq('id', item.schedule.id);
+
+      if (!error) {
+        item.schedule.received_fx_rate = item.lockedRate;
+        item.schedule.is_projected = false;
+        lockedCount++;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return lockedCount;
 }

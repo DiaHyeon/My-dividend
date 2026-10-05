@@ -42,11 +42,19 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 ### Core Table Schemas
 - `assets`: Manages asset master records
-  - Fields: `id` (uuid, PK), `user_id` (uuid), `symbol` (text), `asset_type` (STOCKS | FUNDS | CASH), `current_price` (numeric(15,4)), `tax_rate` (numeric(15,4), default 0.1000), `is_archived` (boolean), `created_at` (timestamptz)
+  - Fields: `id` (uuid, PK), `user_id` (uuid), `symbol` (text), `asset_type` (STOCKS | FUNDS | CASH), `current_price` (numeric(15,4)), `tax_rate` (numeric(15,4), default 0.1000), `last_split_date` (text, nullable), `is_archived` (boolean), `created_at` (timestamptz)
 - `transactions`: Buy and deposit transaction logs
   - Fields: `id` (uuid, PK), `asset_id` (uuid, FK), `type` (BUY | SELL), `shares` (numeric(15,4)), `price_per_share` (numeric(15,4)), `transaction_date` (date), `exchange_rate` (numeric(15,4), default 1.0000)
 - `dividend_schedules`: Dividend payment and projection schedules
-  - Fields: `id` (uuid, PK), `asset_id` (uuid, FK), `dpu` (numeric(15,4)), `xd_date` (date), `payment_date` (date, nullable), `is_projected` (boolean)
+  - Fields: `id` (uuid, PK), `asset_id` (uuid, FK), `dpu` (numeric(15,4)), `xd_date` (date), `payment_date` (date, nullable), `is_projected` (boolean), `received_fx_rate` (numeric(15,4), nullable)
+- `thai_funds_catalog`: Master catalog of all registered Thai mutual funds and share classes (5,790+ records from SEC Open API)
+  - Fields: `id` (uuid, PK), `symbol` (text, unique), `name_th` (text), `name_en` (text), `amc_name` (text), `exchange` (text), `proj_id` (text), `category` (text), `created_at` (timestamptz), `updated_at` (timestamptz)
+  - Indexes: B-Tree indexes on `symbol`, `name_th`, `amc_name`, `exchange`, and `proj_id` for instant sub-20ms multi-field search.
+  - RLS: Public read-only (`SELECT`) access for all users, write access reserved for server-side maintenance and sync.
+- `portfolio_snapshots`: Daily portfolio valuation checkpoints for authentic performance curves over time
+  - Fields: `id` (uuid, PK), `user_id` (uuid, FK), `snapshot_date` (date), `total_market_value` (numeric(15,4)), `total_cost` (numeric(15,4)), `unrealized_pl` (numeric(15,4)), `unrealized_pl_percent` (numeric(15,4)), `created_at` (timestamptz)
+  - Constraint: `UNIQUE (user_id, snapshot_date)`
+  - RLS: Enabled for authenticated and demo sessions.
 - `view_asset_summary` (SQL View): Automatically computes net remaining shares (`net_shares`), weighted average cost (`weighted_average_cost`), total market value (`market_value`), total cost basis (`total_cost`), and Unrealized P/L directly in the database engine.
 
 ---
@@ -55,7 +63,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 ### 4.1 Dashboard & Navigation Structure
 - **Navigation Tabs**: Standardized international naming across the bottom navigation bar:
-  - `Overview` (Dashboard screen): Streamlined minimal cashflow hub containing net worth hero card, compact 3-category summary cards, upcoming payday radar, 12-month dividend/interest cashflow chart, and passive income goal card. Redundant bottom asset lists are omitted in favor of dedicated bottom tabs.
+  - `Overview` (Dashboard screen): Streamlined minimal cashflow hub containing net worth hero card, compact 3-category summary cards, upcoming payday radar, annual cashflow bar chart with year selector and dropdown filter, and passive income goal card. Redundant bottom asset lists are omitted in favor of dedicated bottom tabs.
   - `Portfolio`: Portfolio asset allocation donut pie chart, sector breakdown, and cumulative performance benchmark comparison.
   - `Holdings`: Dedicated dual-view screen for holdings management with sparkline charts, and transaction history timeline with minimal dropdown filters.
 - **Minimal Hero Net Worth Card (`HeroNetWorthCard.tsx`)**:
@@ -75,14 +83,22 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 ---
 
-### 4.2 Dividend Forecasting Engine (12-Month Bar Chart)
-- Visualizes 12-month net passive cashflow projections (January to December).
+### 4.2 Dividend Forecasting Engine (Yearly Bar Chart & Rolling Horizon)
+- **Year Selection & Rolling 12M Horizon**: Visualizes annual passive cashflow across 12 calendar months (Jan–Dec for selected calendar year), defaulting automatically to the current calendar year (`new Date().getFullYear()`) upon load with instant arrow navigation (`[ ‹ ] ปี 2026 (ปีนี้) [ › ]`) and quick modal picker, with full support for historical years, future projections, and Rolling 12-Month Forward Horizon (`Rolling 12M`).
+- **Unified Single-Row Filter Bar**:
+  - **Left**: Minimalist Dropdown button (`[ 🪙 ทั้งหมด ▾ ]` / `[ 📈 เฉพาะปันผล ▾ ]` / `[ 💵 เฉพาะดอกเบี้ย ▾ ]`) with bottom sheet modal picker and checkmarks.
+  - **Right**: Compact Year Selector pill with prev/next arrows (`[ ‹ ]  ปี 2026 (ปีนี้)  [ › ]`) and tap-to-pick modal.
+- **Cross-Year Collision & Double-Counting Elimination**: Each monthly bar maps strictly to a unique year-month key (`payoutMonthKey = YYYY-MM`), ensuring dividend distributions occurring in the same named month across different years never collide or inflate.
+- **Status-Differentiated Bar Chart (ข้อ 3 แบบ A)**:
+  - **Received Months (รับแล้ว)**: Deep emerald solid fill (`#059669`) for past months with actual payouts.
+  - **Current Month (เดือนปัจจุบัน)**: Emerald glowing track with border (`#059669`), rounded pill label, and `▲ Now` badge.
+  - **Projected Months (รอรับ/คาดการณ์)**: Soft mint emerald fill (`#6EE7B7`) for upcoming future projections.
+  - **Header Metrics**: Displays full year total, monthly average (`เฉลี่ย ฿XX,XXX/ด.`), and separate breakdown of `รับแล้ว ฿XX,XXX` • `รอรับ ฿XX,XXX` for the active year.
 - **Net Dividend Formula**:
   $$\text{Net Inflow} = \text{Shares} \times \text{DPU} \times (1 - \text{tax\_rate})$$
   Taxes are calculated per asset (Thai stocks default to 10% `0.1000`, US stocks default to 15% `0.1500` under W-8BEN, Thai bank interest defaults to 0% or 15%, or custom user overrides).
 - **Strict XD Cutoff Logic**: Includes only share lots acquired before the ex-dividend date (`transaction_date < xd_date`).
-- Interactive monthly bar selection opens a modal detailing individual paying assets for that specific month with clear badges (`[Dividend]` vs `[Interest]`).
-- **Current Month Visual Indicator**: Highlights the current calendar month with an emerald border track (`#059669`), emerald rounded month pill, and an upward caret with 'Now' badge (`▲ Now`), paired with an explicit legend row (`▲ Now = เดือนปัจจุบัน (ก.ย.)`) for instantaneous orientation.
+- **Interactive Inspection Modal**: Monthly bar selection opens a modal detailing individual paying assets for that specific month with clear badges (`[Dividend]` vs `[Interest]`, `[Received]`, `[Special]`) and tap-to-adjust integration.
 
 ---
 
@@ -110,6 +126,27 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - Displays a clean informational badge: `ℹ️ No dividend distribution history (Growth / Non-dividend)`.
   - Tracks cost, current price, and unrealized gain/loss normally without generating empty dividend schedule clutter.
 
+### 4.2.2 Dividend Calculation Integrity, FX Locking, and Learned Payday Radar
+- **Foreign Dividend Currency Locking (`received_fx_rate`)**:
+  - Persists `received_fx_rate` as `NUMERIC(15, 4)` in `dividend_schedules` when a foreign dividend is confirmed or reaches payday.
+  - Eliminates live exchange rate fluctuations for past realized cashflow, ensuring lifetime cumulative dividends remain permanent and stable.
+- **Payday Auto-Lock for Passive Investors (`autoLockPastForeignDividendRates`)**:
+  - Automatically locks `received_fx_rate` using the day's exchange rate and sets `is_projected: false` during daily price sync and dashboard load when `payment_date <= today`.
+  - Guarantees authentic past cashflow retention without requiring manual confirmation clicks, while preserving full manual adjustment capabilities via `AdjustDividendModal.tsx`.
+- **Adaptive Learned Payday Lag (`computeLearnedPayoutLag`)**:
+  - Calculates asset-specific median lag between `xd_date` and `payment_date` (filtered to 5–45 days) from historical schedules.
+  - Applies `learnedLagDays` to `estimatePayoutDate`, accurately reflecting real market behavior (e.g. Thai banks ~30 days, US ETFs ~7–14 days) instead of static hardcoded offsets.
+- **Bank Deposit Interest Frequency Detection (`detectCashFrequency`)**:
+  - Determines cash deposit interest frequency strictly by analyzing median month gaps between schedule dates (1mo = MONTHLY, 6mo = SEMI_ANNUAL, 12mo = ANNUAL).
+  - Eliminates naive schedule row-counting bugs, preventing dividend inflation across multi-year schedules.
+- **Special Dividend Forward Yield Isolation**:
+  - Separates regular sustainable dividends (`projectedAnnualRegularNetDividend`) from one-off special dividends in `Dashboard.tsx` to maintain authentic forward Current Yield and Yield on Cost (YoC), while preserving total cashflow in annual forecasts.
+  - Excludes `is_special: true` and AsyncStorage special IDs from rolling schedule generation (`rollExpiredDividendSchedulesIfNeeded`) and CSV representative DPU export.
+- **Confirmed Dividend Fallback**:
+  - Defensive fallback in `returnService.ts` and `Dashboard.tsx` when `schedule.is_projected === false` and `eligibleShares <= 0`: falls back to shares held as of `payment_date` (or `net_shares`) to prevent dropping verified lifetime payouts due to transaction date edge cases.
+- **Automated Regression Test Suite**:
+  - Automated unit and integration test suite maintained in `scripts/test_dividend_logic.js` runnable via `npm test`, covering 30 test cases across date math, learned lag, cash accrual, cutoff fallbacks, and CSV roundtrips.
+
 ---
 
 ### 4.3 Automated Stock Lookup & Closing Prices (US & Thai Stocks)
@@ -129,10 +166,12 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ### 4.3.1 Thai Mutual Funds Engine (SEC Open API v2)
 - Handled by: `src/services/fundService.ts`, `src/components/AddAssetModal.tsx`, `src/components/EditAssetModal.tsx`
 - **Direct Integration**: Connected to the Securities and Exchange Commission of Thailand (SEC Thailand) via API v2.
-- **0ms Catalog & Search**:
-  - Pre-cached catalog of prominent Thai mutual funds across leading Asset Management Companies (KAsset, SCBAM, BBLAM, KSAM, UOBAM, TISCOAM, ONEAM, KTAM, Principal, etc.).
-  - Full-text search by fund abbreviation (`K-USA`, `SCBDV`, `B-INNOTECH`, `KF-GTECH`), Thai name, or AMC name.
-  - Distinct AMC badges: `[KAsset]`, `[SCBAM]`, `[BBLAM]`, `[KSAM]`.
+- **0ms Catalog & Fast Multi-Source Search**:
+  - **Supabase Indexed Database (`thai_funds_catalog`)**: Stores and indexes Thai mutual funds with B-Tree indexes on `symbol`, `name_th`, `amc_name`, `exchange`, and `proj_id` with Row Level Security (RLS) enabled.
+  - **Full-Text Multi-Field Search**: Searches by ticker symbol (`K-USA`, `SCBDV`, `B-INNOTECH`, `KF-GTECH`), Thai name (*"ทศพล"*, *"หุ้นปันผล"*, *"เวียดนาม"*), or AMC name (*"กสิกร"*, *"บัวหลวง"*, *"ไทยพาณิชย์"*, *"กรุงศรี"*, *"วรรณ"*).
+  - **Silent 30-Day Periodic Sync (`syncFundsCatalogIfNeeded`)**: Runs in the background without UI blocking every 30 days (`@mydividend_last_funds_catalog_sync`), consuming minimal SEC API batch requests (<0.25% of single-day quota) with zero force-sync buttons to preserve a clean, minimalist UI.
+  - **Resilient Fallback**: Seamlessly falls back to an expanded built-in catalog if the database is offline, and provides flexible on-demand SEC lookup for unlisted funds.
+  - Distinct AMC badges: `[KAsset]`, `[SCBAM]`, `[BBLAM]`, `[KSAM]`, `[UOBAM]`, `[TISCO]`, `[KTAM]`, `[Principal]`, `[MFC]`, `[LHFund]`.
 - **Auto NAV Fetching**:
   - Automatically fetches the latest Net Asset Value per unit from the SEC API.
   - Dynamically updates form labels to mutual fund terminology: *"Units"*, *"Cost NAV"*, and *"Latest NAV"*.
@@ -175,6 +214,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   4. `action: "fund-nav"`: Daily mutual fund NAV from SEC API (`/v2/fund/daily-info/nav`).
   5. `action: "fund-dividends"`: Mutual fund dividend history from SEC API (`/v2/fund/daily-info/dividend-history`).
   6. `action: "history-7d"`: 7-day historical closing prices for sparkline area charts (`range=7d&interval=1d`).
+  7. `action: "sync-funds"`: 30-day periodic synchronization of Thai mutual fund profiles from SEC Open API.
 
 ---
 
@@ -395,6 +435,9 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
      - **Alpha / Outperformance Banner**: Dynamic summary card (e.g., `🎉 Outperforming S&P 500 by +3.5%` or `📊 Trailing benchmark by -1.2%`).
      - **Asset Return Ranking**: Ranked leaderboard of portfolio assets sorted from highest to lowest % gain (investment assets exclusively).
      - **Investment Isolation from Cash Deposits (Option A)**: In the Performance Tab, calculations for cumulative return, total invested cost, unrealized capital gain, benchmark curves (SET, S&P 500, NASDAQ), and the asset return ranking strictly isolate investment assets (STOCKS & FUNDS) from bank deposits (CASH). This eliminates return dilution (0% cash capital gain) and ensures fair, apple-to-apple equity index comparison. The Allocation Tab continues to display 100% of all asset classes.
+     - **Daily Portfolio Snapshot Tracking & Authentic Trajectory (`portfolio_snapshots`)**:
+       - Automatically records daily end-of-day portfolio valuation (`recordDailyPortfolioSnapshot` in `benchmarkService.ts`) on Dashboard/Portfolio calculation, tracking `total_market_value`, `total_cost`, `unrealized_pl`, and `unrealized_pl_percent`.
+       - When historical snapshots exist ($\ge 2$ points within the active timeframe), plots the user's authentic portfolio trajectory rather than synthetic straight lines, transitioning seamlessly with beta correlation fallback when snapshots are not yet populated.
 
 ---
 
@@ -470,6 +513,9 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - When applying a split adjustment (e.g., 1:10), the split ratio only divides future or projected payout cycles (`is_projected === true || payment_date >= split.date || xd_date >= split.date`).
   - Past completed dividend distributions maintain their authentic, un-diluted historical DPU, guaranteeing that cumulative received dividend records (`returnService.ts`) remain 100% accurate and mathematically sound.
   - All share calculations and cost adjustments maintain strict `NUMERIC(15, 4)` precision.
+- **Cloud Persistence & Multi-Device Split Synchronization (`assets.last_split_date`)**:
+  - Applied stock split dates are persisted directly to Supabase Cloud via `assets.last_split_date` alongside local `AsyncStorage` caching.
+  - Queries `last_split_date` from Cloud before prompting user, completely preventing re-prompting or duplicate split execution across multiple devices, Expo Go, or Web preview sessions.
 
 ---
 
@@ -612,6 +658,36 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - In `supabase/functions/stock-proxy/index.ts`, closed the dummy JWT token bypass (`split('.').length === 3`).
   - Auth Guard strictly validates incoming `apikey` and `Authorization` headers against server-side `SUPABASE_ANON_KEY` or `SUPABASE_SERVICE_ROLE_KEY`, ensuring only legitimate authorized requests can access upstream Yahoo Finance and SEC APIs.
 
+### 5.11 Multi-DCA Preservation & Transaction Integrity Architecture
+- **Non-destructive Purchase Lot Preservation**: In `EditAssetModal.tsx`, when an asset contains multiple purchase transactions (`txCount > 1`), aggregate share count and cost basis inputs are strictly locked (`editable={false}` with visual lock badge `[ 🔒 DCA X ไม้ ]`).
+- **Elimination of Destructive Transaction Collapsing**: Prevents user edits from inadvertently collapsing, aggregating, or overwriting individual historical purchase lots, ensuring purchase dates, historical FX rates, and lots remain authentic.
+- **1-Tap Lot History Navigation**: Displays a minimal interactive navigation row (`[ 🧾 มีประวัติซื้อสะสม X รายการ • ดูประวัติแต่ละไม้ › ]`), allowing users to smoothly jump directly to the transaction history screen (`AssetsScreen.tsx`) to inspect, edit, or adjust specific purchase lots individually.
+
+### 5.12 DPU Native Currency Standard & Payday Multi-Currency Support
+- **Native Currency Storage**: The `dividend_schedules.dpu` column strictly stores values in the asset's native currency (USD for US stocks, THB for Thai stocks, mutual funds, and bank deposits). Redundant client-side FX pre-conversions are eliminated to prevent double currency conversion errors.
+- **Multi-Currency Payday Confirmation**: The 1-click payday confirmation flow (`handleConfirmPayment`) checks asset currency. For USD assets, the confirmation prompt displays the net amount in `$USD` alongside the estimated THB equivalent (`$X.XX (~฿YY.YY)`), preventing user confusion while leaving `dpu` unaltered in the database (`payment_date` and `is_projected: false` updated only).
+
+### 5.13 Rolling 12-Month Forward Horizon Architecture (Option 1)
+- **12 Consecutive Forward Buckets**: Dynamically generates 12 consecutive monthly forecast buckets starting from the active calendar month (e.g., ต.ค. 2026 to ก.ย. 2027) via `new Date(currentYear, currentCalMonth + i, 1)`.
+- **Elimination of Cross-Year Collision & Double Counting**: Dividend schedules map strictly by unique year-month key (`payoutMonthKey = YYYY-MM`). Past distributions in earlier years are excluded from the forward 12M window, and next year's same-named month (e.g. May 2027) occupies its own dedicated forward bucket (`พ.ค. '27`), completely preventing duplicate accumulation.
+- **Minimal Aesthetic**: Features an emerald `Rolling 12M` pill badge, month span subtitle, and `▲ Now` marker on the current month bar.
+
+### 5.14 Daily Portfolio Valuation Snapshots & Authentic Performance Tracking (`portfolio_snapshots`)
+- **Daily Portfolio Snapshot Persistence**: The `portfolio_snapshots` table records daily portfolio valuation checkpoints (`total_market_value`, `total_cost`, `unrealized_pl`, `unrealized_pl_percent`) via `recordDailyPortfolioSnapshot` in `benchmarkService.ts` upon computing portfolio totals.
+- **Authentic Performance Trajectory**: In `benchmarkService.ts`, when $\ge 2$ historical snapshots exist within the selected timeframe (1M, 3M, 6M, 1Y, ALL), plots authentic portfolio valuation points rather than synthetic straight lines, transitioning seamlessly with beta correlation fallback when snapshots are not yet populated.
+
+### 5.15 Cloud-Persisted Stock Split Protection (`assets.last_split_date`)
+- **Cloud-Persisted Split Status**: Persists applied stock split execution dates directly to Supabase Cloud via `assets.last_split_date` (TEXT, nullable) alongside local `AsyncStorage` caching.
+- **Multi-Device Synchronization**: `detectPendingSplits` checks `last_split_date` from Cloud first, permanently preventing duplicate split prompts or double-split executions across different devices, Expo Go, and Web sessions.
+
+### 5.16 Same-Month Next-Year (+1 Year Roll) & Trailing 365-Day Frequency Architecture
+- **Elimination of Multi-Year Frequency Distortion**: In `priceSyncService.ts`, replaces cumulative lifetime count (`existingList.length`) with the Same-Month Next-Year (+1 Year Roll) strategy, rolling past schedules directly into the matching calendar month next year (`addMonthsSafe(xd_date, 12)`). This preserves authentic corporate distribution cycles (e.g. April & August for SET stocks) without requiring artificial frequency guessing.
+- **Trailing 365-Day Frequency Guard**: For newly added assets with < 2 future schedules, evaluates schedule counts strictly within the trailing 365-day window (`countInLastYear`) rather than lifetime totals, guaranteeing frequency stability across decades of app usage.
+
+### 5.17 Lifetime Cumulative Dividend Preservation for Liquidated Holdings
+- **Preservation across 100% Exits**: In `returnService.ts` and `Dashboard.tsx`, received dividends from archived/liquidated assets (`is_archived: true`) remain permanently counted in `totalCumulativeDividends` and `totalReturn`.
+- **Authentic Wealth Tracking**: Prevents historical cash dividends received in reality from vanishing from portfolio totals when a user trims or completely sells out of an asset position.
+
 ---
 
 ## 6. Project File Structure
@@ -622,12 +698,12 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - `src/`
   - `types/database.ts`: TypeScript Database Definitions for Supabase
   - `lib/supabase.ts`: Supabase Client initialization with AsyncStorage persistence
-  - `screens/Dashboard.tsx`: Overview Dashboard with net worth hero card, category summary cards, payday radar, 12-month cashflow chart, and passive income goal card
+  - `screens/Dashboard.tsx`: Overview Dashboard with net worth hero card, category summary cards, payday radar, annual cashflow bar chart with year selector and dropdown filter, and passive income goal card
   - `screens/Portfolio.tsx`: Portfolio view with asset allocation donut pie chart, white callout lines, sector breakdown, and cumulative performance benchmark comparison
   - `screens/AssetsScreen.tsx`: Holdings and transaction history management screen with search, sorting, sparkline cards, and single-row minimal dropdown filters
   - `screens/AuthScreen.tsx`: Modern dark mode authentication screen with sign in, sign up, password reset, and 1-click demo portfolio access
   - `components/AddAssetModal.tsx`: Bottom sheet modal for adding assets, stock lookup autocomplete, USD/THB currency toggle, and live DCA detection
-  - `components/EditAssetModal.tsx`: Bottom sheet modal for editing asset parameters and soft deletion
+  - `components/EditAssetModal.tsx`: Bottom sheet modal for editing asset parameters, soft deletion, and stock split handling, with strict multi-DCA transaction locking and 1-tap navigation to individual lot history
   - `components/SellAssetModal.tsx`: Minimal bottom sheet modal for recording asset sales (SELL) and cash principal withdrawals (WITHDRAW) with 25-100% presets, over-sell validation, and automatic soft deletion upon 100% exit
   - `components/ImportCsvModal.tsx`: Bottom sheet modal for CSV portfolio import with file picker, direct paste, smart mapping, and live validation
   - `components/AssetSparklineCard.tsx`: FinTech asset holding card with 7-day closing price sparkline area chart and Once-a-Day EOD caching
@@ -650,16 +726,18 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - `services/csvService.ts`: Portfolio CSV export, import parsing, column mapping, and automated asset creation service
   - `services/notificationService.ts`: Local ex-dividend (XD) notification scheduling service for Android
   - `services/assetConsolidationService.ts`: Position accumulation, duplicate asset consolidation, and schedule deduplication service
-  - `services/benchmarkService.ts`: Portfolio cumulative return, alpha calculation, and market benchmark comparison service (SET, S&P 500, NASDAQ)
+  - `services/benchmarkService.ts`: Portfolio cumulative return, alpha calculation, market benchmark comparison service (SET, S&P 500, NASDAQ), and daily portfolio snapshot trajectory plotting
   - `services/historyService.ts`: 7-day historical closing price caching service with Once-a-Day EOD cache and on-demand refresh
-  - `services/priceSyncService.ts`: Automated daily market price and NAV synchronization service updating Supabase database with batch throttling (HTTP 429 protection)
+  - `services/priceSyncService.ts`: Automated daily market price and NAV synchronization service updating Supabase database with Same-Month Next-Year (+1 Year Roll) schedule generation and trailing 365-day frequency guards
   - `services/proxyClient.ts`: Centralized client helper for securely invoking the stock-proxy Supabase Edge Function with automatic authentication headers and timeout control
-  - `services/splitService.ts`: Automated stock split detection, market event fetching, and 1-click share & cost adjustments engine protecting historical paid DPU
-  - `services/returnService.ts`: Realized dividend income calculation and Total Return engine (Capital Gain + Dividends)
+  - `services/splitService.ts`: Automated stock split detection, market event fetching, and 1-click share & cost adjustments engine with Supabase Cloud persistence (`assets.last_split_date`)
+  - `services/returnService.ts`: Realized dividend income calculation and Total Return engine (Capital Gain + Dividends), permanently preserving received dividends from archived/liquidated holdings
   - `services/eventService.ts`: Lightweight pub-sub event emitter for real-time cross-tab portfolio synchronization without unmounting screens
   - `utils/dateUtils.ts`: Timezone-safe local date formatting and manipulation utilities preventing 1-day drift
 - `scripts/`
   - `patch-expo-notifications.js`: Patch script resolving Expo Go Android notification crashes
 - `supabase/migrations/`
   - `005_unified_schema_update.sql`: Idempotent migration script adding sector, currency, exchange_rate, and is_special columns
+  - `006_thai_funds_catalog.sql`: Master catalog table for 5,790+ registered Thai mutual funds with multi-column B-Tree indexes and public read access
+  - `007_portfolio_snapshots_and_splits.sql`: Migration adding `assets.last_split_date` column and creating `portfolio_snapshots` table with RLS for authentic daily portfolio valuation history
 - `supabase/functions/stock-proxy/`: Supabase Edge Function source code proxying Yahoo Finance and SEC Open API requests

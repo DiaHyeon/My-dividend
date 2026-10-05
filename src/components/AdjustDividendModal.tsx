@@ -138,19 +138,26 @@ export const AdjustDividendModal: React.FC<AdjustDividendModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      // 1. Update this dividend schedule in Supabase with NUMERIC(15, 4) & resilient is_special fallback
+      // 1. Update this dividend schedule in Supabase with NUMERIC(15, 4) & resilient schema fallback
       const updateData: any = {
         dpu: Number(finalDpu.toFixed(6)),
         is_projected: !isReceived,
         is_special: isSpecialDividend,
       };
+      if (isReceived && isUSD && effectiveRate > 0) {
+        updateData.received_fx_rate = effectiveRate;
+      } else if (!isReceived) {
+        updateData.received_fx_rate = null;
+      }
+
       let { error: updateErr } = await supabase
         .from('dividend_schedules')
         .update(updateData)
         .eq('id', target.scheduleId);
 
-      if (updateErr && (updateErr.message?.includes('is_special') || updateErr.code === '42703' || updateErr.message?.includes('schema cache'))) {
+      if (updateErr && (updateErr.message?.includes('is_special') || updateErr.message?.includes('received_fx_rate') || updateErr.code === '42703' || updateErr.message?.includes('schema cache'))) {
         delete updateData.is_special;
+        delete updateData.received_fx_rate;
         const retry = await supabase
           .from('dividend_schedules')
           .update(updateData)

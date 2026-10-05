@@ -17,7 +17,7 @@ import { supabase } from '../lib/supabase';
 import { Asset, AssetType } from '../types/database';
 import { scheduleXdReminder } from '../services/notificationService';
 import { searchStocks, fetchStockPrice, fetchExchangeRate, fetchDividendAnalysis, StockSuggestion, DividendAnalysis } from '../services/stockService';
-import { searchThaiFunds, fetchFundNav, fetchFundDividendAnalysis, FundSuggestion, POPULAR_THAI_FUNDS, fetchFundCategory, detectFundClass } from '../services/fundService';
+import { searchThaiFunds, fetchFundNav, fetchFundDividendAnalysis, FundSuggestion, POPULAR_THAI_FUNDS, fetchFundCategory, detectFundClass, syncFundsCatalogIfNeeded } from '../services/fundService';
 import { getSectorsForType, detectSector, setAssetSector, getSectorDefinition } from '../services/sectorService';
 import { evaluateCashTax, calculateAnnualGrossInterest } from '../services/taxService';
 import { setAssetCurrency, saveTransactionCurrencyMeta } from '../services/currencyService';
@@ -238,6 +238,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       setCurrency('THB');
       setTaxRatePercent('10');
       setSelectedSector('Equity');
+      syncFundsCatalogIfNeeded();
     } else {
       // STOCKS
       setCurrency('THB');
@@ -719,7 +720,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       const rate = currency === 'USD' ? (parseFloat(exchangeRate) || 34.0) : 1.0;
       const convertedCostPrice = parsedCostPrice * rate;
       const convertedCurrentPrice = parsedCurrentPrice * rate;
-      const convertedDpu = parsedDpu * rate;
+      // DPU is persisted in the asset's native currency (USD for US stocks, THB otherwise) - never pre-converted
 
       const parsedTaxPercent = parseFloat(taxRatePercent);
       const calculatedTaxRate = isNaN(parsedTaxPercent) || parsedTaxPercent < 0

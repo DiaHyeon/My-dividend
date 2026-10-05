@@ -34,6 +34,7 @@ interface EditAssetModalProps {
   asset: AssetSummary | null;
   onClose: () => void;
   onSuccess: () => void;
+  onNavigateToTransactions?: (symbol?: string) => void;
 }
 
 const ASSET_TYPES: { label: string; shortLabel: string; value: AssetType; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -47,6 +48,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
   asset,
   onClose,
   onSuccess,
+  onNavigateToTransactions,
 }) => {
   const [symbol, setSymbol] = useState('');
   const [assetType, setAssetType] = useState<AssetType>('STOCKS');
@@ -183,7 +185,13 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
           setTxCount(txs.length);
           if (asset.asset_type === 'STOCKS' && txs.length > 0) {
             setIsCheckingSplit(true);
-            const result = await detectPendingSplits(asset.id, asset.symbol, txs as Transaction[], asset.currency);
+            const result = await detectPendingSplits(
+              asset.id,
+              asset.symbol,
+              txs as Transaction[],
+              asset.currency,
+              asset.last_split_date
+            );
             setSplitDetection(result);
           } else {
             setSplitDetection(null);
@@ -329,7 +337,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
       const rateMultiplier = currency === 'USD' ? (exchangeRate || 34.00) : 1.0;
       const convertedCurrentPrice = parsedCurrentPrice * rateMultiplier;
       const convertedCostPrice = parsedCostPrice * rateMultiplier;
-      const convertedDpu = parsedDpu * rateMultiplier;
+      // DPU is persisted in the asset's native currency (USD for US stocks, THB otherwise) - never pre-converted
 
       const calculatedTaxRate = isNaN(parsedTaxPercent) || parsedTaxPercent < 0
         ? (currency === 'USD' ? 0.1500 : 0.1000)
@@ -868,26 +876,44 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                 {/* 4. Holdings: Shares & Cost Price */}
                 <View style={styles.twoColumnRow}>
                   <View style={styles.columnItem}>
-                    <Text style={styles.fieldLabel}>
-                      {assetType === 'FUNDS' ? 'จำนวนหน่วยลงทุน (Units)' : 'จำนวนหุ้น/หน่วยที่ถือ'}
-                    </Text>
+                    <View style={styles.labelRow}>
+                      <Text style={styles.fieldLabel}>
+                        {assetType === 'FUNDS' ? 'จำนวนหน่วยลงทุน (Units)' : 'จำนวนหุ้น/หน่วยที่ถือ'}
+                      </Text>
+                      {txCount > 1 && (
+                        <View style={styles.minimalLockBadge}>
+                          <Ionicons name="lock-closed" size={10} color="#64748B" />
+                          <Text style={styles.minimalLockBadgeText}>DCA</Text>
+                        </View>
+                      )}
+                    </View>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, txCount > 1 && styles.inputDisabled]}
                       value={shares}
                       onChangeText={setShares}
+                      editable={txCount <= 1}
                       keyboardType="decimal-pad"
                       placeholder="0"
                       placeholderTextColor="#94A3B8"
                     />
                   </View>
                   <View style={styles.columnItem}>
-                    <Text style={styles.fieldLabel}>
-                      {assetType === 'FUNDS' ? 'NAV ต้นทุนเฉลี่ย (฿)' : `ต้นทุนเฉลี่ยต่อหุ้น (${currency === 'USD' ? '$' : '฿'})`}
-                    </Text>
+                    <View style={styles.labelRow}>
+                      <Text style={styles.fieldLabel}>
+                        {assetType === 'FUNDS' ? 'NAV ต้นทุนเฉลี่ย (฿)' : `ต้นทุนเฉลี่ยต่อหุ้น (${currency === 'USD' ? '$' : '฿'})`}
+                      </Text>
+                      {txCount > 1 && (
+                        <View style={styles.minimalLockBadge}>
+                          <Ionicons name="lock-closed" size={10} color="#64748B" />
+                          <Text style={styles.minimalLockBadgeText}>ถัวเฉลี่ย</Text>
+                        </View>
+                      )}
+                    </View>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, txCount > 1 && styles.inputDisabled]}
                       value={costPrice}
                       onChangeText={setCostPrice}
+                      editable={txCount <= 1}
                       keyboardType="decimal-pad"
                       placeholder="0.00"
                       placeholderTextColor="#94A3B8"
@@ -896,12 +922,22 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                 </View>
 
                 {txCount > 1 && (
-                  <View style={styles.dcaNoticeCard}>
-                    <Ionicons name="information-circle" size={15} color="#0284C7" style={{ marginRight: 6 }} />
-                    <Text style={styles.dcaNoticeText}>
-                      สินทรัพย์นี้มีประวัติซื้อสะสม (DCA) {txCount} ไม้ ยอดหุ้นและต้นทุนนี้คือยอดเฉลี่ยรวม (หากต้องการแก้ไขเฉพาะไม้ ให้แก้ไขที่แท็บประวัติรายการ)
-                    </Text>
-                  </View>
+                  <TouchableOpacity
+                    style={styles.minimalDcaRow}
+                    onPress={() => {
+                      onClose();
+                      onNavigateToTransactions?.(symbol);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.minimalDcaLeft}>
+                      <Ionicons name="receipt-outline" size={14} color="#059669" />
+                      <Text style={styles.minimalDcaText}>
+                        มีประวัติซื้อสะสม {txCount} รายการ • ดูประวัติแต่ละไม้
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={13} color="#94A3B8" />
+                  </TouchableOpacity>
                 )}
 
                 {/* Live Calculation Preview Card */}
@@ -1787,23 +1823,48 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  dcaNoticeCard: {
+  inputDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    color: '#64748B',
+  },
+  minimalLockBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0F9FF',
+    gap: 3,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  minimalLockBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  minimalDcaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#E2E8F0',
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 6,
-    marginBottom: 6,
+    paddingVertical: 9,
+    marginTop: -4,
+    marginBottom: 12,
   },
-  dcaNoticeText: {
+  minimalDcaLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
     flex: 1,
-    fontSize: 11,
-    color: '#0369A1',
-    lineHeight: 16,
+  },
+  minimalDcaText: {
+    fontSize: 12,
+    color: '#334155',
+    fontWeight: '500',
   },
   secondaryActionRow: {
     flexDirection: 'row',

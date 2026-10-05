@@ -24,7 +24,7 @@ import { EditTransactionModal } from '../components/EditTransactionModal';
 import { AddAssetModal } from '../components/AddAssetModal';
 import { ImportCsvModal } from '../components/ImportCsvModal';
 import { AssetSparklineCard } from '../components/AssetSparklineCard';
-import { isKnownUSSymbol, getCachedExchangeRate } from '../services/currencyService';
+import { isKnownUSSymbol, getCachedExchangeRate, getAllAssetCurrencies } from '../services/currencyService';
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
 import { exportPortfolioToCsv } from '../services/csvService';
 import { usePrivacyMode } from '../services/privacyService';
@@ -112,6 +112,7 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
   const [isEditTxModalVisible, setIsEditTxModalVisible] = useState<boolean>(false);
   const [isImportModalVisible, setIsImportModalVisible] = useState<boolean>(false);
   const [exchangeRate, setExchangeRate] = useState<number>(34.00);
+  const [currencyMap, setCurrencyMap] = useState<Record<string, 'THB' | 'USD'>>({});
   const { isPrivate: isPrivateMode, toggle: togglePrivateMode } = usePrivacyMode();
 
   const handleExportCsv = async () => {
@@ -244,9 +245,13 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
         console.warn('Error fetching transactions/schedules in AssetsScreen:', fetchErr);
       }
 
-      // 3. Exchange Rate
-      const rate = await getCachedExchangeRate();
+      // 3. Exchange Rate & Currencies
+      const [rate, currencies] = await Promise.all([
+        getCachedExchangeRate(),
+        getAllAssetCurrencies(),
+      ]);
       if (rate > 0) setExchangeRate(rate);
+      setCurrencyMap(currencies);
 
       // Save fresh snapshot into local cache
       await savePortfolioCache({
@@ -287,8 +292,8 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
 
   // Return Metrics (Cumulative Dividends & Total Return)
   const returnMetrics = useMemo(
-    () => calculatePortfolioReturns(assets, transactions, dividendSchedules, exchangeRate),
-    [assets, transactions, dividendSchedules, exchangeRate]
+    () => calculatePortfolioReturns(assets, transactions, dividendSchedules, exchangeRate, [], currencyMap),
+    [assets, transactions, dividendSchedules, exchangeRate, currencyMap]
   );
 
   // Enriched Transactions with Symbol & Asset Type
@@ -1120,6 +1125,12 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
           setSelectedAssetForEdit(null);
         }}
         onSuccess={loadData}
+        onNavigateToTransactions={(sym) => {
+          setViewMode('TRANSACTIONS');
+          if (sym) {
+            setSearchQuery(sym);
+          }
+        }}
       />
 
       {/* Edit Individual Transaction Modal */}

@@ -22,6 +22,7 @@ export interface Database {
           tax_rate: number;
           sector?: string;
           currency?: 'THB' | 'USD';
+          last_split_date?: string | null;
           is_archived: boolean;
           created_at: string;
         };
@@ -34,6 +35,7 @@ export interface Database {
           tax_rate?: number;
           sector?: string;
           currency?: 'THB' | 'USD';
+          last_split_date?: string | null;
           is_archived?: boolean;
           created_at?: string;
         };
@@ -46,6 +48,7 @@ export interface Database {
           tax_rate?: number;
           sector?: string;
           currency?: 'THB' | 'USD';
+          last_split_date?: string | null;
           is_archived?: boolean;
           created_at?: string;
         };
@@ -109,6 +112,7 @@ export interface Database {
           payment_date: string | null;
           is_projected: boolean;
           is_special?: boolean;
+          received_fx_rate?: number | null;
           created_at: string;
         };
         Insert: {
@@ -119,6 +123,7 @@ export interface Database {
           payment_date?: string | null;
           is_projected?: boolean;
           is_special?: boolean;
+          received_fx_rate?: number | null;
           created_at?: string;
         };
         Update: {
@@ -129,6 +134,7 @@ export interface Database {
           payment_date?: string | null;
           is_projected?: boolean;
           is_special?: boolean;
+          received_fx_rate?: number | null;
           created_at?: string;
         };
 
@@ -138,6 +144,86 @@ export interface Database {
             columns: ['asset_id'];
             isOneToOne: false;
             referencedRelation: 'assets';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      thai_funds_catalog: {
+        Row: {
+          id: string;
+          symbol: string;
+          name_th: string | null;
+          name_en: string | null;
+          amc_name: string | null;
+          exchange: string | null;
+          proj_id: string | null;
+          category: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          symbol: string;
+          name_th?: string | null;
+          name_en?: string | null;
+          amc_name?: string | null;
+          exchange?: string | null;
+          proj_id?: string | null;
+          category?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          symbol?: string;
+          name_th?: string | null;
+          name_en?: string | null;
+          amc_name?: string | null;
+          exchange?: string | null;
+          proj_id?: string | null;
+          category?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      portfolio_snapshots: {
+        Row: {
+          id: string;
+          user_id: string;
+          snapshot_date: string;
+          total_market_value: number;
+          total_cost: number;
+          unrealized_pl: number;
+          unrealized_pl_percent: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string;
+          snapshot_date: string;
+          total_market_value?: number;
+          total_cost?: number;
+          unrealized_pl?: number;
+          unrealized_pl_percent?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          snapshot_date?: string;
+          total_market_value?: number;
+          total_cost?: number;
+          unrealized_pl?: number;
+          unrealized_pl_percent?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'portfolio_snapshots_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
             referencedColumns: ['id'];
           }
         ];
@@ -154,6 +240,7 @@ export interface Database {
           tax_rate: number;
           sector?: string;
           currency?: 'THB' | 'USD';
+          last_split_date?: string | null;
           is_archived: boolean;
           created_at: string;
           net_shares: number;

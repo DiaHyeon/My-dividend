@@ -18,9 +18,8 @@ import { supabase } from '../lib/supabase';
 import { AssetSummary, AssetType, DividendSchedule } from '../types/database';
 import { AddAssetModal } from '../components/AddAssetModal';
 import { EditAssetModal } from '../components/EditAssetModal';
-import { getAllAssetCurrencies, getCachedExchangeRate, isKnownUSSymbol } from '../services/currencyService';
+import { getAllAssetCurrencies, getCachedExchangeRate, resolveIsUSStock } from '../services/currencyService';
 import { getSectorsForType, getAssetSector, SectorDefinition } from '../services/sectorService';
-import { THAI_SAVINGS_TAX_FREE_LIMIT } from '../services/taxService';
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
 import { usePrivacyMode } from '../services/privacyService';
 import { ensureAuthenticated } from '../services/authService';
@@ -32,6 +31,7 @@ import {
   TIMEFRAMES,
   getBenchmarkComparison,
   syncBenchmarkReturns,
+  recordDailyPortfolioSnapshot,
 } from '../services/benchmarkService';
 import { getCachedPortfolio, savePortfolioCache, notifyOffline } from '../services/portfolioCacheService';
 import { portfolioEvents } from '../services/eventService';
@@ -71,14 +71,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
   }, [initialCategoryFilter]);
 
   const isUSStock = useCallback((item: AssetSummary): boolean => {
-    if (item.asset_type !== 'STOCKS') return false;
-    if (item.currency === 'USD') return true;
-    if (item.currency === 'THB') return false;
-    if (currencyMap[item.id] === 'USD') return true;
-    if (currencyMap[item.id] === 'THB') return false;
-    if (isKnownUSSymbol(item.symbol)) return true;
-    if (item.tax_rate !== undefined && Math.abs(Number(item.tax_rate) - 0.15) < 0.005) return true;
-    return false;
+    return resolveIsUSStock(item, currencyMap);
   }, [currencyMap]);
 
   const loadData = useCallback(async (forceSync = false) => {
@@ -213,6 +206,13 @@ export const Portfolio: React.FC<PortfolioProps> = ({
   const totalUnrealizedPL = totalMarketValue - totalCost;
   const totalUnrealizedPLPercent = totalCost > 0 ? (totalUnrealizedPL / totalCost) * 100 : 0;
 
+  // บันทึก Snapshot มูลค่าและผลตอบแทนพอร์ตประจำวันลงตาราง portfolio_snapshots บน Cloud
+  useEffect(() => {
+    if (totalCost > 0 || totalMarketValue > 0) {
+      recordDailyPortfolioSnapshot(totalMarketValue, totalCost, totalUnrealizedPL, totalUnrealizedPLPercent);
+    }
+  }, [totalMarketValue, totalCost, totalUnrealizedPL, totalUnrealizedPLPercent]);
+
   // Investment Assets Metrics (STOCKS & FUNDS exclusively, excluding CASH deposits)
   const investmentAssets = useMemo(() => {
     return assets.filter((a) => a.asset_type !== 'CASH');
@@ -241,37 +241,6 @@ export const Portfolio: React.FC<PortfolioProps> = ({
   const cashTotal = useMemo(() => {
     return assets.filter((a) => a.asset_type === 'CASH').reduce((s, a) => s + (Number(a.market_value) || 0), 0);
   }, [assets]);
-
-  // Cash interest & tax meter
-  const cashTaxSummary = useMemo(() => {
-    const cashAssets = assets.filter((a) => a.asset_type === 'CASH');
-    if (cashAssets.length === 0) return null;
-
-    let totalDeposit = 0;
-    let totalGrossInterest = 0;
-    cashAssets.forEach((asset) => {
-      const dep = Number(asset.market_value) || 0;
-      totalDeposit += dep;
-      const schedules = dividendSchedules.filter((s) => s.asset_id === asset.id);
-      if (schedules.length > 0) {
-        totalGrossInterest += schedules.reduce((acc, s) => acc + (Number(s.dpu) || 0) * (Number(asset.net_shares) || dep), 0);
-      } else {
-        totalGrossInterest += dep * 0.015;
-      }
-    });
-
-    const isExceeded = totalGrossInterest > THAI_SAVINGS_TAX_FREE_LIMIT;
-    const remainingQuota = Math.max(0, THAI_SAVINGS_TAX_FREE_LIMIT - totalGrossInterest);
-    const quotaUsedPercent = (totalGrossInterest / THAI_SAVINGS_TAX_FREE_LIMIT) * 100;
-
-    return {
-      totalDeposit,
-      totalGrossInterest,
-      isExceeded,
-      remainingQuota,
-      quotaUsedPercent: Math.min(100, quotaUsedPercent),
-    };
-  }, [assets, dividendSchedules]);
 
   // Benchmark Comparison Memo: strictly calculated against investment assets (STOCKS + FUNDS) without CASH dilution
   const comparisonResult = useMemo(() => {
@@ -1282,6 +1251,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         onSuccess={() => {
           loadData();
           setIsEditModalVisible(false);
+        }}
+        onNavigateToTransactions={() => {
+          onNavigateToAssets?.('TRANSACTIONS', selectedAssetForEdit?.asset_type);
         }}
       />
 

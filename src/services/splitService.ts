@@ -29,24 +29,48 @@ export interface SplitDetectionResult {
 const APPLIED_SPLITS_STORAGE_KEY = '@my_dividend_applied_splits_map';
 
 /**
- * ดึงรายการวันที่ที่เคยทำการปรับแตกพาร์ไปแล้วของสินทรัพย์นี้
+ * ดึงรายการวันที่ที่เคยทำการปรับแตกพาร์ไปแล้วของสินทรัพย์นี้ (ดึงจาก Supabase Cloud เป็นหลัก และสำรองด้วย AsyncStorage)
  */
 export async function getAppliedSplitsForAsset(assetId: string): Promise<Set<string>> {
+  const result = new Set<string>();
+
+  // 1. ดึงจากฐานข้อมูล Supabase Cloud โดยตรง (เพื่อความถูกต้องข้ามอุปกรณ์และเว็บ)
+  try {
+    const { data, error } = await supabase
+      .from('assets')
+      .select('last_split_date')
+      .eq('id', assetId)
+      .maybeSingle();
+
+    if (!error && data?.last_split_date) {
+      result.add(data.last_split_date);
+    }
+  } catch {
+    // ละเว้นหากยังไม่ได้รัน Migration บนเซิร์ฟเวอร์
+  }
+
+  // 2. ดึงเสริมจาก AsyncStorage ในเครื่อง
   try {
     const raw = await AsyncStorage.getItem(APPLIED_SPLITS_STORAGE_KEY);
-    if (!raw) return new Set();
-    const map = JSON.parse(raw);
-    const dates = map[assetId];
-    return new Set(Array.isArray(dates) ? dates : []);
+    if (raw) {
+      const map = JSON.parse(raw);
+      const dates = map[assetId];
+      if (Array.isArray(dates)) {
+        dates.forEach((d) => result.add(d));
+      }
+    }
   } catch {
-    return new Set();
+    // ignore
   }
+
+  return result;
 }
 
 /**
- * บันทึกว่าสินทรัพย์นี้ได้รับการปรับแตกพาร์ของวันที่นี้เรียบร้อยแล้ว
+ * บันทึกว่าสินทรัพย์นี้ได้รับการปรับแตกพาร์ของวันที่นี้เรียบร้อยแล้ว ทั้งบน Cloud และ Local
  */
 export async function markSplitAsApplied(assetId: string, splitDate: string): Promise<void> {
+  // 1. บันทึกลง AsyncStorage ในเครื่อง
   try {
     const raw = await AsyncStorage.getItem(APPLIED_SPLITS_STORAGE_KEY);
     const map = raw ? JSON.parse(raw) : {};
@@ -56,6 +80,16 @@ export async function markSplitAsApplied(assetId: string, splitDate: string): Pr
     await AsyncStorage.setItem(APPLIED_SPLITS_STORAGE_KEY, JSON.stringify(map));
   } catch {
     // ignore
+  }
+
+  // 2. บันทึกถาวรลงฐานข้อมูล Supabase Cloud ทันที
+  try {
+    await supabase
+      .from('assets')
+      .update({ last_split_date: splitDate })
+      .eq('id', assetId);
+  } catch (err: any) {
+    console.warn('[splitService] Notice updating last_split_date on Cloud:', err?.message || err);
   }
 }
 
@@ -133,7 +167,8 @@ export async function detectPendingSplits(
   assetId: string,
   symbol: string,
   transactions: Transaction[],
-  currency?: string
+  currency?: string,
+  dbLastSplitDate?: string | null
 ): Promise<SplitDetectionResult | null> {
   if (!transactions || transactions.length === 0) return null;
 
@@ -144,6 +179,7 @@ export async function detectPendingSplits(
 
   // หา split ล่าสุดที่ยังไม่เคยถูกปรับ
   for (const split of splits) {
+    if (dbLastSplitDate && split.date <= dbLastSplitDate) continue;
     if (appliedDates.has(split.date)) continue;
 
     // กรองเฉพาะไม้ที่ซื้อก่อนวันแตกพาร์

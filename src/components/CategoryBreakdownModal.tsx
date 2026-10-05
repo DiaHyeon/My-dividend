@@ -18,7 +18,7 @@ import {
   getAssetSector,
   SectorDefinition,
 } from '../services/sectorService';
-import { THAI_SAVINGS_TAX_FREE_LIMIT } from '../services/taxService';
+import { THAI_SAVINGS_TAX_FREE_LIMIT, detectCashFrequency } from '../services/taxService';
 import { usePrivacyMode } from '../services/privacyService';
 
 interface CategoryBreakdownModalProps {
@@ -101,13 +101,17 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
       let assetAnnualGross = 0;
 
       if (schedules.length > 0) {
-        assetAnnualGross = schedules.reduce(
-          (sum, s) => sum + (Number(s.dpu) || 0) * (Number(asset.net_shares) || deposit),
-          0
-        );
+        const freq = detectCashFrequency(schedules.map((s) => s.xd_date));
+        const divisor = freq === 'MONTHLY' ? 12 : freq === 'SEMI_ANNUAL' ? 2 : 1;
+        const validScheds = schedules.filter((s) => Number(s.dpu) > 0);
+        const latestDpu = validScheds.length > 0
+          ? Number(validScheds[validScheds.length - 1].dpu)
+          : (Number(asset.current_price) > 0 ? Number(asset.current_price) / divisor : 0.015 / divisor);
+        assetAnnualGross = (Number(asset.net_shares) || deposit) * latestDpu * divisor;
       } else {
-        // Fallback default 1.5% if no schedules found
-        assetAnnualGross = deposit * 0.015;
+        // Fallback default 1.5% or asset.current_price if no schedules found
+        const rate = Number(asset.current_price) > 0 ? Number(asset.current_price) : 0.015;
+        assetAnnualGross = deposit * rate;
       }
 
       totalAnnualGrossInterest += assetAnnualGross;

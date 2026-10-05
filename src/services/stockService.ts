@@ -407,19 +407,78 @@ export async function fetchDividendAnalysis(
     return emptyResult;
   }
 
-  const latestDpu = Number(payouts[0].amount.toFixed(4));
   const lastXdDate = payouts[0].date;
+  const isThai = targetSymbol.endsWith('.BK');
 
-  // Calculate payout frequency based on count within the last 13 months
+  // Chronological ascending order
+  const chrono = [...payouts].sort((a, b) => a.timestamp - b.timestamp);
+
+  // Calculate median amount to identify outlier/special payouts
+  const amounts = chrono.map((p) => p.amount).sort((a, b) => a - b);
+  const medianAmount = amounts[Math.floor(amounts.length / 2)];
+
+  // Detect special dividends (off-cycle or massive outlier amount)
+  const regularPayouts: DividendPayout[] = [];
+  for (let i = 0; i < chrono.length; i++) {
+    const cur = chrono[i];
+    const prev = i > 0 ? chrono[i - 1] : null;
+    const next = i < chrono.length - 1 ? chrono[i + 1] : null;
+
+    const dayDistPrev = prev ? (cur.timestamp - prev.timestamp) / 86400000 : 999;
+    const dayDistNext = next ? (next.timestamp - cur.timestamp) / 86400000 : 999;
+
+    const isOffCycle = dayDistPrev < 40 || dayDistNext < 40;
+    const isOutlierAmount = chrono.length >= 4 && cur.amount >= medianAmount * 2.2;
+
+    if (isOffCycle || isOutlierAmount) {
+      // Considered special/one-off dividend
+    } else {
+      regularPayouts.push(cur);
+    }
+  }
+
+  const validRegular = regularPayouts.length >= 2 ? regularPayouts : chrono;
+  const latestDpu = Number(validRegular[validRegular.length - 1].amount.toFixed(4));
+
+  // Calculate month gaps between consecutive regular payouts
+  const gapsInMonths: number[] = [];
+  for (let i = 1; i < validRegular.length; i++) {
+    const d1 = new Date(validRegular[i - 1].timestamp);
+    const d2 = new Date(validRegular[i].timestamp);
+    const mDiff = (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+    if (mDiff > 0) gapsInMonths.push(mDiff);
+  }
+
+  // Count in trailing 13 months
   const oneYearAgo = payouts[0].timestamp - 395 * 86400000;
-  const recentPayouts = payouts.filter((p) => p.timestamp >= oneYearAgo);
+  const recentPayouts = validRegular.filter((p) => p.timestamp >= oneYearAgo);
   const countInYear = recentPayouts.length;
 
   let frequency = 4;
   let frequencyLabel = 'ทุกไตรมาส (Quarterly)';
   let intervalMonths = 3;
 
-  if (countInYear >= 10) {
+  if (gapsInMonths.length >= 2) {
+    gapsInMonths.sort((a, b) => a - b);
+    const medianGap = gapsInMonths[Math.floor(gapsInMonths.length / 2)];
+    if (medianGap <= 1.5) {
+      frequency = 12;
+      frequencyLabel = 'รายเดือน (Monthly)';
+      intervalMonths = 1;
+    } else if (medianGap <= 4.5) {
+      frequency = 4;
+      frequencyLabel = 'ทุกไตรมาส (Quarterly)';
+      intervalMonths = 3;
+    } else if (medianGap <= 8) {
+      frequency = 2;
+      frequencyLabel = 'ปีละ 2 ครั้ง (Semi-annual)';
+      intervalMonths = 6;
+    } else {
+      frequency = 1;
+      frequencyLabel = 'ปีละ 1 ครั้ง (Annual)';
+      intervalMonths = 12;
+    }
+  } else if (countInYear >= 10) {
     frequency = 12;
     frequencyLabel = 'รายเดือน (Monthly)';
     intervalMonths = 1;
@@ -431,16 +490,11 @@ export async function fetchDividendAnalysis(
     frequency = 2;
     frequencyLabel = 'ปีละ 2 ครั้ง (Semi-annual)';
     intervalMonths = 6;
-  } else if (countInYear === 1) {
-    if (targetSymbol.endsWith('.BK')) {
-      frequency = 1;
-      frequencyLabel = 'ปีละ 1 ครั้ง (Annual)';
-      intervalMonths = 12;
-    } else {
-      frequency = 4;
-      frequencyLabel = 'ทุกไตรมาส (Quarterly)';
-      intervalMonths = 3;
-    }
+  } else {
+    // Only 1 payout or sparse history
+    frequency = 1;
+    frequencyLabel = isThai ? 'ปีละ 1 ครั้ง (Annual)' : 'ปีละ 1 ครั้ง (Annual) (ประมาณการ)';
+    intervalMonths = 12;
   }
 
   const annualProjectedDpu = Number((latestDpu * frequency).toFixed(4));

@@ -2,6 +2,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AssetSummary } from '../types/database';
 import { invokeStockProxy } from './proxyClient';
+import { supabase } from '../lib/supabase';
+import { getLocalDateString } from '../utils/dateUtils';
 
 export type BenchmarkType = 'NONE' | 'SET' | 'SP500' | 'NASDAQ';
 export type TimeframeType = '1M' | '3M' | '6M' | '1Y' | 'ALL';
@@ -39,6 +41,10 @@ export const TIMEFRAMES: { id: TimeframeType; label: string; points: number }[] 
 ];
 
 const BENCHMARK_CACHE_KEY = '@my_dividend_benchmark_cache_v2';
+const SNAPSHOTS_CACHE_KEY = '@my_dividend_portfolio_snapshots_v1';
+
+// In-memory cache for user's historical portfolio snapshots
+let memoryUserSnapshots: { snapshot_date: string; unrealized_pl_percent: number }[] = [];
 
 // Fallback baseline returns by timeframe when offline or upstream API is unreachable
 const BENCHMARK_BASELINE_RETURNS: Record<BenchmarkType, Record<TimeframeType, number>> = {
@@ -106,10 +112,65 @@ let isBenchmarkLiveMap: Record<BenchmarkType, boolean> = {
         isBenchmarkLiveMap = cached.isLive;
       }
     }
+    const rawSnaps = await AsyncStorage.getItem(SNAPSHOTS_CACHE_KEY);
+    if (rawSnaps) {
+      memoryUserSnapshots = JSON.parse(rawSnaps);
+    }
   } catch {
     // fallback to baseline
   }
 })();
+
+/**
+ * บันทึก Snapshot มูลค่าและผลตอบแทนพอร์ตประจำวันลงตาราง portfolio_snapshots บน Supabase Cloud
+ */
+export async function recordDailyPortfolioSnapshot(
+  totalMarketValue: number,
+  totalCost: number,
+  unrealizedPL: number,
+  unrealizedPLPercent: number
+): Promise<boolean> {
+  if (totalCost <= 0 && totalMarketValue <= 0) return false;
+
+  try {
+    const todayStr = getLocalDateString();
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData?.session?.user?.id;
+    if (!userId) return false;
+
+    const { error } = await supabase.from('portfolio_snapshots').upsert(
+      {
+        user_id: userId,
+        snapshot_date: todayStr,
+        total_market_value: Number(totalMarketValue.toFixed(4)),
+        total_cost: Number(totalCost.toFixed(4)),
+        unrealized_pl: Number(unrealizedPL.toFixed(4)),
+        unrealized_pl_percent: Number(unrealizedPLPercent.toFixed(4)),
+      },
+      { onConflict: 'user_id,snapshot_date' }
+    );
+
+    if (error) {
+      console.warn('[benchmarkService] Notice recording snapshot:', error.message);
+      return false;
+    }
+
+    // อัปเดต In-memory snapshots สำหรับเซสชันปัจจุบัน
+    const existingIdx = memoryUserSnapshots.findIndex((s) => s.snapshot_date === todayStr);
+    if (existingIdx >= 0) {
+      memoryUserSnapshots[existingIdx].unrealized_pl_percent = unrealizedPLPercent;
+    } else {
+      memoryUserSnapshots.push({ snapshot_date: todayStr, unrealized_pl_percent: unrealizedPLPercent });
+      memoryUserSnapshots.sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date));
+    }
+    await AsyncStorage.setItem(SNAPSHOTS_CACHE_KEY, JSON.stringify(memoryUserSnapshots));
+
+    return true;
+  } catch (err: any) {
+    console.warn('[benchmarkService] Failed to record snapshot:', err?.message || err);
+    return false;
+  }
+}
 
 /**
  * คำนวณชุดจุดเส้นกราฟตามจำนวนจุดเป้าหมายจากข้อมูลราคาปิด
@@ -149,6 +210,25 @@ function sampleCurvePoints(closes: number[], targetPoints: number): number[] {
  */
 export async function syncBenchmarkReturns(force: boolean = false): Promise<boolean> {
   try {
+    // 0. ดึงประวัติ Snapshot พอร์ตสะสมของผู้ใช้จาก Supabase
+    try {
+      const { data: snaps } = await supabase
+        .from('portfolio_snapshots')
+        .select('snapshot_date, unrealized_pl_percent')
+        .order('snapshot_date', { ascending: true })
+        .limit(150);
+
+      if (snaps && Array.isArray(snaps) && snaps.length > 0) {
+        memoryUserSnapshots = snaps.map((s) => ({
+          snapshot_date: s.snapshot_date,
+          unrealized_pl_percent: Number(s.unrealized_pl_percent) || 0,
+        }));
+        await AsyncStorage.setItem(SNAPSHOTS_CACHE_KEY, JSON.stringify(memoryUserSnapshots));
+      }
+    } catch {
+      // ignore
+    }
+
     const targetBenchmarks = BENCHMARKS.filter((b) => b.id !== 'NONE' && b.symbol);
     let updatedAny = false;
 
@@ -318,21 +398,48 @@ export function getBenchmarkComparison(
     value: val,
   }));
 
-  // 2. คำนวณเส้นกราฟของพอร์ตผู้ใช้ (Portfolio Trajectory)
-  // ให้สะท้อนความผันผวนของตลาดตามสัดส่วน โดยเริ่มที่ 0.0% และสิ้นสุดที่ผลตอบแทนจริงของพอร์ต
+  // 2. คำนวณเส้นกราฟของพอร์ตผู้ใช้ (Portfolio Data)
+  // หากมี Snapshot จริงสะสมตั้งแต่ 2 จุดขึ้นไป ให้นำจุดข้อมูลจริงมาพล็อต
   const portfolioData: ChartPoint[] = [];
+
+  let realPoints: number[] | null = null;
+  if (memoryUserSnapshots && memoryUserSnapshots.length >= 2) {
+    const nowMs = Date.now();
+    const timeframeDays: Record<TimeframeType, number> = {
+      '1M': 31,
+      '3M': 92,
+      '6M': 184,
+      '1Y': 366,
+      'ALL': 3650,
+    };
+    const maxDays = timeframeDays[timeframe] || 366;
+    const filteredSnaps = memoryUserSnapshots.filter((s) => {
+      const snapMs = new Date(s.snapshot_date).getTime();
+      return (nowMs - snapMs) / (1000 * 60 * 60 * 24) <= maxDays;
+    });
+
+    if (filteredSnaps.length >= 2) {
+      const vals = filteredSnaps.map((s) => s.unrealized_pl_percent);
+      realPoints = sampleCurvePoints(vals, numPoints);
+      realPoints[realPoints.length - 1] = roundedPortfolioReturn;
+    }
+  }
+
   for (let i = 0; i < numPoints; i++) {
     const progress = i / (numPoints - 1);
     let val: number;
 
-    if (benchmark !== 'NONE' && benchmarkPoints.length === numPoints) {
-      // เมื่อเปรียบเทียบกับตลาด: สะท้อนความผันผวนตามการขึ้นลงของตลาด (Beta correlation) ไปยังจุดหมาย currentReturn
+    if (realPoints && realPoints.length === numPoints) {
+      // ใช้จุดข้อมูลประวัติจริงจาก Snapshot ของผู้ใช้
+      val = realPoints[i];
+    } else if (benchmark !== 'NONE' && benchmarkPoints.length === numPoints) {
+      // เมื่อยังไม่มี Snapshot สะสม: สะท้อนความผันผวนตามการขึ้นลงของตลาด (Beta correlation)
       const bmVal = benchmarkPoints[i];
       const bmExpected = roundedBenchmarkReturn * progress;
       const marketFluctuation = (bmVal - bmExpected) * 0.6; // ~0.6 beta factor
       val = Math.round((currentReturn * progress + marketFluctuation) * 10) / 10;
     } else {
-      // เมื่อไม่เปรียบเทียบ: สร้างเส้นโค้งธรรมชาติที่ราบเรียบไปสู่ผลตอบแทนปัจจุบัน (ไม่เป็นเส้นตรงทื่อ)
+      // เมื่อไม่เปรียบเทียบ: สร้างเส้นโค้งธรรมชาติไปสู่ผลตอบแทนปัจจุบัน
       const easeProgress = Math.sin((progress * Math.PI) / 2);
       val = Math.round((currentReturn * easeProgress) * 10) / 10;
     }

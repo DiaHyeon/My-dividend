@@ -302,3 +302,43 @@ export const calculateScheduleCashPayout = (
   };
 };
 
+/**
+ * วิเคราะห์ความถี่ในการจ่ายดอกเบี้ยเงินฝาก (Frequency) จากระยะห่างของวันที่ (xd_date)
+ * เพื่อป้องกันปัญหาตัวหารคำนวณดอกเบี้ยผิดพลาดจากจำนวนแถวสะสมข้ามปี
+ */
+export const detectCashFrequency = (
+  xdDates: (string | undefined | null)[]
+): 'MONTHLY' | 'SEMI_ANNUAL' | 'ANNUAL' => {
+  const validDates = xdDates
+    .filter((d): d is string => typeof d === 'string' && d.length >= 10)
+    .map((d) => d.split('T')[0]);
+
+  const uniqueSorted = Array.from(new Set(validDates)).sort();
+  if (uniqueSorted.length < 2) {
+    // หากมีแค่งวดเดียว ตรวจสอบว่าลงท้ายด้วยวันที่ 28 หรือไม่ (แพทเทิร์นเงินฝากดิจิทัลรายเดือน)
+    if (uniqueSorted.length === 1 && uniqueSorted[0].endsWith('-28')) {
+      return 'MONTHLY';
+    }
+    return 'SEMI_ANNUAL'; // ค่ามาตรฐานทั่วไปของเงินฝากธนาคารไทย (มิ.ย. / ธ.ค.)
+  }
+
+  const gapsInMonths: number[] = [];
+  for (let i = 1; i < uniqueSorted.length; i++) {
+    const [y1, m1] = uniqueSorted[i - 1].split('-').map(Number);
+    const [y2, m2] = uniqueSorted[i].split('-').map(Number);
+    const diff = (y2 - y1) * 12 + (m2 - m1);
+    if (diff > 0) {
+      gapsInMonths.push(diff);
+    }
+  }
+
+  if (gapsInMonths.length === 0) return 'SEMI_ANNUAL';
+
+  gapsInMonths.sort((a, b) => a - b);
+  const median = gapsInMonths[Math.floor(gapsInMonths.length / 2)];
+
+  if (median <= 1) return 'MONTHLY';
+  if (median <= 6) return 'SEMI_ANNUAL';
+  return 'ANNUAL';
+};
+

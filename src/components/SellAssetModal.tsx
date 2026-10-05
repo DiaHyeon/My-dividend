@@ -20,7 +20,7 @@ import { CalendarPickerModal } from './CalendarPickerModal';
 import { getLocalDateString } from '../utils/dateUtils';
 import { cancelRemindersForSymbol } from '../services/notificationService';
 import { portfolioEvents } from '../services/eventService';
-import { saveTransactionCurrencyMeta, isKnownUSSymbol } from '../services/currencyService';
+import { saveTransactionCurrencyMeta, resolveIsUSStock } from '../services/currencyService';
 
 interface SellAssetModalProps {
   visible: boolean;
@@ -50,10 +50,14 @@ export const SellAssetModal: React.FC<SellAssetModalProps> = ({
   const isFund = asset?.asset_type === 'FUNDS';
   const isUS =
     currency === 'USD' ||
-    (asset?.asset_type === 'STOCKS' &&
-      (asset?.currency === 'USD' ||
-        isKnownUSSymbol(asset?.symbol || '') ||
-        Math.abs(Number(asset?.tax_rate) - 0.15) < 0.005));
+    (asset
+      ? resolveIsUSStock({
+          id: asset.id,
+          symbol: asset.symbol,
+          asset_type: asset.asset_type,
+          currency: asset.currency,
+        })
+      : false);
 
   const unitLabel = isCash ? 'บาท' : isFund ? 'หน่วย' : 'หุ้น';
   const actionTitle = isCash ? 'ถอน' : 'ขาย';

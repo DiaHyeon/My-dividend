@@ -4,6 +4,12 @@
 
 import { DividendAnalysis } from './stockService';
 import { getLocalDateString } from '../utils/dateUtils';
+import { supabase } from '../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { invokeStockProxy } from './proxyClient';
+
+export const FUNDS_CATALOG_SYNC_KEY = '@mydividend_last_funds_catalog_sync';
+export const FUNDS_SYNC_INTERVAL_DAYS = 30;
 
 export interface FundSuggestion {
   symbol: string;        // Clean ticker (e.g. 'K-USA', 'SCBDV', 'B-INNOTECH')
@@ -16,8 +22,6 @@ export interface FundSuggestion {
   projId?: string;       // SEC project id if matched (e.g. 'M0017_2538')
   category?: string;     // Segment category (e.g. 'Foreign', 'Equity', 'FixedIncome')
 }
-
-import { invokeStockProxy } from './proxyClient';
 
 export type FundShareClassType = 'DIVIDEND' | 'ACCUMULATION' | 'TAX_SAVING' | 'AUTO_REDEEM' | 'GENERAL';
 
@@ -532,29 +536,204 @@ export const POPULAR_THAI_FUNDS: FundSuggestion[] = [
     currency: 'THB',
     category: 'Property',
   },
+  {
+    symbol: 'PRINCIPAL iPROP-A',
+    rawSymbol: 'PRINCIPAL iPROP-A',
+    name: 'กองทุนเปิดพรินซิเพิล อินคัม พร็อพเพอร์ตี้ (ชนิดสะสมมูลค่า)',
+    amc: 'บลจ.พรินซิเพิล',
+    exchange: 'Principal',
+    market: 'TH',
+    currency: 'THB',
+    category: 'Property',
+  },
+  {
+    symbol: 'PRINCIPAL GCLOUD',
+    rawSymbol: 'PRINCIPAL GCLOUD',
+    name: 'กองทุนเปิดพรินซิเพิล โกลบอล คลาวด์ คอมพิวติ้ง',
+    amc: 'บลจ.พรินซิเพิล',
+    exchange: 'Principal',
+    market: 'TH',
+    currency: 'THB',
+    category: 'Foreign',
+  },
+  {
+    symbol: 'M-EDGE',
+    rawSymbol: 'M-EDGE',
+    name: 'กองทุนเปิดเอ็มเอฟซี โกลบอล เอ็ดจ์',
+    amc: 'บลจ.เอ็มเอฟซี',
+    exchange: 'MFC',
+    market: 'TH',
+    currency: 'THB',
+    category: 'Foreign',
+  },
+  {
+    symbol: 'M-VIETNAM',
+    rawSymbol: 'M-VIETNAM',
+    name: 'กองทุนเปิดเอ็มเอฟซี เวียดนาม อิควิตี้',
+    amc: 'บลจ.เอ็มเอฟซี',
+    exchange: 'MFC',
+    market: 'TH',
+    currency: 'THB',
+    category: 'Foreign',
+  },
+  {
+    symbol: 'M-MIDSMALL',
+    rawSymbol: 'M-MIDSMALL',
+    name: 'กองทุนเปิดเอ็มเอฟซี มิด สมอล แค็ป',
+    amc: 'บลจ.เอ็มเอฟซี',
+    exchange: 'MFC',
+    market: 'TH',
+    currency: 'THB',
+    category: 'Equity',
+  },
+  {
+    symbol: 'M-REIT',
+    rawSymbol: 'M-REIT',
+    name: 'กองทุนเปิดเอ็มเอฟซี เรียล เอสเตท พลัส',
+    amc: 'บลจ.เอ็มเอฟซี',
+    exchange: 'MFC',
+    market: 'TH',
+    currency: 'THB',
+    category: 'Property',
+  },
+  {
+    symbol: 'LHGEQ',
+    rawSymbol: 'LHGEQ',
+    name: 'กองทุนเปิด แอล เอช โกลบอล อิควิตี้',
+    amc: 'บลจ.แลนด์ แอนด์ เฮ้าส์',
+    exchange: 'LHFund',
+    market: 'TH',
+    currency: 'THB',
+    category: 'Foreign',
+  },
+  {
+    symbol: 'LHVIET',
+    rawSymbol: 'LHVIET',
+    name: 'กองทุนเปิด แอล เอช เวียดนาม',
+    amc: 'บลจ.แลนด์ แอนด์ เฮ้าส์',
+    exchange: 'LHFund',
+    market: 'TH',
+    currency: 'THB',
+    category: 'Foreign',
+  },
+  {
+    symbol: 'LHPROPD',
+    rawSymbol: 'LHPROPD',
+    name: 'กองทุนเปิด แอล เอช พร็อพเพอร์ตี้ พลัส ปันผล',
+    amc: 'บลจ.แลนด์ แอนด์ เฮ้าส์',
+    exchange: 'LHFund',
+    market: 'TH',
+    currency: 'THB',
+    category: 'Property',
+  },
 ];
 
 /**
+ * Performs a silent, non-blocking 30-day periodic synchronization of the Thai Mutual Funds catalog.
+ * Only executes if 30 days have elapsed since the last successful sync.
+ */
+export async function syncFundsCatalogIfNeeded(): Promise<{ synced: boolean; count?: number }> {
+  try {
+    const lastSyncStr = await AsyncStorage.getItem(FUNDS_CATALOG_SYNC_KEY);
+    if (lastSyncStr) {
+      const lastDate = new Date(lastSyncStr).getTime();
+      const now = Date.now();
+      const diffDays = (now - lastDate) / (1000 * 60 * 60 * 24);
+      if (diffDays < FUNDS_SYNC_INTERVAL_DAYS) {
+        return { synced: false };
+      }
+    }
+
+    // 30 days elapsed or never synced before -> Trigger silent sync via Edge Function
+    const res = await invokeStockProxy({ action: 'sync-funds' });
+    if (res?.data?.items && Array.isArray(res.data.items)) {
+      const records = res.data.items
+        .map((it: any) => ({
+          symbol: it.class_abbr_name || it.proj_abbr_name || it.fund_class_name,
+          name_th: it.proj_name_th || it.fund_name_th,
+          name_en: it.proj_name_en || it.fund_name_en,
+          amc_name: it.unique_id || it.amc_name || 'บลจ.ไทย',
+          exchange: it.amc_abbr || 'FUNDS',
+          proj_id: it.proj_id,
+          updated_at: new Date().toISOString(),
+        }))
+        .filter((r: any) => Boolean(r.symbol));
+
+      if (records.length > 0) {
+        await supabase.from('thai_funds_catalog').upsert(records, { onConflict: 'symbol' });
+      }
+    }
+
+    await AsyncStorage.setItem(FUNDS_CATALOG_SYNC_KEY, new Date().toISOString());
+    return { synced: true, count: res?.data?.synced || 0 };
+  } catch (err: any) {
+    console.warn('[fundService] Background 30-day sync notice:', err?.message || err);
+    return { synced: false };
+  }
+}
+
+/**
  * Searches Thai mutual funds matching the query.
- * Matches ticker, Thai name, or AMC name.
+ * First queries the Supabase thai_funds_catalog table, then falls back to local catalog.
  */
 export async function searchThaiFunds(query: string): Promise<FundSuggestion[]> {
-  const clean = query.trim().toUpperCase();
+  const clean = query.trim();
   if (!clean) return POPULAR_THAI_FUNDS.slice(0, 8);
+  const cleanUpper = clean.toUpperCase();
 
-  // 1. Priority 1: Fund ticker symbol starts with query (e.g. typing 'K' -> K-VALUE, K-SELECT, K-CHINA)
+  // 1. Tier 1: Query Supabase thai_funds_catalog table (Fast Indexed Search)
+  try {
+    const { data, error } = await supabase
+      .from('thai_funds_catalog')
+      .select('symbol, name_th, name_en, amc_name, exchange, proj_id, category')
+      .or(`symbol.ilike.%${clean}%,name_th.ilike.%${clean}%,amc_name.ilike.%${clean}%,exchange.ilike.%${clean}%`)
+      .limit(15);
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      const mapped: FundSuggestion[] = data.map((d: any) => ({
+        symbol: d.symbol,
+        rawSymbol: d.symbol,
+        name: d.name_th || d.name_en || d.symbol,
+        amc: d.amc_name || 'กองทุนรวมไทย',
+        exchange: d.exchange || 'FUNDS',
+        market: 'TH' as const,
+        currency: 'THB' as const,
+        projId: d.proj_id,
+        category: d.category,
+      }));
+
+      // Sort: exact symbol match first, then dividend class first
+      mapped.sort((a, b) => {
+        const aSym = a.symbol.toUpperCase();
+        const bSym = b.symbol.toUpperCase();
+        if (aSym === cleanUpper) return -1;
+        if (bSym === cleanUpper) return 1;
+
+        const aDiv = detectFundClass(a.symbol, a.name).isDividend;
+        const bDiv = detectFundClass(b.symbol, b.name).isDividend;
+        if (aDiv && !bDiv) return -1;
+        if (!aDiv && bDiv) return 1;
+
+        return 0;
+      });
+
+      return mapped.slice(0, 8);
+    }
+  } catch {
+    // Database table not available or network error -> proceed with local catalog fallback
+  }
+
+  // 2. Tier 2: Local catalog search
   const startsWithSymbol = POPULAR_THAI_FUNDS.filter((f) =>
-    f.symbol.toUpperCase().startsWith(clean)
+    f.symbol.toUpperCase().startsWith(cleanUpper)
   );
 
-  // Sort startsWith: exact match first, then dividend class first, then shorter length, then alphabetical
   startsWithSymbol.sort((a, b) => {
     const aSym = a.symbol.toUpperCase();
     const bSym = b.symbol.toUpperCase();
-    if (aSym === clean) return -1;
-    if (bSym === clean) return 1;
+    if (aSym === cleanUpper) return -1;
+    if (bSym === cleanUpper) return 1;
 
-    // Prioritize dividend-paying class in dividend portfolio app
     const aDiv = detectFundClass(a.symbol, a.name).isDividend;
     const bDiv = detectFundClass(b.symbol, b.name).isDividend;
     if (aDiv && !bDiv) return -1;
@@ -564,25 +743,26 @@ export async function searchThaiFunds(query: string): Promise<FundSuggestion[]> 
     return aSym.localeCompare(bSym);
   });
 
-  // 2. Priority 2: Matches in AMC or fund name (only if query is Thai or length >= 3)
   const isThaiScript = /[\u0E00-\u0E7F]/.test(clean);
   const otherMatches = POPULAR_THAI_FUNDS.filter(
     (f) =>
-      !f.symbol.toUpperCase().startsWith(clean) &&
-      (clean.length >= 3 || isThaiScript) &&
-      (f.symbol.toUpperCase().includes(clean) ||
-        f.name.toUpperCase().includes(clean) ||
-        f.amc.toUpperCase().includes(clean) ||
-        f.exchange.toUpperCase().includes(clean))
+      !f.symbol.toUpperCase().startsWith(cleanUpper) &&
+      (clean.length >= 2 || isThaiScript) &&
+      (f.symbol.toUpperCase().includes(cleanUpper) ||
+        f.name.toUpperCase().includes(cleanUpper) ||
+        f.amc.toUpperCase().includes(cleanUpper) ||
+        f.exchange.toUpperCase().includes(cleanUpper))
   );
 
   const existingSymbols = new Set([...startsWithSymbol, ...otherMatches].map((f) => f.symbol.toUpperCase()));
+
+  // 3. Tier 3: Flexible dynamic ก.ล.ต. search option (supports Thai and alphanumeric names)
   const dynamicOption: FundSuggestion[] =
-    !existingSymbols.has(clean) && clean.length >= 2 && /^[A-Z0-9\-()]+$/.test(clean)
+    !existingSymbols.has(cleanUpper) && clean.length >= 2
       ? [
           {
-            symbol: clean,
-            rawSymbol: clean,
+            symbol: cleanUpper,
+            rawSymbol: cleanUpper,
             name: `ดึงข้อมูล NAV ของ "${clean}" จาก ก.ล.ต.`,
             amc: 'กองทุนรวมไทย',
             exchange: 'ก.ล.ต.',

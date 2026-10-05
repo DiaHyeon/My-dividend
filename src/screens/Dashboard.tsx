@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ScrollView,
@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   Dimensions,
   Alert,
+  Modal,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
@@ -24,18 +26,19 @@ import { HeroNetWorthCard } from '../components/HeroNetWorthCard';
 import { AdjustDividendModal, AdjustDividendTarget, getSpecialScheduleIds } from '../components/AdjustDividendModal';
 import { AnnualComparisonSheet, PriorYearDividendItem } from '../components/AnnualComparisonSheet';
 
-import { getAllAssetCurrencies, getCachedExchangeRate, isKnownUSSymbol } from '../services/currencyService';
-import { calculateScheduleCashPayout } from '../services/taxService';
+import { getAllAssetCurrencies, getCachedExchangeRate, resolveIsUSStock } from '../services/currencyService';
+import { calculateScheduleCashPayout, detectCashFrequency } from '../services/taxService';
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
 import { usePrivacyMode } from '../services/privacyService';
 import { ensureAuthenticated, signOut } from '../services/authService';
 import { getTimeGreeting, getUserDisplayName } from '../services/userService';
-import { syncDailyPricesIfNeeded } from '../services/priceSyncService';
+import { syncDailyPricesIfNeeded, autoLockPastForeignDividendRates } from '../services/priceSyncService';
 import { cleanOrphanedReminders, syncAllUpcomingXdReminders, checkAndPromptNotificationPermission } from '../services/notificationService';
 import { calculatePortfolioReturns } from '../services/returnService';
 import { getCachedPortfolio, savePortfolioCache, notifyOffline } from '../services/portfolioCacheService';
-import { getLocalDateString } from '../utils/dateUtils';
+import { getLocalDateString, parseLocalDateParts, estimatePayoutDate, computeLearnedPayoutLag } from '../utils/dateUtils';
 import { portfolioEvents } from '../services/eventService';
+import { recordDailyPortfolioSnapshot } from '../services/benchmarkService';
 
 const MONTH_NAMES = [
   'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
@@ -46,6 +49,8 @@ interface MonthlyPayoutItem {
   monthIndex: number;
   monthName: string;
   amount: number;
+  isPast?: boolean;
+  isCurrent?: boolean;
   details: {
     scheduleId: string;
     assetId: string;
@@ -55,6 +60,7 @@ interface MonthlyPayoutItem {
     shares: number;
     netAmount: number;
     xdDate: string;
+    paymentDate?: string;
     isInterest: boolean;
     taxRate: number;
     isProjected: boolean;
@@ -90,6 +96,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [dividendSchedules, setDividendSchedules] = useState<DividendSchedule[]>([]);
+  const [archivedAssets, setArchivedAssets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
@@ -98,6 +105,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [selectedCategoryForBreakdown, setSelectedCategoryForBreakdown] = useState<CategoryStats | null>(null);
   const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
   const [inflowFilter, setInflowFilter] = useState<'ALL' | 'DIVIDENDS' | 'INTEREST'>('ALL');
+  const [selectedYear, setSelectedYear] = useState<number | 'ROLLING'>(new Date().getFullYear());
+  const [isInflowFilterModalVisible, setIsInflowFilterModalVisible] = useState<boolean>(false);
+  const [isYearPickerModalVisible, setIsYearPickerModalVisible] = useState<boolean>(false);
   const [exchangeRate, setExchangeRate] = useState<number>(34.00);
   const [currencyMap, setCurrencyMap] = useState<Record<string, 'THB' | 'USD'>>({});
   const { isPrivate: isPrivateMode, toggle: togglePrivateMode } = usePrivacyMode();
@@ -133,15 +143,54 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }, []);
 
   const isUSStock = useCallback((item: AssetSummary): boolean => {
-    if (item.asset_type !== 'STOCKS') return false;
-    if (item.currency === 'USD') return true;
-    if (item.currency === 'THB') return false;
-    if (currencyMap[item.id] === 'USD') return true;
-    if (currencyMap[item.id] === 'THB') return false;
-    if (isKnownUSSymbol(item.symbol)) return true;
-    if (item.tax_rate !== undefined && Math.abs(Number(item.tax_rate) - 0.15) < 0.005) return true;
-    return false;
+    return resolveIsUSStock(item, currencyMap);
   }, [currencyMap]);
+
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set<number>();
+    const cYear = new Date().getFullYear();
+    yearsSet.add(cYear - 1);
+    yearsSet.add(cYear);
+    yearsSet.add(cYear + 1);
+
+    dividendSchedules.forEach((s) => {
+      if (s.payment_date) {
+        const y = parseInt(s.payment_date.slice(0, 4), 10);
+        if (!isNaN(y) && y >= 2000 && y <= 2100) yearsSet.add(y);
+      }
+      if (s.xd_date) {
+        const y = parseInt(s.xd_date.slice(0, 4), 10);
+        if (!isNaN(y) && y >= 2000 && y <= 2100) yearsSet.add(y);
+      }
+    });
+
+    transactions.forEach((t) => {
+      if (t.transaction_date) {
+        const y = parseInt(t.transaction_date.slice(0, 4), 10);
+        if (!isNaN(y) && y >= 2000 && y <= 2100) yearsSet.add(y);
+      }
+    });
+
+    return Array.from(yearsSet).sort((a, b) => b - a);
+  }, [dividendSchedules, transactions]);
+
+  const handlePrevYear = useCallback(() => {
+    const cYear = new Date().getFullYear();
+    setSelectedYear((prev) => {
+      if (prev === 'ROLLING') return cYear - 1;
+      return prev - 1;
+    });
+    setSelectedMonth(null);
+  }, []);
+
+  const handleNextYear = useCallback(() => {
+    const cYear = new Date().getFullYear();
+    setSelectedYear((prev) => {
+      if (prev === 'ROLLING') return cYear + 1;
+      return prev + 1;
+    });
+    setSelectedMonth(null);
+  }, []);
 
   const loadData = useCallback(async (forceSync = false) => {
     try {
@@ -201,16 +250,32 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       setAssets(loadedAssets);
 
+      // 1.2 Fetch archived assets to ensure lifetime cumulative dividends remain preserved
+      let archivedAssetsList: any[] = [];
+      try {
+        const { data: archivedData } = await supabase
+          .from('assets')
+          .select('id, symbol, asset_type, currency, tax_rate, is_archived')
+          .eq('is_archived', true);
+        if (archivedData && Array.isArray(archivedData)) {
+          archivedAssetsList = archivedData;
+        }
+      } catch {
+        // ignore
+      }
+      setArchivedAssets(archivedAssetsList);
+
       const activeAssetIds = loadedAssets.map((a) => a.id).filter(Boolean);
+      const allAssetIds = [...activeAssetIds, ...archivedAssetsList.map((a) => a.id).filter(Boolean)];
       let txDataResult: Transaction[] = [];
       let schedulesData: DividendSchedule[] = [];
 
-      if (activeAssetIds.length > 0) {
-        // 2. Fetch transactions only for active assets with essential columns for XD cutoff calculations
+      if (allAssetIds.length > 0) {
+        // 2. Fetch transactions for active & archived assets for accurate XD cutoff calculations
         const { data: txData, error: txError } = await supabase
           .from('transactions')
           .select('id, asset_id, type, shares, price_per_share, transaction_date')
-          .in('asset_id', activeAssetIds)
+          .in('asset_id', allAssetIds)
           .order('transaction_date', { ascending: true });
 
         if (!txError && txData) {
@@ -218,24 +283,44 @@ export const Dashboard: React.FC<DashboardProps> = ({
           setTransactions(txDataResult);
         }
 
-        // 3. Fetch dividend schedules only for active assets (with resilient is_special fallback)
-        const { data: divDataWithSpecial, error: divSpecialError } = await supabase
-          .from('dividend_schedules')
-          .select('id, asset_id, dpu, xd_date, payment_date, is_projected, is_special')
-          .in('asset_id', activeAssetIds)
-          .order('xd_date', { ascending: true });
-
-        if (!divSpecialError && divDataWithSpecial) {
-          schedulesData = divDataWithSpecial as DividendSchedule[];
-        } else {
+        // 3. Fetch dividend schedules for active assets (with resilient fallback)
+        if (activeAssetIds.length > 0) {
           const { data: divData, error: divError } = await supabase
             .from('dividend_schedules')
-            .select('id, asset_id, dpu, xd_date, payment_date, is_projected')
+            .select('*')
             .in('asset_id', activeAssetIds)
             .order('xd_date', { ascending: true });
 
           if (!divError && divData) {
-            schedulesData = (divData as DividendSchedule[]) || [];
+            schedulesData = divData as DividendSchedule[];
+          } else {
+            const { data: fallbackDiv } = await supabase
+              .from('dividend_schedules')
+              .select('id, asset_id, dpu, xd_date, payment_date, is_projected')
+              .in('asset_id', activeAssetIds)
+              .order('xd_date', { ascending: true });
+
+            if (fallbackDiv) {
+              schedulesData = (fallbackDiv as DividendSchedule[]) || [];
+            }
+          }
+        }
+
+        // Fetch past received schedules for archived assets to preserve lifetime cumulative dividends
+        if (archivedAssetsList.length > 0) {
+          try {
+            const archivedIds = archivedAssetsList.map((a) => a.id);
+            const { data: archivedSchedules } = await supabase
+              .from('dividend_schedules')
+              .select('*')
+              .in('asset_id', archivedIds)
+              .or('is_projected.eq.false,payment_date.not.is.null');
+
+            if (archivedSchedules && archivedSchedules.length > 0) {
+              schedulesData = [...schedulesData, ...(archivedSchedules as DividendSchedule[])];
+            }
+          } catch {
+            // ignore
           }
         }
         setDividendSchedules(schedulesData);
@@ -254,6 +339,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
       setExchangeRate(rate);
       setCurrencyMap(currencies);
       setSpecialScheduleIds(specialIds);
+
+      // Auto-lock past foreign dividend schedules if any reached payday
+      if (loadedAssets.length > 0 && schedulesData.length > 0 && rate > 0) {
+        autoLockPastForeignDividendRates(loadedAssets, schedulesData, rate).catch(() => {});
+      }
 
       // Save fresh snapshot into local cache for offline viewing
       await savePortfolioCache({
@@ -318,12 +408,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const totalUnrealizedPL = totalMarketValue - totalCost;
   const totalUnrealizedPLPercent = totalCost > 0 ? (totalUnrealizedPL / totalCost) * 100 : 0;
 
+  // บันทึก Snapshot มูลค่าและผลตอบแทนพอร์ตประจำวันลงตาราง portfolio_snapshots บน Cloud
+  useEffect(() => {
+    if (totalCost > 0 || totalMarketValue > 0) {
+      recordDailyPortfolioSnapshot(totalMarketValue, totalCost, totalUnrealizedPL, totalUnrealizedPLPercent);
+    }
+  }, [totalMarketValue, totalCost, totalUnrealizedPL, totalUnrealizedPLPercent]);
+
   // Realized Dividends & Total Return Metrics
   const returnMetrics = calculatePortfolioReturns(
     assets,
     transactions,
     dividendSchedules,
-    exchangeRate
+    exchangeRate,
+    archivedAssets,
+    currencyMap
   );
 
   // Category Breakdown
@@ -384,16 +483,70 @@ export const Dashboard: React.FC<DashboardProps> = ({
     cat.unrealizedPLPercent = cat.totalCost > 0 ? (cat.unrealizedPL / cat.totalCost) * 100 : 0;
   });
 
-  // Dividend Forecasting Engine (12-Month Bar Chart) with Strict XD Cutoff Logic
-  // Formula: Shares * DPU * (1 - tax_rate) where transaction_date < xd_date
-  const monthlyForecasts: MonthlyPayoutItem[] = MONTH_NAMES.map((name, index) => ({
-    monthIndex: index,
-    monthName: name,
-    amount: 0,
-    details: [],
-  }));
+  // Dividend Forecasting Engine (Rolling 12-Month & Selected Year Horizon) with Strict XD Cutoff Logic
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const currentYear = today.getFullYear();
+  const currentCalMonth = today.getMonth();
+
+  // 1. Rolling 12M index map (Strict forward horizon for HeroNetWorthCard & Category run-rate)
+  const rollingMonthKeyToIndex = new Map<string, number>();
+  for (let i = 0; i < 12; i++) {
+    const bucketDate = new Date(currentYear, currentCalMonth + i, 1);
+    const bYear = bucketDate.getFullYear();
+    const bMonth = bucketDate.getMonth();
+    const bKey = `${bYear}-${String(bMonth + 1).padStart(2, '0')}`;
+    rollingMonthKeyToIndex.set(bKey, i);
+  }
+
+  // 2. Active Forecast index map (Selected Calendar Year Jan-Dec or Rolling 12M)
+  const isRollingView = selectedYear === 'ROLLING';
+  const targetYearNum = typeof selectedYear === 'number' ? selectedYear : currentYear;
+
+  const monthlyForecasts: MonthlyPayoutItem[] = [];
+  const forecastMonthKeyToIndex = new Map<string, number>();
+
+  for (let i = 0; i < 12; i++) {
+    let bYear: number;
+    let bMonth: number;
+    let displayName: string;
+    let isPast = false;
+    let isCurrent = false;
+
+    if (isRollingView) {
+      const bucketDate = new Date(currentYear, currentCalMonth + i, 1);
+      bYear = bucketDate.getFullYear();
+      bMonth = bucketDate.getMonth();
+      const baseName = MONTH_NAMES[bMonth];
+      displayName = bYear !== currentYear ? `${baseName} '${String(bYear).slice(-2)}` : baseName;
+      isCurrent = i === 0;
+      isPast = false;
+    } else {
+      bYear = targetYearNum;
+      bMonth = i;
+      displayName = MONTH_NAMES[bMonth];
+      if (targetYearNum < currentYear) {
+        isPast = true;
+      } else if (targetYearNum === currentYear) {
+        if (bMonth < currentCalMonth) isPast = true;
+        else if (bMonth === currentCalMonth) isCurrent = true;
+      }
+    }
+
+    const bKey = `${bYear}-${String(bMonth + 1).padStart(2, '0')}`;
+    forecastMonthKeyToIndex.set(bKey, i);
+    monthlyForecasts.push({
+      monthIndex: i,
+      monthName: displayName,
+      amount: 0,
+      isPast,
+      isCurrent,
+      details: [],
+    });
+  }
 
   let projectedAnnualNetDividend = 0;
+  let projectedAnnualRegularNetDividend = 0;
   const annualInflowByCategory: Record<AssetType, number> = {
     STOCKS: 0,
     FUNDS: 0,
@@ -402,9 +555,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const annualInflowByAsset: Record<string, number> = {};
 
   // Upcoming Paydays Radar & Annual Dividend Tracking
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const currentYear = today.getFullYear();
   let priorYearTotalNetDividend = 0;
   const priorYearDetails: PriorYearDividendItem[] = [];
 
@@ -412,6 +562,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   let nextClosestSchedule: ClosestSchedule | null = null;
   let minFutureDiffDays = Infinity;
   const seenScheduleKeys = new Set<string>();
+  const learnedLagByAsset = new Map<string, number | null>();
 
   dividendSchedules.forEach((schedule) => {
     // Deduplicate identical schedules if any
@@ -434,10 +585,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
         ? t.transaction_date <= schedule.xd_date
         : t.transaction_date < schedule.xd_date;
     });
-    const eligibleShares = eligibleTxs.reduce(
+    let eligibleShares = eligibleTxs.reduce(
       (sum, t) => sum + (t.type === 'BUY' ? Number(t.shares) : -Number(t.shares)),
       0
     );
+
+    // Fallback สำหรับเงินปันผล/ดอกเบี้ยที่ยืนยันว่าได้รับแล้ว (is_projected === false)
+    // ป้องกันยอดเงินปันผลที่ได้รับจริงหายไป หากผู้ใช้บันทึกวันที่ซื้อคาบเกี่ยวกับวัน XD
+    let effectiveTxs = eligibleTxs;
+    if (eligibleShares <= 0 && schedule.is_projected === false) {
+      const cutoff = schedule.payment_date || schedule.xd_date;
+      const fallbackTxs = transactions.filter((t) => {
+        if (t.asset_id !== schedule.asset_id) return false;
+        return t.transaction_date <= cutoff;
+      });
+      const fallbackShares = fallbackTxs.reduce(
+        (sum, t) => sum + (t.type === 'BUY' ? Number(t.shares) : -Number(t.shares)),
+        0
+      );
+      if (fallbackShares > 0) {
+        eligibleShares = fallbackShares;
+        effectiveTxs = fallbackTxs;
+      } else if (Number(parentAsset.net_shares) > 0) {
+        eligibleShares = Number(parentAsset.net_shares);
+      }
+    }
 
     if (eligibleShares <= 0) return;
 
@@ -451,10 +623,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
     let isPartialCycle = false;
 
     if (isCashAsset) {
-      // Find interest frequency by schedules count
+      // Find interest frequency by schedule dates
       const assetSchedules = dividendSchedules.filter((s) => s.asset_id === schedule.asset_id);
-      const freq: 'MONTHLY' | 'SEMI_ANNUAL' | 'ANNUAL' =
-        assetSchedules.length >= 12 ? 'MONTHLY' : assetSchedules.length >= 2 ? 'SEMI_ANNUAL' : 'ANNUAL';
+      const freq = detectCashFrequency(assetSchedules.map((s) => s.xd_date));
       const divisor = freq === 'MONTHLY' ? 12 : freq === 'SEMI_ANNUAL' ? 2 : 1;
       const annualRatePct = dpu * divisor * 100;
 
@@ -462,10 +633,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       let hasPartial = false;
       let partialLabel = '';
 
-      const hasWithdrawals = eligibleTxs.some((t) => t.type === 'SELL');
+      const hasWithdrawals = effectiveTxs.some((t) => t.type === 'SELL');
       if (hasWithdrawals) {
         // เมื่อมีการถอนเงินต้น ให้คิดดอกเบี้ยจากยอดเงินต้นคงเหลือสุทธิ (eligibleShares)
-        const firstDepDate = eligibleTxs.find((t) => t.type === 'BUY')?.transaction_date || schedule.xd_date;
+        const firstDepDate = effectiveTxs.find((t) => t.type === 'BUY')?.transaction_date || schedule.xd_date;
         const res = calculateScheduleCashPayout(
           eligibleShares,
           annualRatePct,
@@ -480,7 +651,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           partialLabel = res.daysLabel;
         }
       } else {
-        eligibleTxs.forEach((t) => {
+        effectiveTxs.forEach((t) => {
           if (t.type !== 'BUY') return;
           const txAmount = Number(t.shares) || 0;
           if (txAmount <= 0) return;
@@ -506,7 +677,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
       daysInfo = hasPartial ? partialLabel : 'เต็มงวด';
     } else {
       // Live Floating FX for foreign assets: convert native DPU to current THB
-      const effectiveRate = isUS && exchangeRate > 0 ? exchangeRate : 1.0;
+      // If payment has already been confirmed and has a locked received_fx_rate, use it!
+      const isConfirmed = schedule.is_projected === false;
+      const effectiveRate = isUS
+        ? isConfirmed && Number(schedule.received_fx_rate) > 0
+          ? Number(schedule.received_fx_rate)
+          : exchangeRate > 0
+          ? exchangeRate
+          : 1.0
+        : 1.0;
       netDividend = eligibleShares * dpu * effectiveRate * (1 - taxRate);
     }
 
@@ -514,32 +693,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     const isSpecialItem = schedule.is_special || specialScheduleIds.has(schedule.id);
 
-    // Parse dates safely without UTC timezone skew
-    const parseDateParts = (dStr?: string | null) => {
-      if (!dStr) return null;
-      const p = dStr.split('T')[0].split('-').map(Number);
-      if (p.length < 3 || isNaN(p[0]) || isNaN(p[1]) || isNaN(p[2])) return null;
-      return new Date(p[0], p[1] - 1, p[2]);
-    };
-
-    const xdDateObj = parseDateParts(schedule.xd_date);
-    const payDateObj = parseDateParts(schedule.payment_date);
-
-    // Determine payout date and whether it's an estimated calculation
-    let payoutDateObj: Date;
-    let isEstimatedPayout = false;
-
-    if (payDateObj) {
-      payoutDateObj = payDateObj;
-      isEstimatedPayout = false;
-    } else if (xdDateObj) {
-      payoutDateObj = new Date(xdDateObj.getFullYear(), xdDateObj.getMonth(), xdDateObj.getDate());
-      const daysToAdd = isCashAsset ? 0 : isUS ? 14 : 20;
-      payoutDateObj.setDate(payoutDateObj.getDate() + daysToAdd);
-      isEstimatedPayout = !isCashAsset;
-    } else {
-      return;
+    let learnedLag = learnedLagByAsset.get(schedule.asset_id);
+    if (learnedLag === undefined) {
+      const assetScheds = dividendSchedules.filter((s) => s.asset_id === schedule.asset_id);
+      learnedLag = isCashAsset ? null : computeLearnedPayoutLag(assetScheds);
+      learnedLagByAsset.set(schedule.asset_id, learnedLag);
     }
+
+    const xdDateObj = parseLocalDateParts(schedule.xd_date);
+    const payoutDateObj = estimatePayoutDate(schedule.xd_date, schedule.payment_date, {
+      isCash: isCashAsset,
+      isUS,
+      learnedLagDays: learnedLag,
+    });
+    if (!payoutDateObj) return;
+
+    const isEstimatedPayout = !schedule.payment_date && !isCashAsset;
 
     const itemYear = payoutDateObj.getFullYear();
     const targetMonth = payoutDateObj.getMonth();
@@ -564,22 +733,30 @@ export const Dashboard: React.FC<DashboardProps> = ({
       });
     }
 
-    // 2. Active 12-Month Inflow Forecast (Forward 12 months & current year cycles)
-    // Captures all scheduled payouts within the 1-year forward projection horizon
-    const isForward12Month = (diffPay >= -30 && diffPay <= 365) || (itemYear === currentYear && diffPay >= -180);
+    const payoutMonthKey = `${payoutDateObj.getFullYear()}-${String(payoutDateObj.getMonth() + 1).padStart(2, '0')}`;
 
-    if (isForward12Month) {
+    // 2. Rolling 12-Month Inflow for Portfolio Hero Net Worth & Category Cards (Strict XD Cutoff)
+    const rollingIndex = rollingMonthKeyToIndex.get(payoutMonthKey);
+    if (rollingIndex !== undefined) {
       annualInflowByCategory[parentAsset.asset_type] += netDividend;
       annualInflowByAsset[parentAsset.id] = (annualInflowByAsset[parentAsset.id] || 0) + netDividend;
+      projectedAnnualNetDividend += netDividend;
+      if (!isSpecialItem) {
+        projectedAnnualRegularNetDividend += netDividend;
+      }
+    }
 
+    // 3. Active Cashflow Forecast Chart Data (Selected Calendar Year Jan-Dec or Rolling 12M)
+    const forecastIndex = forecastMonthKeyToIndex.get(payoutMonthKey);
+    if (forecastIndex !== undefined) {
       const matchesFilter =
         inflowFilter === 'ALL' ||
         (inflowFilter === 'DIVIDENDS' && !isCashAsset) ||
         (inflowFilter === 'INTEREST' && isCashAsset);
 
-      if (matchesFilter && targetMonth >= 0 && targetMonth < 12) {
-        monthlyForecasts[targetMonth].amount += netDividend;
-        monthlyForecasts[targetMonth].details.push({
+      if (matchesFilter) {
+        monthlyForecasts[forecastIndex].amount += netDividend;
+        monthlyForecasts[forecastIndex].details.push({
           scheduleId: schedule.id,
           assetId: schedule.asset_id,
           symbol: parentAsset.symbol,
@@ -588,6 +765,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           shares: eligibleShares,
           netAmount: netDividend,
           xdDate: schedule.xd_date,
+          paymentDate: schedule.payment_date || getLocalDateString(payoutDateObj),
           isInterest: isCashAsset,
           taxRate,
           isProjected: schedule.is_projected !== false,
@@ -595,7 +773,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
           daysInfo,
           isPartialCycle,
         });
-        projectedAnnualNetDividend += netDividend;
       }
     }
 
@@ -662,9 +839,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   upcomingList.sort((a, b) => a.diffDays - b.diffDays);
 
-  // Dual Yield & Inflow Metrics
-  const portfolioCurrentYield = totalMarketValue > 0 ? (projectedAnnualNetDividend / totalMarketValue) * 100 : 0;
-  const portfolioYoC = totalCost > 0 ? (projectedAnnualNetDividend / totalCost) * 100 : 0;
+  // Dual Yield & Inflow Metrics (Using regular sustainable dividends for accurate Yield & YoC)
+  const portfolioCurrentYield = totalMarketValue > 0 ? (projectedAnnualRegularNetDividend / totalMarketValue) * 100 : 0;
+  const portfolioYoC = totalCost > 0 ? (projectedAnnualRegularNetDividend / totalCost) * 100 : 0;
   const monthlyAvgInflow = projectedAnnualNetDividend / 12;
 
   // Passive Income Goal Calculations
@@ -693,13 +870,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onPress: async () => {
             try {
               const todayStr = getLocalDateString();
-              const { error } = await supabase
+              const updatePayload: any = {
+                payment_date: todayStr,
+                is_projected: false,
+              };
+              if (item.currency === 'USD' && exchangeRate > 0) {
+                updatePayload.received_fx_rate = exchangeRate;
+              }
+              let { error } = await supabase
                 .from('dividend_schedules')
-                .update({
-                  payment_date: todayStr,
-                  is_projected: false,
-                })
+                .update(updatePayload)
                 .eq('id', scheduleId);
+
+              if (error && (error.message?.includes('received_fx_rate') || error.code === '42703' || error.message?.includes('schema cache'))) {
+                delete updatePayload.received_fx_rate;
+                const retry = await supabase
+                  .from('dividend_schedules')
+                  .update(updatePayload)
+                  .eq('id', scheduleId);
+                error = retry.error;
+              }
 
               if (error) throw error;
               loadData(true);
@@ -714,6 +904,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // Max value for bar chart normalization
   const maxMonthlyAmount = Math.max(...monthlyForecasts.map((m) => m.amount), 1);
+
+  // Selected Forecast Year Summary Metrics
+  const forecastYearTotal = monthlyForecasts.reduce((sum, m) => sum + m.amount, 0);
+  const forecastYearReceived = monthlyForecasts
+    .filter((m) => m.isPast)
+    .reduce((sum, m) => sum + m.amount, 0);
+  const forecastYearPending = monthlyForecasts
+    .filter((m) => !m.isPast)
+    .reduce((sum, m) => sum + m.amount, 0);
+  const forecastMonthlyAvg = forecastYearTotal / 12;
 
   // Current month index (0 = Jan, 11 = Dec)
   const currentMonthIndex = new Date().getMonth();
@@ -893,7 +1093,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               netAmount: item.amount,
               xdDate: item.dateStr,
               isInterest: item.isInterest,
-              currency: item.isInterest ? 'THB' : (currencyMap[item.assetId] || 'THB'),
+              currency: item.isInterest ? 'THB' : (item.currency || 'THB'),
               taxRate: item.taxRate || 0,
               isProjected: item.isProjected ?? true,
               exchangeRate,
@@ -902,52 +1102,180 @@ export const Dashboard: React.FC<DashboardProps> = ({
           }}
         />
 
-        {/* 3-Way Inflow Toggle Filter (Option 3) */}
-        <View style={styles.inflowFilterContainer}>
-          {[
-            { label: 'ทั้งหมด (ปันผล+ดอกเบี้ย)', value: 'ALL' },
-            { label: 'เฉพาะปันผล', value: 'DIVIDENDS' },
-            { label: 'เฉพาะดอกเบี้ย', value: 'INTEREST' },
-          ].map((f) => (
+        {/* Unified Filter Bar: Left Inflow Dropdown + Right Year Selector (Option 2 แบบที่ 1) */}
+        <View style={styles.forecastFilterRow}>
+          {/* Left: Dropdown for Inflow Filter */}
+          <TouchableOpacity
+            style={styles.filterDropdownBtn}
+            onPress={() => setIsInflowFilterModalVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={
+                inflowFilter === 'ALL'
+                  ? 'wallet-outline'
+                  : inflowFilter === 'DIVIDENDS'
+                  ? 'trending-up-outline'
+                  : 'cash-outline'
+              }
+              size={13}
+              color="#059669"
+            />
+            <Text style={styles.filterDropdownText} numberOfLines={1}>
+              {inflowFilter === 'ALL'
+                ? 'ทั้งหมด'
+                : inflowFilter === 'DIVIDENDS'
+                ? 'เฉพาะหุ้น/กองทุน'
+                : 'เฉพาะดอกเบี้ย'}
+            </Text>
+            <Ionicons name="chevron-down" size={12} color="#64748B" />
+          </TouchableOpacity>
+
+          {/* Right: Year Selector with Prev/Next arrows (แบบที่ 1) */}
+          <View style={styles.yearSelectorContainer}>
             <TouchableOpacity
-              key={f.value}
-              style={[
-                styles.inflowFilterBtn,
-                inflowFilter === f.value && styles.inflowFilterBtnActive,
-              ]}
-              onPress={() => setInflowFilter(f.value as any)}
+              style={styles.yearArrowBtn}
+              onPress={handlePrevYear}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.6}
+            >
+              <Ionicons name="chevron-back" size={15} color="#334155" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.yearDisplayBtn}
+              onPress={() => setIsYearPickerModalVisible(true)}
               activeOpacity={0.7}
             >
-              <Text
-                style={[
-                  styles.inflowFilterBtnText,
-                  inflowFilter === f.value && styles.inflowFilterBtnTextActive,
-                ]}
-              >
-                {f.label}
+              <Text style={styles.yearDisplayText}>
+                {selectedYear === 'ROLLING'
+                  ? 'Rolling 12M'
+                  : selectedYear === currentYear
+                  ? `ปี ${selectedYear} (ปีนี้)`
+                  : `ปี ${selectedYear}`}
               </Text>
+              <Ionicons name="chevron-down" size={11} color="#64748B" style={{ marginLeft: 3 }} />
             </TouchableOpacity>
-          ))}
+
+            <TouchableOpacity
+              style={styles.yearArrowBtn}
+              onPress={handleNextYear}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.6}
+            >
+              <Ionicons name="chevron-forward" size={15} color="#334155" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.chartCard}>
-          {projectedAnnualNetDividend === 0 ? (
+          {forecastYearTotal === 0 ? (
             <View style={styles.emptyChartBox}>
               <Ionicons name="bar-chart-outline" size={40} color="#CBD5E1" />
-              <Text style={styles.emptyChartText}>ยังไม่มีข้อมูลปันผลคาดการณ์</Text>
+              <Text style={styles.emptyChartText}>
+                {selectedYear === 'ROLLING'
+                  ? 'ยังไม่มีข้อมูลปันผลคาดการณ์'
+                  : `ไม่มีข้อมูลกระแสเงินสดในปี ${selectedYear}`}
+              </Text>
               <Text style={styles.emptyChartSubtext}>
-                เพิ่มหุ้นและระบุ Expected DPU ผ่านปุ่ม + เพื่อดูแท่งกราฟปันผลรายเดือน
+                {selectedYear === 'ROLLING' || selectedYear === currentYear
+                  ? 'เพิ่มหุ้นหรือระบุ Expected DPU เพื่อดูแท่งกราฟกระแสเงินสดรายเดือน'
+                  : 'เลือกปีอื่น หรือบันทึกรายการธุรกรรมเพิ่มเติม'}
               </Text>
             </View>
           ) : (
             <>
-              {/* Monthly Bar Chart View */}
+              {/* Year Summary Header Row (ข้อ 3 แบบ A) */}
+              <View style={styles.chartHeaderRow}>
+                <View style={styles.chartHeaderLeft}>
+                  <View style={styles.chartHeaderTitleRow}>
+                    <Text style={styles.chartCardTitle}>
+                      {selectedYear === 'ROLLING'
+                        ? 'กระแสเงินสดคาดการณ์ 12 เดือนข้างหน้า'
+                        : `กระแสเงินสดปี ${selectedYear}`}
+                    </Text>
+                    <View
+                      style={[
+                        styles.yearTagPill,
+                        selectedYear === currentYear || selectedYear === 'ROLLING'
+                          ? styles.yearTagPillCurrent
+                          : styles.yearTagPillDefault,
+                      ]}
+                    >
+                      <Ionicons
+                        name={
+                          selectedYear === 'ROLLING'
+                            ? 'repeat-outline'
+                            : selectedYear === currentYear
+                            ? 'sparkles'
+                            : 'calendar'
+                        }
+                        size={11}
+                        color={
+                          selectedYear === currentYear || selectedYear === 'ROLLING'
+                            ? '#059669'
+                            : '#64748B'
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.yearTagText,
+                          selectedYear === currentYear || selectedYear === 'ROLLING'
+                            ? styles.yearTagTextCurrent
+                            : styles.yearTagTextDefault,
+                        ]}
+                      >
+                        {selectedYear === 'ROLLING'
+                          ? 'Rolling 12M'
+                          : selectedYear === currentYear
+                          ? 'ปีนี้'
+                          : typeof selectedYear === 'number' && selectedYear < currentYear
+                          ? 'ประวัติย้อนหลัง'
+                          : 'คาดการณ์'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Total Amount & Monthly Average */}
+                  <View style={styles.chartTotalRow}>
+                    <Text style={styles.chartTotalAmount}>
+                      {formatMoney(forecastYearTotal)}
+                    </Text>
+                    <Text style={styles.chartAvgText}>
+                      เฉลี่ย {formatMoney(forecastMonthlyAvg)}/ด.
+                    </Text>
+                  </View>
+
+                  {/* Subrow for Received vs Pending breakdown if current year */}
+                  {selectedYear === currentYear && (
+                    <View style={styles.receivedPendingRow}>
+                      <View style={styles.receivedPill}>
+                        <View style={styles.dotReceived} />
+                        <Text style={styles.receivedPillText}>
+                          รับแล้ว {formatMoney(forecastYearReceived)}
+                        </Text>
+                      </View>
+                      <View style={styles.pendingPill}>
+                        <View style={styles.dotPending} />
+                        <Text style={styles.pendingPillText}>
+                          รอรับ {formatMoney(forecastYearPending)}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* Monthly Bar Chart View (ข้อ 3 แบบ A) */}
               <View style={styles.barsContainer}>
                 {monthlyForecasts.map((item) => {
                   const hasPayout = item.amount > 0;
-                  const barHeightRatio = hasPayout ? Math.max(0.12, item.amount / maxMonthlyAmount) : 0.05;
+                  const barHeightRatio = hasPayout
+                    ? Math.max(0.12, item.amount / maxMonthlyAmount)
+                    : 0.05;
                   const isSelected = selectedMonth === item.monthIndex;
-                  const isCurrentMonth = item.monthIndex === currentMonthIndex;
+                  const isCurrentMonth = item.isCurrent;
+                  const isPastMonth = item.isPast;
 
                   return (
                     <TouchableOpacity
@@ -958,28 +1286,52 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     >
                       {/* Amount tooltip above bar if has payout */}
                       {hasPayout && (
-                        <Text style={styles.barTopAmount}>
+                        <Text
+                          style={[
+                            styles.barTopAmount,
+                            isSelected && styles.barTopAmountSelected,
+                          ]}
+                          numberOfLines={1}
+                        >
                           {isPrivateMode
                             ? '••••'
-                            : `฿${item.amount >= 1000 ? `${(item.amount / 1000).toFixed(1)}k` : item.amount.toFixed(0)}`}
+                            : item.amount >= 1000
+                            ? `${(item.amount / 1000).toFixed(item.amount >= 10000 ? 0 : 1)}k`
+                            : item.amount.toFixed(0)}
                         </Text>
                       )}
 
-                      {/* Bar Graphic */}
-                      <View style={[styles.barTrack, isCurrentMonth && styles.barTrackCurrent]}>
+                      {/* Bar Graphic Track & Fill */}
+                      <View
+                        style={[
+                          styles.barTrack,
+                          isCurrentMonth && styles.barTrackCurrent,
+                          isSelected && styles.barTrackSelected,
+                        ]}
+                      >
                         <View
                           style={[
                             styles.barFill,
                             { height: `${barHeightRatio * 100}%` },
-                            hasPayout ? styles.barFillActive : styles.barFillInactive,
+                            hasPayout
+                              ? isPastMonth
+                                ? styles.barFillPast
+                                : isCurrentMonth
+                                ? styles.barFillCurrent
+                                : styles.barFillFuture
+                              : styles.barFillInactive,
                             isSelected && styles.barFillSelected,
-                            isCurrentMonth && !isSelected && styles.barFillCurrent,
                           ]}
                         />
                       </View>
 
                       {/* Month Label with Current Month Indicator */}
-                      <View style={[styles.monthLabelWrapper, isCurrentMonth && styles.monthLabelWrapperCurrent]}>
+                      <View
+                        style={[
+                          styles.monthLabelWrapper,
+                          isCurrentMonth && styles.monthLabelWrapperCurrent,
+                        ]}
+                      >
                         <Text
                           style={[
                             styles.barMonthLabel,
@@ -990,9 +1342,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           {item.monthName}
                         </Text>
                       </View>
+
                       {isCurrentMonth ? (
                         <View style={styles.nowBadge}>
-                          <Ionicons name="caret-up" size={8} color="#059669" style={{ marginBottom: -2 }} />
+                          <Ionicons
+                            name="caret-up"
+                            size={8}
+                            color="#059669"
+                            style={{ marginBottom: -2 }}
+                          />
                           <Text style={styles.nowBadgeText}>Now</Text>
                         </View>
                       ) : (
@@ -1003,18 +1361,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 })}
               </View>
 
-              {/* Current Month Legend Row */}
+              {/* Chart Legend Row */}
               <View style={styles.chartLegendRow}>
-                <View style={styles.chartLegendItem}>
-                  <View style={styles.nowBadgeLegend}>
-                    <Ionicons name="caret-up" size={8} color="#059669" />
-                    <Text style={styles.nowBadgeText}>Now</Text>
-                  </View>
-                  <Text style={styles.chartLegendText}>
-                    เดือนปัจจุบัน ({MONTH_NAMES[currentMonthIndex]})
-                  </Text>
+                <View style={styles.chartLegendItemsWrap}>
+                  {selectedYear === currentYear ? (
+                    <>
+                      <View style={styles.chartLegendItem}>
+                        <View style={[styles.chartLegendDot, { backgroundColor: '#059669' }]} />
+                        <Text style={styles.chartLegendText}>รับแล้ว</Text>
+                      </View>
+                      <View style={styles.chartLegendItem}>
+                        <View style={[styles.chartLegendDot, { backgroundColor: '#6EE7B7' }]} />
+                        <Text style={styles.chartLegendText}>รอรับ</Text>
+                      </View>
+                      <View style={styles.chartLegendItem}>
+                        <View style={styles.nowBadgeLegend}>
+                          <Ionicons name="caret-up" size={8} color="#059669" />
+                          <Text style={styles.nowBadgeText}>Now</Text>
+                        </View>
+                        <Text style={styles.chartLegendText}>เดือนปัจจุบัน</Text>
+                      </View>
+                    </>
+                  ) : typeof selectedYear === 'number' && selectedYear < currentYear ? (
+                    <View style={styles.chartLegendItem}>
+                      <View style={[styles.chartLegendDot, { backgroundColor: '#059669' }]} />
+                      <Text style={styles.chartLegendText}>รับจริงแล้วทั้งหมด</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.chartLegendItem}>
+                      <View style={[styles.chartLegendDot, { backgroundColor: '#6EE7B7' }]} />
+                      <Text style={styles.chartLegendText}>คาดการณ์ล่วงหน้า</Text>
+                    </View>
+                  )}
                 </View>
-                <Text style={styles.chartLegendHint}>แตะแท่งกราฟเพื่อดูรายละเอียด</Text>
+                <Text style={styles.chartLegendHint}>แตะแท่งกราฟเพื่อดูรายการ</Text>
               </View>
 
               {/* Selected Month Detail Pop-out */}
@@ -1178,6 +1558,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onSuccess={() => {
           loadData();
         }}
+        onNavigateToTransactions={() => {
+          onNavigateToAssets?.('TRANSACTIONS', selectedAssetForEdit?.asset_type);
+        }}
       />
 
       {/* 7. Category Breakdown & Segment Pie Chart Modal */}
@@ -1230,6 +1613,235 @@ export const Dashboard: React.FC<DashboardProps> = ({
         priorYearItems={priorYearDetails}
         formatMoney={formatMoney}
       />
+
+      {/* 11. Modal: กรองประเภทกระแสเงินสด */}
+      <Modal
+        visible={isInflowFilterModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsInflowFilterModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsInflowFilterModalVisible(false)}
+        >
+          <View style={styles.pickerModalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.pickerModalHeader}>
+              <View style={styles.pickerModalTitleRow}>
+                <Ionicons name="funnel-outline" size={17} color="#059669" />
+                <Text style={styles.pickerModalTitle}>กรองประเภทกระแสเงินสด</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsInflowFilterModalVisible(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.pickerOptionsList}>
+              {[
+                {
+                  label: 'ทั้งหมด (ปันผล + ดอกเบี้ย)',
+                  sublabel: 'หุ้น, กองทุนรวม และเงินฝากธนาคาร',
+                  value: 'ALL',
+                  icon: 'wallet-outline',
+                  color: '#059669',
+                },
+                {
+                  label: 'เฉพาะหุ้นและกองทุน (เงินปันผล)',
+                  sublabel: 'เงินปันผลจากหุ้นไทย, หุ้นนอก และกองทุน',
+                  value: 'DIVIDENDS',
+                  icon: 'trending-up-outline',
+                  color: '#2563EB',
+                },
+                {
+                  label: 'เฉพาะบัญชีเงินฝาก (ดอกเบี้ย)',
+                  sublabel: 'ดอกเบี้ยเงินฝากออมทรัพย์และดิจิทัล',
+                  value: 'INTEREST',
+                  icon: 'cash-outline',
+                  color: '#10B981',
+                },
+              ].map((opt) => {
+                const isSelected = inflowFilter === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
+                    onPress={() => {
+                      setInflowFilter(opt.value as any);
+                      setIsInflowFilterModalVisible(false);
+                      setSelectedMonth(null);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.pickerOptionLeft}>
+                      <View style={[styles.pickerIconCircle, { backgroundColor: `${opt.color}15` }]}>
+                        <Ionicons name={opt.icon as any} size={16} color={opt.color} />
+                      </View>
+                      <View>
+                        <Text style={[styles.pickerOptionLabel, isSelected && styles.pickerOptionLabelSelected]}>
+                          {opt.label}
+                        </Text>
+                        <Text style={styles.pickerOptionSublabel}>{opt.sublabel}</Text>
+                      </View>
+                    </View>
+                    {isSelected ? (
+                      <Ionicons name="checkmark-circle" size={20} color="#059669" />
+                    ) : (
+                      <View style={styles.pickerUncheckedCircle} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 12. Modal: เลือกปีแสดงผล */}
+      <Modal
+        visible={isYearPickerModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsYearPickerModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsYearPickerModalVisible(false)}
+        >
+          <View style={styles.pickerModalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.pickerModalHeader}>
+              <View style={styles.pickerModalTitleRow}>
+                <Ionicons name="calendar-outline" size={17} color="#059669" />
+                <Text style={styles.pickerModalTitle}>เลือกปีแสดงกระแสเงินสด</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsYearPickerModalVisible(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              <View style={styles.pickerOptionsList}>
+                {availableYears.map((yr) => {
+                  const isSelected = selectedYear === yr;
+                  const isCurYear = yr === currentYear;
+                  const badgeText = isCurYear
+                    ? 'ปีนี้'
+                    : yr === currentYear - 1
+                    ? 'ปีที่แล้ว'
+                    : yr === currentYear + 1
+                    ? 'ปีหน้า'
+                    : null;
+
+                  return (
+                    <TouchableOpacity
+                      key={yr}
+                      style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
+                      onPress={() => {
+                        setSelectedYear(yr);
+                        setIsYearPickerModalVisible(false);
+                        setSelectedMonth(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.pickerOptionLeft}>
+                        <View
+                          style={[
+                            styles.pickerIconCircle,
+                            { backgroundColor: isCurYear ? '#ECFDF5' : '#F1F5F9' },
+                          ]}
+                        >
+                          <Ionicons
+                            name="calendar"
+                            size={16}
+                            color={isCurYear ? '#059669' : '#64748B'}
+                          />
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text
+                            style={[
+                              styles.pickerOptionLabel,
+                              isSelected && styles.pickerOptionLabelSelected,
+                            ]}
+                          >
+                            ปี {yr}
+                          </Text>
+                          {badgeText && (
+                            <View
+                              style={[
+                                styles.yearBadgePill,
+                                isCurYear ? styles.yearBadgePillCurrent : styles.yearBadgePillDefault,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.yearBadgeText,
+                                  isCurYear ? styles.yearBadgeTextCurrent : styles.yearBadgeTextDefault,
+                                ]}
+                              >
+                                {badgeText}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                      {isSelected ? (
+                        <Ionicons name="checkmark-circle" size={20} color="#059669" />
+                      ) : (
+                        <View style={styles.pickerUncheckedCircle} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+
+                {/* Option: Rolling 12M */}
+                <TouchableOpacity
+                  style={[
+                    styles.pickerOptionItem,
+                    selectedYear === 'ROLLING' && styles.pickerOptionItemSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedYear('ROLLING');
+                    setIsYearPickerModalVisible(false);
+                    setSelectedMonth(null);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.pickerOptionLeft}>
+                    <View style={[styles.pickerIconCircle, { backgroundColor: '#ECFDF5' }]}>
+                      <Ionicons name="repeat-outline" size={16} color="#059669" />
+                    </View>
+                    <View>
+                      <Text
+                        style={[
+                          styles.pickerOptionLabel,
+                          selectedYear === 'ROLLING' && styles.pickerOptionLabelSelected,
+                        ]}
+                      >
+                        12 เดือนข้างหน้า (Rolling 12M)
+                      </Text>
+                      <Text style={styles.pickerOptionSublabel}>
+                        คำนวณ 12 เดือนข้างหน้าเริ่มต้นจากเดือนปัจจุบัน
+                      </Text>
+                    </View>
+                  </View>
+                  {selectedYear === 'ROLLING' ? (
+                    <Ionicons name="checkmark-circle" size={20} color="#059669" />
+                  ) : (
+                    <View style={styles.pickerUncheckedCircle} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1429,6 +2041,106 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 4,
   },
+  chartHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  chartHeaderLeft: {
+    flex: 1,
+  },
+  chartHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  chartCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  yearTagPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 0.5,
+  },
+  yearTagPillCurrent: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  yearTagPillDefault: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+  },
+  yearTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  yearTagTextCurrent: {
+    color: '#047857',
+  },
+  yearTagTextDefault: {
+    color: '#64748B',
+  },
+  chartTotalRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    marginTop: 4,
+  },
+  chartTotalAmount: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  chartAvgText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  receivedPendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 6,
+  },
+  receivedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  pendingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dotReceived: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#059669',
+  },
+  dotPending: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#6EE7B7',
+  },
+  receivedPillText: {
+    fontSize: 11,
+    color: '#047857',
+    fontWeight: '600',
+  },
+  pendingPillText: {
+    fontSize: 11,
+    color: '#059669',
+    fontWeight: '600',
+  },
   emptyChartBox: {
     paddingVertical: 32,
     alignItems: 'center',
@@ -1451,7 +2163,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    height: 168,
+    height: 180,
     paddingTop: 24,
     paddingBottom: 4,
   },
@@ -1465,36 +2177,49 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     color: '#059669',
-    marginBottom: 2,
+    marginBottom: 3,
+  },
+  barTopAmountSelected: {
+    color: '#0F172A',
+    fontWeight: '800',
   },
   barTrack: {
-    width: 14,
-    height: 100,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 7,
+    width: 16,
+    height: 110,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
     justifyContent: 'flex-end',
     overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: '#E2E8F0',
   },
   barTrackCurrent: {
     borderWidth: 1.5,
     borderColor: '#059669',
     backgroundColor: '#ECFDF5',
   },
+  barTrackSelected: {
+    borderWidth: 1.5,
+    borderColor: '#0F172A',
+  },
   barFill: {
     width: '100%',
-    borderRadius: 7,
+    borderRadius: 8,
   },
-  barFillActive: {
+  barFillPast: {
     backgroundColor: '#059669',
+  },
+  barFillCurrent: {
+    backgroundColor: '#10B981',
+  },
+  barFillFuture: {
+    backgroundColor: '#6EE7B7',
   },
   barFillInactive: {
     backgroundColor: '#E2E8F0',
   },
   barFillSelected: {
     backgroundColor: '#0F172A',
-  },
-  barFillCurrent: {
-    backgroundColor: '#059669',
   },
   monthLabelWrapper: {
     marginTop: 4,
@@ -1552,29 +2277,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 10,
+    marginTop: 12,
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
+  chartLegendItemsWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
   chartLegendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
   },
   chartLegendDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#059669',
   },
   chartLegendText: {
     fontSize: 11,
-    color: '#059669',
-    fontWeight: '700',
+    color: '#475569',
+    fontWeight: '600',
   },
   chartLegendHint: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#94A3B8',
   },
   selectedMonthDetails: {
@@ -1866,36 +2596,166 @@ const styles = StyleSheet.create({
   bottomSpacer: {
     height: 60,
   },
-  inflowFilterContainer: {
+  forecastFilterRow: {
     flexDirection: 'row',
-    backgroundColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 3,
-    marginBottom: 12,
-    gap: 4,
-  },
-  inflowFilterBtn: {
-    flex: 1,
-    paddingVertical: 7,
+    justifyContent: 'space-between',
     alignItems: 'center',
-    borderRadius: 9,
+    marginBottom: 12,
   },
-  inflowFilterBtnActive: {
+  filterDropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: '#FFFFFF',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     elevation: 1,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.04,
     shadowRadius: 2,
   },
-  inflowFilterBtnText: {
-    fontSize: 11,
+  filterDropdownText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
-  },
-  inflowFilterBtnTextActive: {
     color: '#0F172A',
+  },
+  yearSelectorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 3,
+    paddingVertical: 2,
+    elevation: 1,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+  },
+  yearArrowBtn: {
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  yearDisplayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  yearDisplayText: {
+    fontSize: 12,
     fontWeight: '700',
+    color: '#0F172A',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    justifyContent: 'flex-end',
+  },
+  pickerModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    paddingHorizontal: 16,
+    maxHeight: '80%',
+  },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 8,
+  },
+  pickerModalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pickerModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  pickerOptionsList: {
+    paddingVertical: 4,
+    gap: 4,
+  },
+  pickerOptionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  pickerOptionItemSelected: {
+    backgroundColor: '#F0FDF4',
+  },
+  pickerOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  pickerIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerOptionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  pickerOptionLabelSelected: {
+    color: '#047857',
+    fontWeight: '700',
+  },
+  pickerOptionSublabel: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  pickerUncheckedCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+  },
+  yearBadgePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  yearBadgePillCurrent: {
+    backgroundColor: '#ECFDF5',
+  },
+  yearBadgePillDefault: {
+    backgroundColor: '#F1F5F9',
+  },
+  yearBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  yearBadgeTextCurrent: {
+    color: '#059669',
+  },
+  yearBadgeTextDefault: {
+    color: '#64748B',
   },
   categoryHeaderRightRow: {
     flexDirection: 'row',
