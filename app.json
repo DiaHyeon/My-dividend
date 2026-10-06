@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.mydividend.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "splash": {
         "image": "./assets/splash-icon.png",
         "resizeMode": "contain",
@@ -37,6 +37,18 @@
       ]
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0F172A",
+          "image": "./assets/splash-icon.png",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#0F172A"
+          },
+          "imageWidth": 200
+        }
+      ],
       [
         "expo-notifications",
         {
