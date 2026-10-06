@@ -402,6 +402,26 @@ async function main() {
     assert.ok(errors.length >= 3, `Expected at least 3 errors, found ${errors.length}`);
   });
 
+  await runAsyncTest('4.7 exportPortfolioToCsv sanitizes formula injection characters (=, +, -, @) and parse restores it', async () => {
+    const formulaAsset = {
+      id: 'f-1',
+      symbol: '=SUM(A1:A10)',
+      asset_type: 'CASH',
+      net_shares: 50000,
+      weighted_average_cost: 1,
+      currency: 'THB',
+      tax_rate: 0,
+    };
+    const csvOutput = await exportPortfolioToCsv([formulaAsset]);
+    // Must be sanitized with leading single quote inside quotes: "'=SUM(A1:A10)"
+    assert.ok(csvOutput.includes("\"'=SUM(A1:A10)\""), `Expected sanitized formula in CSV, got:\n${csvOutput}`);
+
+    // Roundtrip back via parseAndValidateCsv
+    const parsed = parseAndValidateCsv(csvOutput);
+    assert.strictEqual(parsed.validRows.length, 1);
+    assert.strictEqual(parsed.validRows[0].symbol, '=SUM(A1:A10)');
+  });
+
   // -------------------------------------------------------------
   // SUITE 5: Stock Dividend Interval & Special Candidate Logic (Issue 7)
   // -------------------------------------------------------------

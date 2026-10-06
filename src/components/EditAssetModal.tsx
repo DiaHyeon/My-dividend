@@ -349,6 +349,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
         .update({
           symbol: trimmedSymbol,
           asset_type: assetType,
+          currency: currency,
           current_price: Number(convertedCurrentPrice.toFixed(4)),
           tax_rate: calculatedTaxRate,
         })

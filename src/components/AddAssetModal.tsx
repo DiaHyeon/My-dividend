@@ -741,10 +741,11 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       const isExisting = !!asset;
 
       if (asset) {
-        // Asset already exists: update latest current_price and tax_rate
+        // Asset already exists: update latest current_price, tax_rate and currency
         const { data: updatedAsset, error: updateErr } = await supabase
           .from('assets')
           .update({
+            currency: currency,
             current_price: Number(convertedCurrentPrice.toFixed(4)),
             tax_rate: calculatedTaxRate,
           })
@@ -762,6 +763,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
           .insert({
             symbol: trimmedSymbol,
             asset_type: assetType,
+            currency: currency,
             current_price: Number(convertedCurrentPrice.toFixed(4)),
             tax_rate: calculatedTaxRate,
             is_archived: false,

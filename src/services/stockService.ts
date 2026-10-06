@@ -9,6 +9,7 @@ export interface StockSuggestion {
 
 import { invokeStockProxy } from './proxyClient';
 import { getLocalDateString } from '../utils/dateUtils';
+import { registerSymbolCurrency } from './currencyService';
 
 export function normalizeExchange(rawExch: string): string {
   const upper = (rawExch || '').toUpperCase();
@@ -67,11 +68,23 @@ const POPULAR_STOCKS: StockSuggestion[] = [
   { symbol: 'SPY', rawSymbol: 'SPY', name: 'SPDR S&P 500 ETF Trust', market: 'US', exchange: 'NYSE', currency: 'USD' },
 ];
 
+let popularRegistered = false;
+function ensurePopularRegistered() {
+  if (!popularRegistered) {
+    popularRegistered = true;
+    POPULAR_STOCKS.forEach((p) => {
+      registerSymbolCurrency(p.symbol, p.currency);
+      registerSymbolCurrency(p.rawSymbol, p.currency);
+    });
+  }
+}
+
 /**
  * Searches US and Thai stocks matching the query.
  * Combines instant local catalog matches with live search results.
  */
 export async function searchStocks(query: string): Promise<StockSuggestion[]> {
+  ensurePopularRegistered();
   const cleanQuery = query.trim().toUpperCase();
   if (!cleanQuery) return [];
 
@@ -125,13 +138,16 @@ export async function searchStocks(query: string): Promise<StockSuggestion[]> {
 
       if (isThai || isUS) {
         const displaySymbol = isThai && rawSym.endsWith('.BK') ? rawSym.replace('.BK', '') : rawSym;
+        const resolvedCurrency: 'THB' | 'USD' = isThai ? 'THB' : 'USD';
+        registerSymbolCurrency(displaySymbol, resolvedCurrency);
+        registerSymbolCurrency(rawSym, resolvedCurrency);
         liveMatches.push({
           symbol: displaySymbol,
           rawSymbol: rawSym,
           name: shortname,
           market: isThai ? 'TH' : 'US',
           exchange: normalizeExchange(exch),
-          currency: isThai ? 'THB' : 'USD',
+          currency: resolvedCurrency,
         });
       }
     }
@@ -229,6 +245,11 @@ export async function fetchStockPrice(symbol: string, rawSymbol?: string): Promi
     const { data: json } = await invokeStockProxy({ action: 'quote', symbol: targetSymbol });
     if (json) {
       const meta = json.chart?.result?.[0]?.meta;
+      const currency = meta?.currency;
+      if (currency === 'USD' || currency === 'THB') {
+        registerSymbolCurrency(targetSymbol, currency);
+        registerSymbolCurrency(symbol, currency);
+      }
       const price = meta?.regularMarketPrice ?? meta?.chartPreviousClose ?? meta?.previousClose;
 
       if (price !== undefined && price !== null && !isNaN(price)) {
@@ -250,6 +271,11 @@ export async function fetchStockPrice(symbol: string, rawSymbol?: string): Promi
     if (response.ok) {
       const json = await response.json();
       const meta = json.chart?.result?.[0]?.meta;
+      const currency = meta?.currency;
+      if (currency === 'USD' || currency === 'THB') {
+        registerSymbolCurrency(targetSymbol, currency);
+        registerSymbolCurrency(symbol, currency);
+      }
       const price = meta?.regularMarketPrice ?? meta?.chartPreviousClose ?? meta?.previousClose;
 
       if (price !== undefined && price !== null && !isNaN(price)) {
@@ -345,6 +371,12 @@ export async function fetchDividendAnalysis(
   try {
     const { data: json } = await invokeStockProxy({ action: 'dividends', symbol: targetSymbol });
     if (json) {
+      const meta = json?.chart?.result?.[0]?.meta;
+      const currency = meta?.currency;
+      if (currency === 'USD' || currency === 'THB') {
+        registerSymbolCurrency(targetSymbol, currency);
+        registerSymbolCurrency(symbol, currency);
+      }
       rawDividends = json?.chart?.result?.[0]?.events?.dividends;
     }
   } catch (err: any) {
@@ -367,6 +399,12 @@ export async function fetchDividendAnalysis(
 
       if (response.ok) {
         const json = await response.json();
+        const meta = json?.chart?.result?.[0]?.meta;
+        const currency = meta?.currency;
+        if (currency === 'USD' || currency === 'THB') {
+          registerSymbolCurrency(targetSymbol, currency);
+          registerSymbolCurrency(symbol, currency);
+        }
         rawDividends = json?.chart?.result?.[0]?.events?.dividends;
       }
     } catch (err: any) {

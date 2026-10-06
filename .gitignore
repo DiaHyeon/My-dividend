@@ -49,3 +49,6 @@ supabase/.temp/
 
 # security backup
 .git_backup_security/
+
+# temporary test builds
+scratch/

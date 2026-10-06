@@ -115,7 +115,7 @@ export const UpcomingPaydayRadar: React.FC<UpcomingPaydayRadarProps> = React.mem
                   <View style={styles.amountAndActionRow}>
                     {item.currency === 'USD' && item.shares && item.dpu !== undefined ? (
                       <Text style={styles.radarAmount} numberOfLines={1}>
-                        ${(item.shares * item.dpu * (1 - (item.taxRate || 0))).toFixed(2)}
+                        ${(item.shares * item.dpu * (1 - (item.taxRate || 0))).toFixed(2)} (~{formatMoney(item.amount)})
                       </Text>
                     ) : (
                       <Text style={styles.radarAmount} numberOfLines={1}>

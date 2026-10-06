@@ -285,8 +285,10 @@ export function parseAndValidateCsv(csvContent: string): ParseResult {
       }
     }
 
+    const cleanSymbol = rawSymbol.replace(/^'(?=[=+\-@\t\r])/, '');
+
     validRows.push({
-      symbol: rawSymbol.toUpperCase(),
+      symbol: cleanSymbol.toUpperCase(),
       asset_type: assetType,
       shares: Number(sharesVal.toFixed(4)),
       cost_price: Number(costPrice.toFixed(4)),
@@ -377,10 +379,11 @@ export async function importAssetRows(
       if (existingAssets && existingAssets.length > 0) {
         const existing = existingAssets[0];
         assetId = existing.id;
-        // อัปเดตราคาล่าสุด
+        // อัปเดตราคาล่าสุดและสกุลเงิน
         await supabase
           .from('assets')
           .update({
+            currency: item.currency,
             current_price: Number(convertedCurrent.toFixed(4)),
             tax_rate: taxRate,
           })
@@ -392,6 +395,7 @@ export async function importAssetRows(
           .insert({
             symbol: item.symbol,
             asset_type: item.asset_type,
+            currency: item.currency,
             current_price: Number(convertedCurrent.toFixed(4)),
             tax_rate: taxRate,
             is_archived: false,
@@ -583,6 +587,19 @@ export interface ExportCsvOptions {
 }
 
 /**
+ * ป้องกัน CSV Formula Injection (OWASP) โดยตรวจสอบสัญลักษณ์สูตรคำนวณ =, +, -, @, \t, \r
+ * และ Escape เครื่องหมายคำพูดแบบ Double Quote
+ */
+function sanitizeCsvField(val: string): string {
+  const str = String(val ?? '');
+  const escaped = str.replace(/"/g, '""');
+  if (/^[=+\-@\t\r]/.test(escaped)) {
+    return `"'${escaped}"`;
+  }
+  return `"${escaped}"`;
+}
+
+/**
  * ส่งออกข้อมูลพอร์ตสินทรัพย์และประวัติธุรกรรมแบบ Full Backup เป็น CSV
  * ครอบคลุมประวัติการซื้อทุกไม้ ต้นทุนสกุลเงินจริง (USD/THB) และรอบปันผล เพื่อให้กู้คืนพอร์ตได้ 100%
  */
@@ -682,7 +699,7 @@ export async function exportPortfolioToCsv(
           : 0.1;
 
       return [
-        `"${symbol.replace(/"/g, '""')}"`,
+        sanitizeCsvField(symbol),
         assetType,
         Number(tx.shares || 0).toFixed(4),
         Number(costPrice || 0).toFixed(4),
@@ -715,7 +732,7 @@ export async function exportPortfolioToCsv(
         : 0.1;
 
     return [
-      `"${a.symbol.replace(/"/g, '""')}"`,
+      sanitizeCsvField(a.symbol),
       a.asset_type,
       Number(a.net_shares || 0).toFixed(4),
       Number(a.weighted_average_cost || 0).toFixed(4),

@@ -1,12 +1,10 @@
-// บริการจัดการยืนยันตัวตน (Authentication Service) และเซสชันผู้ใช้งาน พร้อมระบบเชื่อมต่อบัญชีทดสอบและกู้คืนรหัสผ่าน
+// บริการจัดการยืนยันตัวตน (Authentication Service) และเซสชันผู้ใช้งาน พร้อมระบบกู้คืนรหัสผ่าน
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { clearPortfolioCache } from './portfolioCacheService';
+import { clearPortfolioSnapshotsCache } from './benchmarkService';
 import { USER_NAME_STORAGE_KEY } from './userService';
-
-const DEMO_EMAIL = process.env.EXPO_PUBLIC_DEMO_EMAIL || '';
-const DEMO_PASSWORD = process.env.EXPO_PUBLIC_DEMO_PASSWORD || '';
 
 let authInitPromise: Promise<Session | null> | null = null;
 
@@ -91,13 +89,6 @@ export async function signInWithEmail(
 }
 
 /**
- * ฟังก์ชันเข้าสู่ระบบพอร์ตทดลองทันที (1-Click Demo Sign In)
- */
-export async function signInWithDemo(): Promise<{ session: Session | null; error: Error | null }> {
-  return signInWithEmail(DEMO_EMAIL, DEMO_PASSWORD);
-}
-
-/**
  * ฟังก์ชันสมัครสมาชิกใหม่ พร้อมบันทึกชื่อที่แสดง (Display Name)
  */
 export async function signUpWithEmail(
@@ -138,21 +129,13 @@ export async function resetPasswordForEmail(
 export async function signOut(): Promise<{ error: Error | null }> {
   try {
     const { error } = await supabase.auth.signOut();
-    // ล้างแคชพอร์ตออฟไลน์และชื่อผู้ใช้ในเครื่อง เพื่อไม่ให้ผู้ใช้คนถัดไปเห็นข้อมูล
+    // ล้างแคชพอร์ตออฟไลน์, แคช Snapshot และชื่อผู้ใช้ในเครื่อง เพื่อไม่ให้ผู้ใช้คนถัดไปเห็นข้อมูล
     await clearPortfolioCache();
+    await clearPortfolioSnapshotsCache();
     await AsyncStorage.removeItem(USER_NAME_STORAGE_KEY);
     return { error: error ? new Error(error.message) : null };
   } catch (err: any) {
     return { error: err };
   }
-}
-
-/**
- * ตรวจสอบว่าเซสชันปัจจุบันเป็นบัญชีทดสอบหรือไม่
- */
-export async function isDemoSession(): Promise<boolean> {
-  const user = await getCurrentUser();
-  if (!user || !user.email) return false;
-  return user.email.toLowerCase() === DEMO_EMAIL.toLowerCase();
 }
 

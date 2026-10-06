@@ -50,16 +50,18 @@ serve(async (req: Request) => {
   const expectedAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
   const expectedServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
+  if (!expectedAnonKey && !expectedServiceKey) {
+    return new Response(
+      JSON.stringify({ error: "Server configuration error: missing auth keys" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   let isAuthorized = false;
-  if (expectedAnonKey || expectedServiceKey) {
-    if (expectedAnonKey && (apiKeyHeader === expectedAnonKey || token === expectedAnonKey)) {
-      isAuthorized = true;
-    } else if (expectedServiceKey && (apiKeyHeader === expectedServiceKey || token === expectedServiceKey)) {
-      isAuthorized = true;
-    }
-  } else {
-    // Fallback if environment keys not injected in local test environment
-    isAuthorized = Boolean(apiKeyHeader || token);
+  if (expectedAnonKey && (apiKeyHeader === expectedAnonKey || token === expectedAnonKey)) {
+    isAuthorized = true;
+  } else if (expectedServiceKey && (apiKeyHeader === expectedServiceKey || token === expectedServiceKey)) {
+    isAuthorized = true;
   }
 
   if (!isAuthorized) {

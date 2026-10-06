@@ -80,15 +80,35 @@ export function isKnownUSSymbol(symbol: string): boolean {
  * ไม่ใช้ tax_rate ในการตัดสินสกุลเงิน เพื่อความเที่ยงตรงของข้อมูล
  */
 export function resolveIsUSStock(
-  item: { asset_type?: string; symbol?: string; id?: string; currency?: string },
+  item: { asset_type?: string; symbol?: string; id?: string; currency?: string; tax_rate?: number },
   currencyMap: Record<string, 'THB' | 'USD'> = {}
 ): boolean {
   if (item.asset_type && item.asset_type !== 'STOCKS') return false;
   if (item.currency === 'USD') return true;
-  if (item.currency === 'THB') return false;
   if (item.id && currencyMap[item.id] === 'USD') return true;
   if (item.id && currencyMap[item.id] === 'THB') return false;
-  return isKnownUSSymbol(item.symbol || '');
+
+  const upper = (item.symbol || '').trim().toUpperCase();
+  if (upper.endsWith('.BK') || /[\u0E00-\u0E7F]/.test(upper)) return false;
+
+  // Check dynamic registry populated from live market metadata
+  if (dynamicCurrencySymbolsMap.get(upper) === 'USD') return true;
+  if (dynamicCurrencySymbolsMap.get(upper) === 'THB') return false;
+
+  // If DB explicitly had THB, check W-8BEN 15% tax rate fallback for unmigrated US stocks
+  if (item.currency === 'THB') {
+    if (item.tax_rate !== undefined && Math.abs(Number(item.tax_rate) - 0.15) < 0.005) {
+      return true;
+    }
+    return false;
+  }
+
+  // Tax rate heuristic for US stocks under W-8BEN (15% tax)
+  if (item.tax_rate !== undefined && Math.abs(Number(item.tax_rate) - 0.15) < 0.005) {
+    return true;
+  }
+
+  return false;
 }
 
 /**

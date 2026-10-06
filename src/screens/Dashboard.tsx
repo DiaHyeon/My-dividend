@@ -859,7 +859,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const handleConfirmPayment = (item: UpcomingSchedule) => {
     const scheduleId = item.scheduleId;
     if (!scheduleId) return;
-    const amountStr = formatMoney(item.amount);
+    const amountStr =
+      item.currency === 'USD' && item.shares && item.dpu !== undefined
+        ? `$${(item.shares * item.dpu * (1 - (item.taxRate || 0))).toFixed(2)} (~${formatMoney(item.amount)})`
+        : formatMoney(item.amount);
     Alert.alert(
       'ยืนยันเงินปันผลเข้าบัญชี',
       `ยืนยันว่าได้รับเงินปันผลสุทธิ ${amountStr} (${item.symbol}) เข้าบัญชีเรียบร้อยแล้วใช่หรือไม่?`,

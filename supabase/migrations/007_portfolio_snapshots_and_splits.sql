@@ -20,15 +20,16 @@ CREATE TABLE IF NOT EXISTS public.portfolio_snapshots (
 -- 3. เปิดใช้งาน Row Level Security (RLS) สำหรับ portfolio_snapshots
 ALTER TABLE public.portfolio_snapshots ENABLE ROW LEVEL SECURITY;
 
--- 4. กำหนดสิทธิ์ RLS สำหรับผู้ใช้ที่ล็อกอินและเซสชันเดโม
+-- 4. กำหนดสิทธิ์ RLS สำหรับผู้ใช้ที่ล็อกอิน (แยกพอร์ตเด็ดขาดด้วย auth.uid() = user_id)
 DROP POLICY IF EXISTS "Users can manage their own portfolio snapshots" ON public.portfolio_snapshots;
 
 CREATE POLICY "Users can manage their own portfolio snapshots"
   ON public.portfolio_snapshots
   FOR ALL
-  TO authenticated, anon
-  USING (auth.uid() = user_id OR user_id IS NULL)
-  WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+  TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
--- 5. ให้สิทธิ์การใช้งานแก่ authenticated และ anon
-GRANT ALL ON public.portfolio_snapshots TO authenticated, anon;
+-- 5. ให้สิทธิ์การใช้งานเฉพาะ authenticated
+GRANT ALL ON public.portfolio_snapshots TO authenticated;
+REVOKE ALL ON public.portfolio_snapshots FROM anon;

@@ -122,6 +122,18 @@ let isBenchmarkLiveMap: Record<BenchmarkType, boolean> = {
 })();
 
 /**
+ * ล้างข้อมูลแคช Snapshot ทั้งในหน่วยความจำและ AsyncStorage ตอนออกจากระบบ
+ */
+export async function clearPortfolioSnapshotsCache(): Promise<void> {
+  memoryUserSnapshots = [];
+  try {
+    await AsyncStorage.removeItem(SNAPSHOTS_CACHE_KEY);
+  } catch (err) {
+    console.warn('[benchmarkService] Failed to clear snapshots cache:', err);
+  }
+}
+
+/**
  * บันทึก Snapshot มูลค่าและผลตอบแทนพอร์ตประจำวันลงตาราง portfolio_snapshots บน Supabase Cloud
  */
 export async function recordDailyPortfolioSnapshot(

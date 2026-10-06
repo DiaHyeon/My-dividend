@@ -41,11 +41,20 @@ CREATE POLICY "Allow service role full access to thai_funds_catalog"
   USING (true)
   WITH CHECK (true);
 
--- นโยบาย RLS: อนุญาตให้ Authenticated Users เพิ่มและอัปเดตข้อมูลกรณีซิงก์จาก Client
+-- นโยบาย RLS: อนุญาตให้ Authenticated Users เพิ่มและอัปเดตข้อมูลกรณีซิงก์จาก Client (ไม่อนุญาตให้ DELETE เพื่อป้องกันการลบแคตตาล็อก)
 DROP POLICY IF EXISTS "Allow authenticated upsert to thai_funds_catalog" ON public.thai_funds_catalog;
-CREATE POLICY "Allow authenticated upsert to thai_funds_catalog"
+DROP POLICY IF EXISTS "Allow authenticated insert to thai_funds_catalog" ON public.thai_funds_catalog;
+DROP POLICY IF EXISTS "Allow authenticated update to thai_funds_catalog" ON public.thai_funds_catalog;
+
+CREATE POLICY "Allow authenticated insert to thai_funds_catalog"
   ON public.thai_funds_catalog
-  FOR ALL
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated update to thai_funds_catalog"
+  ON public.thai_funds_catalog
+  FOR UPDATE
   TO authenticated
   USING (true)
   WITH CHECK (true);
