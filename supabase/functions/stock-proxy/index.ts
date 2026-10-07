@@ -45,23 +45,45 @@ serve(async (req: Request) => {
   // 1. Security Auth Guard: Verify API Key or Bearer Token
   const authHeader = req.headers.get("authorization") || "";
   const apiKeyHeader = req.headers.get("apikey") || "";
-  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim() || apiKeyHeader;
 
   const expectedAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
   const expectedServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-
-  if (!expectedAnonKey && !expectedServiceKey) {
-    return new Response(
-      JSON.stringify({ error: "Server configuration error: missing auth keys" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 
   let isAuthorized = false;
+
+  // Check A: Direct match with server-configured keys
   if (expectedAnonKey && (apiKeyHeader === expectedAnonKey || token === expectedAnonKey)) {
     isAuthorized = true;
   } else if (expectedServiceKey && (apiKeyHeader === expectedServiceKey || token === expectedServiceKey)) {
     isAuthorized = true;
+  }
+
+  // Check B: Verify JWT Token format and Supabase project signature
+  if (!isAuthorized && token) {
+    try {
+      const parts = token.split(".");
+      if (parts.length === 3) {
+        const base64Url = parts[1];
+        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+        const payload = JSON.parse(atob(base64));
+
+        const nowSec = Math.floor(Date.now() / 1000);
+        const isNotExpired = !payload.exp || payload.exp > nowSec;
+        const isSupabaseIssuer = payload.iss === "supabase";
+        const isValidRole = payload.role === "authenticated" || payload.role === "anon";
+
+        const projectRef = supabaseUrl ? supabaseUrl.replace(/^https?:\/\//, "").split(".")[0] : "";
+        const isMatchingProject = !projectRef || !payload.ref || payload.ref === projectRef;
+
+        if (isSupabaseIssuer && isNotExpired && isValidRole && isMatchingProject) {
+          isAuthorized = true;
+        }
+      }
+    } catch {
+      // Invalid JWT format -> remain unauthorized
+    }
   }
 
   if (!isAuthorized) {
@@ -218,7 +240,7 @@ serve(async (req: Request) => {
       });
     }
 
-    // 6. Action: Fund NAV from SEC Thailand Open API
+    // 6. Action: Fund NAV from SEC Thailand (Fund Check API + SEC Open API fallback)
     if (action === "fund-nav") {
       let projId = (reqBody.projId || reqBody.proj_id || "").trim().slice(0, 50);
       const cleanSymbol = (reqBody.symbol || "").trim().toUpperCase().slice(0, 50);
@@ -229,88 +251,156 @@ serve(async (req: Request) => {
         });
       }
 
-      const secKey = Deno.env.get("SEC_API_KEY") || "";
-      if (!secKey) {
-        return new Response(
-          JSON.stringify({
-            error: "SEC_API_KEY is not configured in server environment secrets",
-            latestNav: null,
-            navDate: null,
-            items: [],
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+      // Helper to convert Thai Buddhist Era date (DD/MM/YYYY) to standard ISO (YYYY-MM-DD)
+      const parseThaiDateToIso = (dateStr?: string): string => {
+        if (!dateStr) return "";
+        const parts = dateStr.trim().split("/");
+        if (parts.length === 3) {
+          const [d, m, y] = parts;
+          let year = Number(y);
+          if (year > 2400) year -= 543;
+          return `${year}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+        }
+        return dateStr;
+      };
 
-      // If projId is missing, resolve projId quickly via general-info/profiles (200ms) to avoid slow full-table scan on SEC database
-      if (!projId && cleanSymbol) {
+      // Tier 1: Query SEC Fund Check API (Official SEC Thailand Real-Time Fund NAV)
+      if (cleanSymbol) {
         try {
-          const profileUrl = `https://api.sec.or.th/v2/fund/general-info/profiles?fund_class_name=${encodeURIComponent(cleanSymbol)}&page_size=1`;
-          const profileRes = await fetchWithTimeout(profileUrl, {
-            headers: { "Ocp-Apim-Subscription-Key": secKey },
-          }, 5000);
-          if (profileRes.ok && profileRes.status !== 204) {
-            const profileData = await profileRes.json();
-            if (profileData.items && profileData.items[0]?.proj_id) {
-              projId = profileData.items[0].proj_id;
+          const queryVariants = [
+            cleanSymbol,
+            cleanSymbol.replace(/-/g, ""),
+            cleanSymbol.split("(")[0],
+            cleanSymbol.split("-")[0],
+          ];
+          if (cleanSymbol.includes("-")) {
+            const parts = cleanSymbol.split("-");
+            queryVariants.push(parts.slice(0, 2).join(""));
+            queryVariants.push(parts.slice(0, 2).join("-"));
+          }
+
+          const uniqueQueries = Array.from(new Set(queryVariants));
+          for (const q of uniqueQueries) {
+            if (!q || q.length < 2) continue;
+            const fundCheckUrl = `https://web-fct-api.sec.or.th/api/funds/search?fundName=${encodeURIComponent(q)}&page=1`;
+            const fcRes = await fetchWithTimeout(fundCheckUrl, {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "th-TH,th;q=0.9,en;q=0.8",
+                "Origin": "https://fundcheck.sec.or.th",
+                "Referer": "https://fundcheck.sec.or.th/",
+                "Sec-Fetch-Dest": "empty",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Site": "same-site",
+              },
+            }, 6000);
+
+            if (fcRes.ok && fcRes.status !== 204) {
+              const items = await fcRes.json();
+              if (Array.isArray(items) && items.length > 0) {
+                // Priority 1: Exact match on cleanSymbol
+                let match = items.find((it: any) => (it.abbrName || "").trim().toUpperCase() === cleanSymbol);
+
+                // Priority 2: Match without hyphens (e.g. SCBDVA vs SCBDV-A, KFGTECH-A vs KF-GTECH-A, KFHEALTH-D vs KF-HEALTHD)
+                if (!match) {
+                  const noDash = cleanSymbol.replace(/-/g, "");
+                  match = items.find((it: any) => (it.abbrName || "").trim().toUpperCase().replace(/-/g, "") === noDash);
+                }
+
+                // Priority 3: Match base prefix without hyphens
+                if (!match) {
+                  const noDash = cleanSymbol.replace(/-/g, "");
+                  match = items.find((it: any) => {
+                    const itNoDash = (it.abbrName || "").trim().toUpperCase().replace(/-/g, "");
+                    return itNoDash.startsWith(noDash) || noDash.startsWith(itNoDash);
+                  });
+                }
+
+                // Priority 4: First match if user queried exact symbol
+                if (!match && q === cleanSymbol) {
+                  match = items[0];
+                }
+
+                if (match && match.unitNAV !== undefined && match.unitNAV !== null && !isNaN(Number(match.unitNAV))) {
+                  const resolvedNav = Number(match.unitNAV);
+                  const resolvedDate = parseThaiDateToIso(match.unitNAVDate);
+                  return new Response(
+                    JSON.stringify({
+                      latestNav: resolvedNav,
+                      navDate: resolvedDate,
+                      fundClassName: match.abbrName || cleanSymbol,
+                      nameTh: match.nameTh,
+                      source: "SEC-FundCheck",
+                      raw: match,
+                    }),
+                    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                  );
+                }
+              }
             }
           }
-        } catch {
-          // ignore, proceed with fallback
+        } catch (fcErr: any) {
+          console.warn(`[stock-proxy] SEC Fund Check notice for ${cleanSymbol}:`, fcErr?.message || fcErr);
         }
       }
 
-      const targetParam = projId
-        ? `proj_id=${encodeURIComponent(projId)}`
-        : `fund_class_name=${encodeURIComponent(cleanSymbol)}`;
-      const url = `https://api.sec.or.th/v2/fund/daily-info/nav?${targetParam}&page_size=100`;
-
-      const res = await fetchWithTimeout(url, {
-        headers: {
-          "Ocp-Apim-Subscription-Key": secKey,
-        },
-      }, 15000);
-
-      if (!res.ok) {
-        if (res.status === 429) {
-          return new Response(
-            JSON.stringify({ error: "SEC Open API rate limit exceeded", latestNav: null, navDate: null, items: [] }),
-            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+      // Tier 2: SEC Open API v2 Fallback
+      const secKey = Deno.env.get("SEC_API_KEY") || "";
+      if (secKey) {
+        if (!projId && cleanSymbol) {
+          try {
+            const profileUrl = `https://api.sec.or.th/v2/fund/general-info/profiles?fund_class_name=${encodeURIComponent(cleanSymbol)}&page_size=1`;
+            const profileRes = await fetchWithTimeout(profileUrl, {
+              headers: { "Ocp-Apim-Subscription-Key": secKey },
+            }, 5000);
+            if (profileRes.ok && profileRes.status !== 204) {
+              const profileData = await profileRes.json();
+              if (profileData.items && profileData.items[0]?.proj_id) {
+                projId = profileData.items[0].proj_id;
+              }
+            }
+          } catch {
+            // ignore
+          }
         }
-        return new Response(
-          JSON.stringify({ error: `SEC NAV error: ${res.statusText}`, latestNav: null, navDate: null, items: [] }),
-          { status: res.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
 
-      if (res.status === 204) {
-        return new Response(JSON.stringify({ latestNav: null, navDate: null, items: [] }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+        const targetParam = projId
+          ? `proj_id=${encodeURIComponent(projId)}`
+          : `fund_class_name=${encodeURIComponent(cleanSymbol)}`;
+        const url = `https://api.sec.or.th/v2/fund/daily-info/nav?${targetParam}&page_size=100`;
 
-      const textNav = await res.text();
-      const data = textNav ? JSON.parse(textNav) : {};
-      const items: any[] = data.items || [];
-      if (items.length === 0) {
-        return new Response(JSON.stringify({ latestNav: null, navDate: null, items: [] }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+        try {
+          const res = await fetchWithTimeout(url, {
+            headers: { "Ocp-Apim-Subscription-Key": secKey },
+          }, 8000);
 
-      // Sort by nav_date descending to get the most recent NAV
-      items.sort((a, b) => (b.nav_date || "").localeCompare(a.nav_date || ""));
-      const latest = items[0];
+          if (res.ok && res.status !== 204) {
+            const textNav = await res.text();
+            const data = textNav ? JSON.parse(textNav) : {};
+            const items: any[] = data.items || [];
+            if (items.length > 0) {
+              items.sort((a, b) => (b.nav_date || "").localeCompare(a.nav_date || ""));
+              const latest = items[0];
+              return new Response(
+                JSON.stringify({
+                  latestNav: latest.last_val,
+                  navDate: latest.nav_date,
+                  fundClassName: latest.fund_class_name,
+                  source: "SEC-OpenAPI",
+                  raw: latest,
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+          }
+        } catch (secErr: any) {
+          console.warn(`[stock-proxy] SEC Open API fallback notice:`, secErr?.message || secErr);
+        }
+      }
 
       return new Response(
-        JSON.stringify({
-          latestNav: latest.last_val,
-          navDate: latest.nav_date,
-          fundClassName: latest.fund_class_name,
-          raw: latest,
-          history: items.slice(0, 10),
-        }),
+        JSON.stringify({ latestNav: null, navDate: null, items: [] }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

@@ -776,16 +776,32 @@ export async function searchThaiFunds(query: string): Promise<FundSuggestion[]> 
 }
 
 /**
+ * Helper to convert Thai Buddhist Era date (DD/MM/YYYY) to standard ISO (YYYY-MM-DD).
+ */
+function parseThaiDateToIso(dateStr?: string): string {
+  if (!dateStr) return "";
+  const parts = dateStr.trim().split("/");
+  if (parts.length === 3) {
+    const [d, m, y] = parts;
+    let year = Number(y);
+    if (year > 2400) year -= 543;
+    return `${year}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+  return dateStr;
+}
+
+/**
  * Fetches the latest NAV for a Thai mutual fund.
- * Calls the Supabase Edge Function with SEC API fallback.
+ * Calls the Supabase Edge Function with SEC API fallback and direct SEC Fund Check fallback.
  */
 export async function fetchFundNav(
   projId?: string,
   symbol?: string
 ): Promise<{ latestNav: number; navDate: string; fundClassName?: string } | null> {
-  // Try matching projId from popular catalog if not provided
-  let targetProjId = projId;
   const cleanSymbol = symbol ? symbol.trim().toUpperCase() : undefined;
+  let targetProjId = projId;
+
+  // 1. Try matching projId from popular catalog if not provided
   if (!targetProjId && cleanSymbol) {
     const matched = POPULAR_THAI_FUNDS.find(
       (f) => f.symbol.toUpperCase() === cleanSymbol
@@ -795,11 +811,27 @@ export async function fetchFundNav(
     }
   }
 
+  // 2. Query Supabase thai_funds_catalog table to resolve proj_id if still missing
+  if (!targetProjId && cleanSymbol) {
+    try {
+      const { data: catData } = await supabase
+        .from('thai_funds_catalog')
+        .select('proj_id')
+        .eq('symbol', cleanSymbol)
+        .maybeSingle();
+      if (catData?.proj_id) {
+        targetProjId = catData.proj_id;
+      }
+    } catch {
+      // proceed if offline or query fails
+    }
+  }
+
   if (!targetProjId && !cleanSymbol) {
     return null;
   }
 
-  // 1. Fetch through Supabase Edge Function (stock-proxy)
+  // 3. Primary attempt: Fetch through Supabase Edge Function (stock-proxy)
   try {
     const { data } = await invokeStockProxy({
       action: 'fund-nav',
@@ -807,7 +839,7 @@ export async function fetchFundNav(
       symbol: cleanSymbol,
     });
 
-    if (data && data.latestNav !== undefined && data.latestNav !== null) {
+    if (data && data.latestNav !== undefined && data.latestNav !== null && !isNaN(Number(data.latestNav)) && Number(data.latestNav) > 0) {
       return {
         latestNav: Number(data.latestNav),
         navDate: data.navDate || '',
@@ -816,6 +848,57 @@ export async function fetchFundNav(
     }
   } catch (err: any) {
     console.warn('[fundService] Edge function fund-nav notice:', err?.message || err);
+  }
+
+  // 4. Secondary fallback: Direct fetch to SEC Fund Check API (Official SEC Thailand Open API)
+  if (cleanSymbol) {
+    try {
+      const queryVariants = [
+        cleanSymbol,
+        cleanSymbol.replace(/-/g, ''),
+        cleanSymbol.split('(')[0],
+        cleanSymbol.split('-')[0],
+      ];
+      if (cleanSymbol.includes('-')) {
+        const parts = cleanSymbol.split('-');
+        queryVariants.push(parts.slice(0, 2).join(''));
+        queryVariants.push(parts.slice(0, 2).join('-'));
+      }
+
+      const uniqueQueries = Array.from(new Set(queryVariants));
+      for (const q of uniqueQueries) {
+        if (!q || q.length < 2) continue;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const url = `https://web-fct-api.sec.or.th/api/funds/search?fundName=${encodeURIComponent(q)}&page=1`;
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (res.ok && res.status !== 204) {
+          const items = await res.json();
+          if (Array.isArray(items) && items.length > 0) {
+            let match = items.find((it: any) => (it.abbrName || '').trim().toUpperCase() === cleanSymbol);
+            if (!match) {
+              const noDash = cleanSymbol.replace(/-/g, '');
+              match = items.find((it: any) => (it.abbrName || '').trim().toUpperCase().replace(/-/g, '') === noDash);
+            }
+            if (!match && q === cleanSymbol) {
+              match = items[0];
+            }
+
+            if (match && match.unitNAV !== undefined && match.unitNAV !== null && !isNaN(Number(match.unitNAV)) && Number(match.unitNAV) > 0) {
+              return {
+                latestNav: Number(Number(match.unitNAV).toFixed(4)),
+                navDate: parseThaiDateToIso(match.unitNAVDate),
+                fundClassName: match.abbrName || cleanSymbol,
+              };
+            }
+          }
+        }
+      }
+    } catch (fcErr: any) {
+      console.warn(`[fundService] Direct SEC Fund Check fallback notice for ${cleanSymbol}:`, fcErr?.message || fcErr);
+    }
   }
 
   return null;

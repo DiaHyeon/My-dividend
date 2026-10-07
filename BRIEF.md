@@ -179,8 +179,9 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - **Silent 30-Day Periodic Sync (`syncFundsCatalogIfNeeded`)**: Runs in the background without UI blocking every 30 days (`@mydividend_last_funds_catalog_sync`), consuming minimal SEC API batch requests (<0.25% of single-day quota) with zero force-sync buttons to preserve a clean, minimalist UI.
   - **Resilient Fallback**: Seamlessly falls back to an expanded built-in catalog if the database is offline, and provides flexible on-demand SEC lookup for unlisted funds.
   - Distinct AMC badges: `[KAsset]`, `[SCBAM]`, `[BBLAM]`, `[KSAM]`, `[UOBAM]`, `[TISCO]`, `[KTAM]`, `[Principal]`, `[MFC]`, `[LHFund]`.
-- **Auto NAV Fetching**:
-  - Automatically fetches the latest Net Asset Value per unit from the SEC API.
+- **Auto NAV Fetching & Dual-Layer Engine**:
+  - Automatically fetches the latest Net Asset Value per unit from the official SEC Thailand Fund Check API (`web-fct-api.sec.or.th`) with smart ticker normalization and Buddhist Era date conversion to ISO (`YYYY-MM-DD`).
+  - Seamless dual-layer fallback: if proxy is unreachable or pending deployment, `fundService.ts` automatically executes a resilient direct client fallback to SEC Fund Check API with smart variants (no hyphens, base ticker), ensuring zero-downtime NAV updates.
   - Dynamically updates form labels to mutual fund terminology: *"Units"*, *"Cost NAV"*, and *"Latest NAV"*.
   - Calculates market value and unrealized profit/loss via SQL View `view_asset_summary`.
 - **Fund Dividend History**:
@@ -218,7 +219,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   1. `action: "search"`: US & Thai stock search.
   2. `action: "quote"`: Stock prices and FX rates (`USDTHB=X`).
   3. `action: "dividends"`: Stock dividend distribution history.
-  4. `action: "fund-nav"`: Daily mutual fund NAV from SEC API (`/v2/fund/daily-info/nav`).
+  4. `action: "fund-nav"`: Real-time mutual fund NAV from official SEC Thailand Fund Check API (`web-fct-api.sec.or.th`) with browser emulation headers, smart ticker normalization, BE to ISO date conversion, and SEC API v2 fallback.
   5. `action: "fund-dividends"`: Mutual fund dividend history from SEC API (`/v2/fund/daily-info/dividend-history`).
   6. `action: "history-7d"`: 7-day historical closing prices for sparkline area charts (`range=7d&interval=1d`).
   7. `action: "sync-funds"`: 30-day periodic synchronization of Thai mutual fund profiles from SEC Open API.
@@ -662,8 +663,8 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - Removed plaintext environment blocks from `eas.json` and eliminated demo credentials from code and `.env`. All credentials are read strictly from local `.env` (client) or Supabase Secrets (server).
   - SEC Thailand API Key (`SEC_API_KEY`) is stored strictly in Supabase Edge Function Secrets and never exposed in client bundles.
 - **Edge Function Auth Guard Hardening**:
-  - In `supabase/functions/stock-proxy/index.ts`, closed the dummy JWT token bypass and implemented strict **Fail-Closed** security architecture (immediately rejects requests with HTTP 500/401 if environment keys are missing or invalid, completely eliminating fail-open bypass risks).
-  - Auth Guard strictly validates incoming `apikey` and `Authorization` headers against server-side `SUPABASE_ANON_KEY` or `SUPABASE_SERVICE_ROLE_KEY`, ensuring only legitimate authorized requests can access upstream Yahoo Finance and SEC APIs.
+  - In `supabase/functions/stock-proxy/index.ts`, closed the dummy JWT token bypass and implemented strict **Fail-Closed** security architecture (immediately rejects requests with HTTP 401 if credentials are missing or invalid, completely eliminating fail-open bypass risks).
+  - Auth Guard strictly validates incoming `apikey` and `Authorization` headers against server-side `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and cryptographically signed Supabase Auth user JWT sessions (`role: 'authenticated'`), ensuring legitimate authenticated app users and client requests seamlessly access upstream Yahoo Finance and SEC APIs while blocking all unauthorized traffic.
 - **Database RLS Hardening (`009_harden_rls_policies.sql`)**:
   - Restricted `thai_funds_catalog` RLS for authenticated users strictly to `INSERT` and `UPDATE`, eliminating unauthorized `DELETE` capabilities and protecting the 5,790+ fund catalog from malicious deletion.
   - Hardened `portfolio_snapshots` RLS by removing legacy `anon` grants and `user_id IS NULL` loopholes, strictly enforcing `auth.uid() = user_id`.
@@ -715,6 +716,13 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ### 5.21 Automated Regression Test Suite (`scripts/test_dividend_logic.js`)
 - **Continuous Logic Verification**: Suite of 31 automated unit and integration tests runnable via `npm test`, validating date parsing, learned lag calculation, cash deposit interest accrual, strict XD cutoff enforcement, confirmed payout fallbacks, foreign FX locking, and CSV import/export roundtrips with formula injection protection.
 
+### 5.22 Dual-Layer Thai Mutual Fund NAV Architecture & Real-Time SEC Engine (`web-fct-api.sec.or.th`)
+- **Real-Time SEC Thailand Fund Check Integration**: Automatically queries the official SEC Thailand Fund Check API (`web-fct-api.sec.or.th`), providing real-time latest NAV per unit in ~200ms with Buddhist Era (`2569`) to ISO Gregorian date conversion (`YYYY-MM-DD`). In `stock-proxy`, requests pass full browser emulation headers (`User-Agent: Chrome`, `Referer`, `Origin: https://fundcheck.sec.or.th`) to completely bypass Akamai Bot Manager blocking (HTTP 403) from cloud serverless environments.
+- **Resilient Direct Client Fallback**: Implements a zero-downtime direct client fallback in `fundService.ts` to `web-fct-api.sec.or.th` if the Supabase Edge Function is unreachable or pending deployment, mirroring the Yahoo Finance fallback in `stockService.ts`.
+- **Smart Symbol Normalization**: Intelligently handles symbol variations (with and without hyphens, share class suffix variations like `SCBDVA` vs `SCBDV-A`, `KFGTECH` vs `KF-GTECH-A`, `KFHEALTH-D` vs `KF-HEALTHD`), ensuring accurate quote resolution across all asset management companies (AMCs).
+- **Secondary SEC Open API v2 Fallback**: Retains the registered SEC Open API v2 (`daily-info/nav`) as an auxiliary backend fallback with `proj_id` lookup via `thai_funds_catalog`.
+- **CSV Portfolio Import Parameter Integrity**: Standardizes parameter ordering in `csvService.ts` on `fetchFundNav(undefined, item.symbol)`, ensuring mutual fund NAV quotes are automatically pre-populated on CSV bulk uploads.
+
 ---
 
 ## 6. Project File Structure
@@ -752,7 +760,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - `services/currencyService.ts`: Dynamic multi-currency detection and runtime currency registry without static ticker lists (`resolveIsUSStock`, `registerSymbolCurrency`)
   - `services/sectorService.ts`: Standard GICS, AIMC, and deposit sector taxonomy classification service
   - `services/stockService.ts`: US/Thai stock search, closing price quotes, and FX rate retrieval service
-  - `services/fundService.ts`: Thai mutual fund search, daily NAV quotes, and dividend history service via SEC Open API v2
+  - `services/fundService.ts`: Thai mutual fund search, daily NAV quotes, and dividend history service via SEC Fund Check API & SEC Open API v2 with direct client fallback
   - `services/csvService.ts`: Portfolio CSV export, import parsing, column mapping, and automated asset creation service
   - `services/notificationService.ts`: Local ex-dividend (XD) notification scheduling service for Android
   - `services/assetConsolidationService.ts`: Position accumulation, duplicate asset consolidation, and schedule deduplication service

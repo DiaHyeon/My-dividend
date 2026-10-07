@@ -346,7 +346,7 @@ export async function importAssetRows(
             convertedCurrent = isUsd ? livePrice * rate : livePrice;
           }
         } else if (item.asset_type === 'FUNDS') {
-          const navResult = await fetchFundNav(item.symbol);
+          const navResult = await fetchFundNav(undefined, item.symbol);
           if (navResult && navResult.latestNav && navResult.latestNav > 0) {
             convertedCurrent = navResult.latestNav;
           }
