@@ -299,15 +299,16 @@ export async function syncDailyPricesIfNeeded(
               const rawSymbol = asset.symbol.trim().toUpperCase();
 
               if (asset.asset_type === 'STOCKS') {
-                const rawMarketPrice = await fetchStockPrice(rawSymbol);
+                const currency = await getAssetCurrency(
+                  asset.id,
+                  asset.symbol,
+                  asset.tax_rate,
+                  asset.asset_type,
+                  asset.currency
+                );
+                const rawMarketPrice = await fetchStockPrice(rawSymbol, undefined, currency);
                 if (rawMarketPrice !== null && !isNaN(rawMarketPrice) && rawMarketPrice > 0) {
                   successfulFetchCount++;
-                  const currency = await getAssetCurrency(
-                    asset.id,
-                    asset.symbol,
-                    asset.tax_rate,
-                    asset.asset_type
-                  );
                   const priceTHB = currency === 'USD' ? rawMarketPrice * fxRate : rawMarketPrice;
                   const roundedTHB = Number(priceTHB.toFixed(4));
 

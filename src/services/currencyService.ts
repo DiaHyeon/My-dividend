@@ -14,7 +14,16 @@ const dynamicCurrencySymbolsMap = new Map<string, 'THB' | 'USD'>();
  */
 export function registerSymbolCurrency(symbol: string, currency: 'THB' | 'USD'): void {
   if (!symbol) return;
-  dynamicCurrencySymbolsMap.set(symbol.trim().toUpperCase(), currency);
+  const upper = symbol.trim().toUpperCase();
+  if (upper.endsWith('.BK')) {
+    dynamicCurrencySymbolsMap.set(upper, 'THB');
+    return;
+  }
+  // For bare ticker symbols, never overwrite an existing THB entry with USD to prevent ticker collision
+  if (dynamicCurrencySymbolsMap.get(upper) === 'THB' && currency === 'USD') {
+    return;
+  }
+  dynamicCurrencySymbolsMap.set(upper, currency);
 }
 
 /**
@@ -91,17 +100,18 @@ export function resolveIsUSStock(
   const upper = (item.symbol || '').trim().toUpperCase();
   if (upper.endsWith('.BK') || /[\u0E00-\u0E7F]/.test(upper)) return false;
 
-  // Check dynamic registry populated from live market metadata
-  if (dynamicCurrencySymbolsMap.get(upper) === 'USD') return true;
-  if (dynamicCurrencySymbolsMap.get(upper) === 'THB') return false;
-
-  // If DB explicitly had THB, check W-8BEN 15% tax rate fallback for unmigrated US stocks
+  // If DB explicitly has THB, strictly respect it over runtime memory caches
   if (item.currency === 'THB') {
+    // Only exception: unmigrated US stock with 15% W-8BEN tax rate
     if (item.tax_rate !== undefined && Math.abs(Number(item.tax_rate) - 0.15) < 0.005) {
       return true;
     }
     return false;
   }
+
+  // Check dynamic registry populated from live market metadata (only when currency not specified in DB)
+  if (dynamicCurrencySymbolsMap.get(upper) === 'USD') return true;
+  if (dynamicCurrencySymbolsMap.get(upper) === 'THB') return false;
 
   // Tax rate heuristic for US stocks under W-8BEN (15% tax)
   if (item.tax_rate !== undefined && Math.abs(Number(item.tax_rate) - 0.15) < 0.005) {

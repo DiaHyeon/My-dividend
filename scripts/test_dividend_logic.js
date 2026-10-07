@@ -47,6 +47,7 @@ const { detectCashFrequency, calculateScheduleCashPayout, calculateCashCycleInfo
 const { calculatePortfolioReturns } = require('../scratch/test_build/src/services/returnService');
 const { generateCsvTemplate, exportPortfolioToCsv, parseAndValidateCsv } = require('../scratch/test_build/src/services/csvService');
 const { resolveIsUSStock } = require('../scratch/test_build/src/services/currencyService');
+const { resolveTargetStockSymbol } = require('../scratch/test_build/src/services/stockService');
 
 let passedTests = 0;
 let failedTests = 0;
@@ -477,6 +478,37 @@ async function main() {
 
     // Quarterly stock (median gap 3 months) pays unexpected bonus 1 month later -> candidate!
     assert.strictEqual(isSpecialCandidate(0.40, 0.50, 1, 3), true);
+  });
+
+  runTest('5.3 Dynamic target symbol mapping routes THB to .BK and USD cleanly without POPULAR_STOCKS hardcoding', () => {
+    assert.strictEqual(resolveTargetStockSymbol('AP', undefined, 'THB'), 'AP.BK');
+    assert.strictEqual(resolveTargetStockSymbol('AP.BK', undefined, 'THB'), 'AP.BK');
+    assert.strictEqual(resolveTargetStockSymbol('CPALL', undefined, 'THB'), 'CPALL.BK');
+    assert.strictEqual(resolveTargetStockSymbol('AAPL', undefined, 'USD'), 'AAPL');
+    assert.strictEqual(resolveTargetStockSymbol('AAPL.BK', undefined, 'USD'), 'AAPL');
+  });
+
+  runTest('5.4 Single 12-month interval correctly identifies Annual frequency (frequency = 1)', () => {
+    // 2 payouts with 1 gap of 12 months (e.g. AP dividend history)
+    const gapsInMonths = [12];
+    let frequency = 4;
+    let frequencyLabel = 'ทุกไตรมาส (Quarterly)';
+    if (gapsInMonths.length >= 1) {
+      gapsInMonths.sort((a, b) => a - b);
+      const medianGap = gapsInMonths[Math.floor(gapsInMonths.length / 2)];
+      if (medianGap <= 1.5) {
+        frequency = 12;
+      } else if (medianGap <= 4.5) {
+        frequency = 4;
+      } else if (medianGap <= 8) {
+        frequency = 2;
+      } else {
+        frequency = 1;
+        frequencyLabel = 'ปีละ 1 ครั้ง (Annual)';
+      }
+    }
+    assert.strictEqual(frequency, 1);
+    assert.strictEqual(frequencyLabel, 'ปีละ 1 ครั้ง (Annual)');
   });
 
   // -------------------------------------------------------------

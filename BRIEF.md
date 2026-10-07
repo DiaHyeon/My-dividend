@@ -256,7 +256,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - Handled by: `src/components/CategoryBreakdownModal.tsx`, `src/screens/Portfolio.tsx`, `src/services/sectorService.ts`
 - **Visual Presentation & White Callout Lines**:
   - High-contrast Donut Pie Chart rendered on a compact minimal dark card (`#0F172A`, ~40% height reduction) with streamlined padding and tighter callout radius.
-  - **Crisp White Callout Lines**: Elegant directional lines linking chart slices directly to percentage and name badges, preventing overlapping labels.
+  - **Crisp White Callout Lines & Single Minor Suppression**: Elegant directional lines linking chart slices directly to percentage and name badges with compact standard dimensions (`length: 16`, `tailLength: 10`, `extraRadius: 48`). When viewing the entire portfolio (`activeCategoryFilter === 'ALL'`) where all 3 categories exist and minor adjacent categories (`fundsPct < 10 || cashPct < 10`) occupy narrow adjacent arcs, the chart automatically applies Single Minor Callout Suppression to hide the callout line of the smaller minor category (tie-breaker: hide Cash) to guarantee zero badge collision and zero off-screen penetration, while fully displaying all categories in the legend below.
   - **Context Isolation**: The bank interest quota meter is omitted from the portfolio allocation card and maintained strictly inside `CategoryBreakdownModal` for CASH details, keeping the allocation overview focused and compact.
   - **Minor Items Grouping (Option A)**:
     - Holdings or segments representing $\ge 6\%$ receive dedicated chart slices and callouts.
@@ -714,7 +714,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - **Median Gap Analysis**: Analyzes median month intervals between scheduled interest dates (1 month = `MONTHLY`, 6 months = `SEMI_ANNUAL`, 12 months = `ANNUAL`) rather than naive schedule row counting, preventing interest compounding/divisor bugs across multi-year bank deposit schedules.
 
 ### 5.21 Automated Regression Test Suite (`scripts/test_dividend_logic.js`)
-- **Continuous Logic Verification**: Suite of 31 automated unit and integration tests runnable via `npm test`, validating date parsing, learned lag calculation, cash deposit interest accrual, strict XD cutoff enforcement, confirmed payout fallbacks, foreign FX locking, and CSV import/export roundtrips with formula injection protection.
+- **Continuous Logic Verification**: Suite of 33 automated unit and integration tests runnable via `npm test`, validating date parsing, learned lag calculation, cash deposit interest accrual, strict XD cutoff enforcement, confirmed payout fallbacks, foreign FX locking, CSV import/export roundtrips with formula injection protection, dynamic currency ticker routing, and single-gap annual dividend frequency detection.
 
 ### 5.22 Dual-Layer Thai Mutual Fund NAV Architecture & Real-Time SEC Engine (`web-fct-api.sec.or.th`)
 - **Real-Time SEC Thailand Fund Check Integration**: Automatically queries the official SEC Thailand Fund Check API (`web-fct-api.sec.or.th`), providing real-time latest NAV per unit in ~200ms with Buddhist Era (`2569`) to ISO Gregorian date conversion (`YYYY-MM-DD`). In `stock-proxy`, requests pass full browser emulation headers (`User-Agent: Chrome`, `Referer`, `Origin: https://fundcheck.sec.or.th`) to completely bypass Akamai Bot Manager blocking (HTTP 403) from cloud serverless environments.
@@ -722,6 +722,11 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - **Smart Symbol Normalization**: Intelligently handles symbol variations (with and without hyphens, share class suffix variations like `SCBDVA` vs `SCBDV-A`, `KFGTECH` vs `KF-GTECH-A`, `KFHEALTH-D` vs `KF-HEALTHD`), ensuring accurate quote resolution across all asset management companies (AMCs).
 - **Secondary SEC Open API v2 Fallback**: Retains the registered SEC Open API v2 (`daily-info/nav`) as an auxiliary backend fallback with `proj_id` lookup via `thai_funds_catalog`.
 - **CSV Portfolio Import Parameter Integrity**: Standardizes parameter ordering in `csvService.ts` on `fetchFundNav(undefined, item.symbol)`, ensuring mutual fund NAV quotes are automatically pre-populated on CSV bulk uploads.
+
+### 5.23 Dynamic Currency-First Stock Architecture & Payout Interval Engine
+- **Decoupling from Hardcoded Static Lists**: Completely eliminates static `POPULAR_STOCKS` dependency for market routing. If asset `currency === 'THB'` or symbol ends with `.BK`, the ticker is dynamically mapped to the Thai SET exchange (`${symbol}.BK`) on Yahoo Finance, preserving native THB valuation and avoiding false FX conversions.
+- **Database-First Currency Authority**: In `currencyService.ts` (`resolveIsUSStock`), database-persisted `currency === 'THB'` strictly takes precedence over in-memory dynamic registry caches, permanently guarding against symbol collisions between Thai and US equities (`AP`, `SC`, `EA`, `M`, `TRUE`).
+- **Single-Interval Frequency Detection**: In `stockService.ts` (`fetchDividendAnalysis`), evaluates intervals when `gapsInMonths.length >= 1`, ensuring that annual dividend payers with trailing 12-month gaps are cleanly identified as `frequency = 1` (Annual) rather than falling into naively guessed semi-annual counts. Expands historical analysis window to 5 years (`range=5y`) for deep corporate payout tracking.
 
 ---
 

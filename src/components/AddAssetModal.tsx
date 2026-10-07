@@ -450,9 +450,11 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       setTaxRatePercent('10');
     }
 
+    const stockItem = item as StockSuggestion;
+    const selectedCurrency: 'THB' | 'USD' = stockItem.currency || (stockItem.market === 'US' ? 'USD' : 'THB');
     const [price, divAnalysis] = await Promise.all([
-      fetchStockPrice(item.symbol, item.rawSymbol),
-      fetchDividendAnalysis(item.symbol, item.rawSymbol),
+      fetchStockPrice(stockItem.symbol, stockItem.rawSymbol, selectedCurrency),
+      fetchDividendAnalysis(stockItem.symbol, stockItem.rawSymbol, selectedCurrency),
     ]);
 
     setIsFetchingPrice(false);

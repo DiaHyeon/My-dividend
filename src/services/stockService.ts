@@ -228,17 +228,44 @@ export async function searchStocks(query: string): Promise<StockSuggestion[]> {
 }
 
 /**
+ * Resolves the target ticker symbol for market queries based on asset currency.
+ * Thai assets (THB) are automatically mapped to the SET market (.BK suffix).
+ */
+export function resolveTargetStockSymbol(
+  symbol: string,
+  rawSymbol?: string,
+  preferredCurrency?: 'THB' | 'USD'
+): string {
+  let target = (rawSymbol || symbol).trim().toUpperCase();
+
+  // If explicitly specified as THB, ensure it targets Thailand SET (.BK)
+  if (preferredCurrency === 'THB') {
+    if (!target.endsWith('.BK') && !target.includes('=')) {
+      return `${target.replace(/\.BK$/i, '')}.BK`;
+    }
+    return target;
+  }
+
+  // If explicitly specified as USD, ensure it targets US market
+  if (preferredCurrency === 'USD') {
+    return target.replace(/\.BK$/i, '');
+  }
+
+  // Fallback when currency not explicitly provided:
+  if (target.endsWith('.BK')) return target;
+
+  return target;
+}
+
+/**
  * Fetches the closing / current regular market price for a given stock.
  */
-export async function fetchStockPrice(symbol: string, rawSymbol?: string): Promise<number | null> {
-  let targetSymbol = (rawSymbol || symbol).trim().toUpperCase();
-
-  if (!targetSymbol.endsWith('.BK')) {
-    const matched = POPULAR_STOCKS.find((p) => p.symbol === targetSymbol);
-    if (matched) {
-      targetSymbol = matched.rawSymbol;
-    }
-  }
+export async function fetchStockPrice(
+  symbol: string,
+  rawSymbol?: string,
+  preferredCurrency?: 'THB' | 'USD'
+): Promise<number | null> {
+  const targetSymbol = resolveTargetStockSymbol(symbol, rawSymbol, preferredCurrency);
 
   // 1. Try fetching via Supabase Edge Function (works on Web & Mobile without CORS error)
   try {
@@ -246,7 +273,10 @@ export async function fetchStockPrice(symbol: string, rawSymbol?: string): Promi
     if (json) {
       const meta = json.chart?.result?.[0]?.meta;
       const currency = meta?.currency;
-      if (currency === 'USD' || currency === 'THB') {
+      if (preferredCurrency) {
+        registerSymbolCurrency(targetSymbol, preferredCurrency);
+        registerSymbolCurrency(symbol, preferredCurrency);
+      } else if (currency === 'USD' || currency === 'THB') {
         registerSymbolCurrency(targetSymbol, currency);
         registerSymbolCurrency(symbol, currency);
       }
@@ -272,7 +302,10 @@ export async function fetchStockPrice(symbol: string, rawSymbol?: string): Promi
       const json = await response.json();
       const meta = json.chart?.result?.[0]?.meta;
       const currency = meta?.currency;
-      if (currency === 'USD' || currency === 'THB') {
+      if (preferredCurrency) {
+        registerSymbolCurrency(targetSymbol, preferredCurrency);
+        registerSymbolCurrency(symbol, preferredCurrency);
+      } else if (currency === 'USD' || currency === 'THB') {
         registerSymbolCurrency(targetSymbol, currency);
         registerSymbolCurrency(symbol, currency);
       }
@@ -286,10 +319,10 @@ export async function fetchStockPrice(symbol: string, rawSymbol?: string): Promi
     console.warn(`Direct quote fallback error for ${targetSymbol}:`, err?.message || err);
   }
 
-  // 3. Fallback: If not found and doesn't end with .BK, try with .BK (for Thai SET/mai stocks)
-  if (!targetSymbol.endsWith('.BK') && !targetSymbol.includes('=')) {
+  // 3. Fallback: If not found and doesn't end with .BK and preferredCurrency is not USD, try with .BK
+  if (preferredCurrency !== 'USD' && !targetSymbol.endsWith('.BK') && !targetSymbol.includes('=')) {
     try {
-      const bkPrice = await fetchStockPrice(`${targetSymbol}.BK`);
+      const bkPrice = await fetchStockPrice(`${targetSymbol}.BK`, undefined, 'THB');
       if (bkPrice !== null) return bkPrice;
     } catch {
       // ignore
@@ -343,16 +376,10 @@ export interface DividendAnalysis {
  */
 export async function fetchDividendAnalysis(
   symbol: string,
-  rawSymbol?: string
+  rawSymbol?: string,
+  preferredCurrency?: 'THB' | 'USD'
 ): Promise<DividendAnalysis> {
-  let targetSymbol = (rawSymbol || symbol).trim().toUpperCase();
-
-  if (!targetSymbol.endsWith('.BK')) {
-    const matched = POPULAR_STOCKS.find((p) => p.symbol === targetSymbol);
-    if (matched) {
-      targetSymbol = matched.rawSymbol;
-    }
-  }
+  const targetSymbol = resolveTargetStockSymbol(symbol, rawSymbol, preferredCurrency);
 
   const emptyResult: DividendAnalysis = {
     hasDividends: false,
@@ -373,7 +400,10 @@ export async function fetchDividendAnalysis(
     if (json) {
       const meta = json?.chart?.result?.[0]?.meta;
       const currency = meta?.currency;
-      if (currency === 'USD' || currency === 'THB') {
+      if (preferredCurrency) {
+        registerSymbolCurrency(targetSymbol, preferredCurrency);
+        registerSymbolCurrency(symbol, preferredCurrency);
+      } else if (currency === 'USD' || currency === 'THB') {
         registerSymbolCurrency(targetSymbol, currency);
         registerSymbolCurrency(symbol, currency);
       }
@@ -388,7 +418,7 @@ export async function fetchDividendAnalysis(
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 6000);
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(targetSymbol)}?interval=1mo&range=2y&events=div`;
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(targetSymbol)}?interval=1mo&range=5y&events=div`;
       const response = await fetch(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -401,7 +431,10 @@ export async function fetchDividendAnalysis(
         const json = await response.json();
         const meta = json?.chart?.result?.[0]?.meta;
         const currency = meta?.currency;
-        if (currency === 'USD' || currency === 'THB') {
+        if (preferredCurrency) {
+          registerSymbolCurrency(targetSymbol, preferredCurrency);
+          registerSymbolCurrency(symbol, preferredCurrency);
+        } else if (currency === 'USD' || currency === 'THB') {
           registerSymbolCurrency(targetSymbol, currency);
           registerSymbolCurrency(symbol, currency);
         }
@@ -414,9 +447,9 @@ export async function fetchDividendAnalysis(
 
   // If no dividend events recorded, check if it's a Thai stock that needs .BK suffix
   if (!rawDividends || Object.keys(rawDividends).length === 0) {
-    if (!targetSymbol.endsWith('.BK') && !targetSymbol.includes('=')) {
+    if (preferredCurrency !== 'USD' && !targetSymbol.endsWith('.BK') && !targetSymbol.includes('=')) {
       try {
-        const bkAnalysis = await fetchDividendAnalysis(`${targetSymbol}.BK`);
+        const bkAnalysis = await fetchDividendAnalysis(`${targetSymbol}.BK`, undefined, 'THB');
         if (bkAnalysis && bkAnalysis.hasDividends) {
           return bkAnalysis;
         }
@@ -446,7 +479,7 @@ export async function fetchDividendAnalysis(
   }
 
   const lastXdDate = payouts[0].date;
-  const isThai = targetSymbol.endsWith('.BK');
+  const isThai = targetSymbol.endsWith('.BK') || preferredCurrency === 'THB';
 
   // Chronological ascending order
   const chrono = [...payouts].sort((a, b) => a.timestamp - b.timestamp);
@@ -496,7 +529,7 @@ export async function fetchDividendAnalysis(
   let frequencyLabel = 'ทุกไตรมาส (Quarterly)';
   let intervalMonths = 3;
 
-  if (gapsInMonths.length >= 2) {
+  if (gapsInMonths.length >= 1) {
     gapsInMonths.sort((a, b) => a - b);
     const medianGap = gapsInMonths[Math.floor(gapsInMonths.length / 2)];
     if (medianGap <= 1.5) {

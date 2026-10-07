@@ -270,7 +270,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
     setPriceFeedback('กำลังดึงราคาตลาดล่าสุด...');
 
     try {
-      const price = await fetchStockPrice(symbol.trim().toUpperCase());
+      const price = await fetchStockPrice(symbol.trim().toUpperCase(), undefined, currency);
       if (price !== null && price > 0) {
         if (currency === 'USD') {
           setCurrentPrice(price.toString());

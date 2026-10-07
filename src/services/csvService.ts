@@ -341,7 +341,7 @@ export async function importAssetRows(
       // 1. ดึงราคาตลาดอัตโนมัติหากไม่ได้ระบุราคาปัจจุบันมา
       if (!item.current_price || item.current_price <= 0) {
         if (item.asset_type === 'STOCKS') {
-          const livePrice = await fetchStockPrice(item.symbol);
+          const livePrice = await fetchStockPrice(item.symbol, undefined, isUsd ? 'USD' : 'THB');
           if (livePrice && livePrice > 0) {
             convertedCurrent = isUsd ? livePrice * rate : livePrice;
           }
@@ -499,7 +499,7 @@ export async function importAssetRows(
 
             if (item.asset_type === 'STOCKS') {
               try {
-                const divAnalysis = await fetchDividendAnalysis(item.symbol);
+                const divAnalysis = await fetchDividendAnalysis(item.symbol, undefined, isUsd ? 'USD' : 'THB');
                 if (divAnalysis?.hasDividends && divAnalysis.projectedNextXdDates.length > 0) {
                   futureXdDates = divAnalysis.projectedNextXdDates;
                 }

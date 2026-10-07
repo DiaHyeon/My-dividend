@@ -395,6 +395,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
     shortLabel?: string;
     percentText: string;
     isOther?: boolean;
+    hideLabel?: boolean;
   }
 
   // Donut Pie & Legend Data Generation (Option A: Major Assets with Callout Lines, Minor into Others)
@@ -405,66 +406,86 @@ export const Portfolio: React.FC<PortfolioProps> = ({
       const pData: PortfolioPieDataItem[] = [];
       const lItems: { id: string; color: string; label: string; val: number; pct: number }[] = [];
 
-      if (stocksTotal > 0) {
-        const pct = (stocksTotal / totalMarketValue) * 100;
-        const rounded = Math.round(pct * 10) / 10;
+      const hasStocks = stocksTotal > 0;
+      const hasFunds = fundsTotal > 0;
+      const hasCash = cashTotal > 0;
+
+      const stocksPct = hasStocks ? (stocksTotal / totalMarketValue) * 100 : 0;
+      const fundsPct = hasFunds ? (fundsTotal / totalMarketValue) * 100 : 0;
+      const cashPct = hasCash ? (cashTotal / totalMarketValue) * 100 : 0;
+
+      // Smart Single Minor Callout Suppression:
+      // When all 3 categories exist and either Funds or Cash is < 10%, suppress the smaller one's
+      // callout line (tie-breaker: suppress Cash) to guarantee zero overlap without elongating lines.
+      const shouldSuppressMinor = hasStocks && hasFunds && hasCash && (fundsPct < 10 || cashPct < 10);
+      const hideFundsCallout = shouldSuppressMinor && (fundsPct < cashPct);
+      const hideCashCallout = shouldSuppressMinor && (cashPct <= fundsPct);
+
+      if (hasStocks) {
+        const rounded = Math.round(stocksPct * 10) / 10;
         pData.push({
           value: Math.max(0.1, rounded),
           color: '#3B82F6',
           label: 'หุ้น (STOCKS)',
           shortLabel: 'หุ้น',
-          percentText: `${pct.toFixed(1)}%`,
+          percentText: `${stocksPct.toFixed(1)}%`,
           strokeWidth: 2,
           strokeColor: '#0F172A',
         });
         lItems.push({
           id: 'stocks',
           color: '#3B82F6',
-          label: `หุ้น (${pct.toFixed(1)}%)`,
+          label: `หุ้น (${stocksPct.toFixed(1)}%)`,
           val: stocksTotal,
-          pct,
+          pct: stocksPct,
         });
       }
 
-      if (fundsTotal > 0) {
-        const pct = (fundsTotal / totalMarketValue) * 100;
-        const rounded = Math.round(pct * 10) / 10;
+      if (hasFunds) {
+        const rounded = Math.round(fundsPct * 10) / 10;
         pData.push({
           value: Math.max(0.1, rounded),
           color: '#8B5CF6',
           label: 'กองทุน (FUNDS)',
           shortLabel: 'กองทุน',
-          percentText: `${pct.toFixed(1)}%`,
+          percentText: `${fundsPct.toFixed(1)}%`,
           strokeWidth: 2,
           strokeColor: '#0F172A',
+          hideLabel: hideFundsCallout,
+          labelLineConfig: hideFundsCallout
+            ? { color: 'transparent', length: 0, tailLength: 0, thickness: 0 }
+            : undefined,
         });
         lItems.push({
           id: 'funds',
           color: '#8B5CF6',
-          label: `กองทุน (${pct.toFixed(1)}%)`,
+          label: `กองทุน (${fundsPct.toFixed(1)}%)`,
           val: fundsTotal,
-          pct,
+          pct: fundsPct,
         });
       }
 
-      if (cashTotal > 0) {
-        const pct = (cashTotal / totalMarketValue) * 100;
-        const rounded = Math.round(pct * 10) / 10;
+      if (hasCash) {
+        const rounded = Math.round(cashPct * 10) / 10;
         pData.push({
           value: Math.max(0.1, rounded),
           color: '#10B981',
           label: 'เงินฝาก (CASH)',
           shortLabel: 'เงินฝาก',
-          percentText: `${pct.toFixed(1)}%`,
+          percentText: `${cashPct.toFixed(1)}%`,
           strokeWidth: 2,
           strokeColor: '#0F172A',
+          hideLabel: hideCashCallout,
+          labelLineConfig: hideCashCallout
+            ? { color: 'transparent', length: 0, tailLength: 0, thickness: 0 }
+            : undefined,
         });
         lItems.push({
           id: 'cash',
           color: '#10B981',
-          label: `เงินฝาก (${pct.toFixed(1)}%)`,
+          label: `เงินฝาก (${cashPct.toFixed(1)}%)`,
           val: cashTotal,
-          pct,
+          pct: cashPct,
         });
       }
 
@@ -701,6 +722,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                   labelComponentMargin: 4,
                 }}
                 externalLabelComponent={(item?: any) => {
+                  if (item?.hideLabel) return null;
                   const shortLabel = item?.shortLabel || item?.label || '';
                   const percentText = item?.percentText || (item?.value !== undefined ? `${item.value}%` : '');
                   const strokeColor = item?.color || '#38BDF8';
