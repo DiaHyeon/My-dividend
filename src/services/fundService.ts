@@ -644,25 +644,8 @@ export async function syncFundsCatalogIfNeeded(): Promise<{ synced: boolean; cou
       }
     }
 
-    // 30 days elapsed or never synced before -> Trigger silent sync via Edge Function
+    // 30 days elapsed or never synced before -> Trigger silent server-side sync via Edge Function
     const res = await invokeStockProxy({ action: 'sync-funds' });
-    if (res?.data?.items && Array.isArray(res.data.items)) {
-      const records = res.data.items
-        .map((it: any) => ({
-          symbol: it.class_abbr_name || it.proj_abbr_name || it.fund_class_name,
-          name_th: it.proj_name_th || it.fund_name_th,
-          name_en: it.proj_name_en || it.fund_name_en,
-          amc_name: it.unique_id || it.amc_name || 'บลจ.ไทย',
-          exchange: it.amc_abbr || 'FUNDS',
-          proj_id: it.proj_id,
-          updated_at: new Date().toISOString(),
-        }))
-        .filter((r: any) => Boolean(r.symbol));
-
-      if (records.length > 0) {
-        await supabase.from('thai_funds_catalog').upsert(records, { onConflict: 'symbol' });
-      }
-    }
 
     await AsyncStorage.setItem(FUNDS_CATALOG_SYNC_KEY, new Date().toISOString());
     return { synced: true, count: res?.data?.synced || 0 };

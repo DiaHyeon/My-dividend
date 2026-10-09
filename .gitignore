@@ -52,3 +52,6 @@ supabase/.temp/
 
 # temporary test builds
 scratch/
+
+# documents / worksheets
+*.docx

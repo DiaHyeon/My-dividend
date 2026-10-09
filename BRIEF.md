@@ -26,7 +26,7 @@ Technical specification and system architecture document for the My dividend app
 
 ### Environment Variables (.env)
 ```bash
-EXPO_PUBLIC_SUPABASE_URL=https://ycflookcrilaujmeillt.supabase.co
+EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 # SEC_API_KEY is securely configured on Supabase Edge Function Secrets (never exposed to client bundle)
 ```
@@ -45,12 +45,13 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - Fields: `id` (uuid, PK), `user_id` (uuid), `symbol` (text), `asset_type` (STOCKS | FUNDS | CASH), `sector` (text, default 'Other'), `currency` (text, default 'THB'), `current_price` (numeric(15,4)), `tax_rate` (numeric(15,4), default 0.1000), `last_split_date` (text, nullable), `is_archived` (boolean), `created_at` (timestamptz)
 - `transactions`: Buy and deposit transaction logs
   - Fields: `id` (uuid, PK), `asset_id` (uuid, FK), `type` (BUY | SELL), `shares` (numeric(15,4)), `price_per_share` (numeric(15,4)), `transaction_date` (date), `exchange_rate` (numeric(15,4), default 1.0000)
+  - Anti-Spam Velocity Guard: Trigger `trg_check_transaction_rate_limit` (`011_anti_spam_velocity_guard.sql`) limits transactions to 500 inserts per 24 hours per user without lifetime caps, protecting Supabase storage from automated spam while preserving unlimited multi-decade Buy & Hold DCA growth. Bulk CSV imports are similarly guarded by `MAX_CSV_IMPORT_ROWS = 500`.
 - `dividend_schedules`: Dividend payment and projection schedules
   - Fields: `id` (uuid, PK), `asset_id` (uuid, FK), `dpu` (numeric(15,4)), `xd_date` (date), `payment_date` (date, nullable), `is_projected` (boolean), `is_special` (boolean, default false), `received_fx_rate` (numeric(15,4), nullable)
 - `thai_funds_catalog`: Master catalog of all registered Thai mutual funds and share classes (5,790+ records from SEC Open API)
   - Fields: `id` (uuid, PK), `symbol` (text, unique), `name_th` (text), `name_en` (text), `amc_name` (text), `exchange` (text), `proj_id` (text), `category` (text), `created_at` (timestamptz), `updated_at` (timestamptz)
   - Indexes: B-Tree indexes on `symbol`, `name_th`, `amc_name`, `exchange`, and `proj_id` for instant sub-20ms multi-field search.
-  - RLS: Public read-only (`SELECT`) access for all users; authenticated `INSERT` & `UPDATE` for periodic background sync (`006_thai_funds_catalog.sql`); `DELETE` is strictly prohibited (`009_harden_rls_policies.sql`) to protect master data integrity.
+  - RLS: Strictly read-only (`SELECT`) for all clients (public, authenticated, anon); client `INSERT`, `UPDATE`, and `DELETE` are strictly prohibited (`010_secure_thai_funds_catalog.sql`); periodic catalog sync is executed securely via Supabase Edge Function `stock-proxy` using server-side `SUPABASE_SERVICE_ROLE_KEY` to guarantee complete immunity against catalog tampering.
 - `portfolio_snapshots`: Daily portfolio valuation checkpoints for authentic performance curves over time
   - Fields: `id` (uuid, PK), `user_id` (uuid, FK), `snapshot_date` (date), `total_market_value` (numeric(15,4)), `total_cost` (numeric(15,4)), `unrealized_pl` (numeric(15,4)), `unrealized_pl_percent` (numeric(15,4)), `created_at` (timestamptz)
   - Constraint: `UNIQUE (user_id, snapshot_date)`
@@ -151,8 +152,8 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - **Dual-Currency Payday Radar & Confirmation Display (`UpcomingPaydayRadar.tsx`, `Dashboard.tsx`)**:
   - Upcoming Payday Radar displays foreign dividend amounts in native USD alongside estimated converted THB: `$USD (~฿THB)` (e.g. `$0.46 (~฿15.66)`), completely eliminating denomination ambiguity for global dividend investors.
   - One-click payday confirmation alerts (`handleConfirmPayment`) similarly display both native USD and estimated THB amounts.
-- **Automated Regression Test Suite**:
-  - Automated unit and integration test suite maintained in `scripts/test_dividend_logic.js` runnable via `npm test`, covering 31 test cases across date math, learned lag, cash accrual, cutoff fallbacks, and CSV roundtrips with formula injection protection.
+- **Automated Regression & Security Test Suite**:
+  - Automated unit, integration, and penetration test suite maintained in `scripts/test_dividend_logic.js` and `scripts/test_security_hardening.js` runnable via `npm test`, covering 48 test cases across date math, learned lag, cash accrual, cutoff fallbacks, CSV formula sanitization roundtrips, forged JWT signature detection, and master fund catalog RLS tampering protection.
 
 ---
 
@@ -176,7 +177,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - **0ms Catalog & Fast Multi-Source Search**:
   - **Supabase Indexed Database (`thai_funds_catalog`)**: Stores and indexes Thai mutual funds with B-Tree indexes on `symbol`, `name_th`, `amc_name`, `exchange`, and `proj_id` with Row Level Security (RLS) enabled.
   - **Full-Text Multi-Field Search**: Searches by ticker symbol (`K-USA`, `SCBDV`, `B-INNOTECH`, `KF-GTECH`), Thai name (*"ทศพล"*, *"หุ้นปันผล"*, *"เวียดนาม"*), or AMC name (*"กสิกร"*, *"บัวหลวง"*, *"ไทยพาณิชย์"*, *"กรุงศรี"*, *"วรรณ"*).
-  - **Silent 30-Day Periodic Sync (`syncFundsCatalogIfNeeded`)**: Runs in the background without UI blocking every 30 days (`@mydividend_last_funds_catalog_sync`), consuming minimal SEC API batch requests (<0.25% of single-day quota) with zero force-sync buttons to preserve a clean, minimalist UI.
+  - **Silent 30-Day Periodic Sync (`syncFundsCatalogIfNeeded`)**: Runs in the background without UI blocking every 30 days (`@mydividend_last_funds_catalog_sync`), triggering silent server-side master catalog sync via Edge Function (`action: 'sync-funds'`) using service role key, consuming minimal SEC API batch requests (<0.25% of single-day quota) with zero force-sync buttons to preserve a clean, minimalist UI.
   - **Resilient Fallback**: Seamlessly falls back to an expanded built-in catalog if the database is offline, and provides flexible on-demand SEC lookup for unlisted funds.
   - Distinct AMC badges: `[KAsset]`, `[SCBAM]`, `[BBLAM]`, `[KSAM]`, `[UOBAM]`, `[TISCO]`, `[KTAM]`, `[Principal]`, `[MFC]`, `[LHFund]`.
 - **Auto NAV Fetching & Dual-Layer Engine**:
@@ -211,9 +212,9 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 ### 4.5 Supabase Edge Function (`stock-proxy`) & Secure Proxy Client
 - Resolves browser CORS limitations and acts as a hardened proxy for Yahoo Finance and SEC Open API requests.
-- **Security Auth Guard**: Enforces API key / Bearer token validation on all incoming requests to reject unauthorized scrapers (HTTP 401).
+- **Security Auth Guard**: Enforces strict API key / Bearer token validation matching server environment keys, paired with cryptographic verification of user session tokens via Supabase Auth API (`/auth/v1/user`) to reject unsigned, forged, or expired tokens (HTTP 401).
 - **Client Helper (`proxyClient.ts`)**: Centralized service invoking `stock-proxy` with automatic `apikey` & `Authorization: Bearer <key>` header injection, strict 8-second request timeouts, and SDK fallback.
-- Deployed at Supabase Project: `ycflookcrilaujmeillt`
+- Deployed as Supabase Edge Function
 - Endpoint: `/functions/v1/stock-proxy`
 - Supported Actions:
   1. `action: "search"`: US & Thai stock search.
@@ -222,7 +223,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   4. `action: "fund-nav"`: Real-time mutual fund NAV from official SEC Thailand Fund Check API (`web-fct-api.sec.or.th`) with browser emulation headers, smart ticker normalization, BE to ISO date conversion, and SEC API v2 fallback.
   5. `action: "fund-dividends"`: Mutual fund dividend history from SEC API (`/v2/fund/daily-info/dividend-history`).
   6. `action: "history-7d"`: 7-day historical closing prices for sparkline area charts (`range=7d&interval=1d`).
-  7. `action: "sync-funds"`: 30-day periodic synchronization of Thai mutual fund profiles from SEC Open API.
+  7. `action: "sync-funds"`: 30-day periodic synchronization of Thai mutual fund profiles from SEC Open API, persisting updates directly to `thai_funds_catalog` via server-side `SUPABASE_SERVICE_ROLE_KEY`.
 
 ---
 
@@ -481,6 +482,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - Preserves projected or adjusted `expected_dpu` and `tax_rate` per asset.
   - Symmetrical CSV format matching `parseAndValidateCsv` schema (`symbol,asset_type,shares,cost_price,currency,transaction_date,expected_dpu,tax_rate,type`), guaranteeing 100% full portfolio restoration via `ImportCsvModal`.
   - **OWASP CSV Formula Injection Sanitization**: Sanitizes exported fields (`sanitizeCsvField`) by prepending single quotes (`'`) to values starting with formula control characters (`=`, `+`, `-`, `@`, `\t`, `\r`), and safely unescapes them during import (`cleanSymbol`) to guarantee 100% roundtrip data fidelity while eliminating spreadsheet formula execution vulnerabilities.
+  - **CSV Payload & Symbol Length Bounds**: Enforces `MAX_CSV_IMPORT_ROWS = 500` to prevent UI thread freezing and memory exhaustion during large file uploads, and truncates symbol names to 30 characters (`cleanSymbol.slice(0, 30)`) to guard against database text flooding attacks.
   - Supports automated web file download (`Blob` + auto-click) and native mobile sharing (`Share.share`).
 - **Portfolio CSV Bulk Import**:
   - **Dual Import Modes**:
@@ -728,6 +730,17 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - **Database-First Currency Authority**: In `currencyService.ts` (`resolveIsUSStock`), database-persisted `currency === 'THB'` strictly takes precedence over in-memory dynamic registry caches, permanently guarding against symbol collisions between Thai and US equities (`AP`, `SC`, `EA`, `M`, `TRUE`).
 - **Single-Interval Frequency Detection**: In `stockService.ts` (`fetchDividendAnalysis`), evaluates intervals when `gapsInMonths.length >= 1`, ensuring that annual dividend payers with trailing 12-month gaps are cleanly identified as `frequency = 1` (Annual) rather than falling into naively guessed semi-annual counts. Expands historical analysis window to 5 years (`range=5y`) for deep corporate payout tracking.
 
+### 5.24 Multi-Decade DCA Scalability & Anti-Spam Velocity Protection (`011_anti_spam_velocity_guard.sql`, `csvService.ts`)
+- **No Lifetime Cap for Buy & Hold DCA Investors**: Dividend investors holding assets over 10–30+ years should never be constrained by arbitrary lifetime transaction limits. Normal monthly DCA accumulation (~5–10 transactions/month) generates only ~1,200 rows in 20 years (~0.2 MB), comfortably within Supabase storage boundaries.
+- **Rolling Anti-Spam Velocity Check (500 Tx / 24h)**: PostgreSQL trigger `trg_check_transaction_rate_limit` on `transactions` restricts inserts to 500 per 24 hours per user (`created_at >= NOW() - INTERVAL '24 hours'`). This completely neutralizes automated script flooding and disk space exhaustion attacks while leaving legitimate long-term accumulation completely unhindered.
+- **CSV Import Flood Safeguard**: `csvService.ts` limits bulk file uploads to `MAX_CSV_IMPORT_ROWS = 500` and clips ticker symbols to 30 characters (`cleanSymbol.slice(0, 30)`), preventing device UI thread freezing and payload memory overflow.
+
+### 5.25 PostgREST Query Hardening, Edge Function Rate Limiting & Backup Security (`stock-proxy`, `app.json`)
+- **PostgREST Wildcard Injection Protection**: Replaced `.ilike('symbol', ...)` with exact `.eq('symbol', ...)` across `AddAssetModal.tsx` and `csvService.ts`. This eliminates PostgreSQL query hijacking or unintended pattern matching via `%` and `_` wildcards in user input or imported CSV files.
+- **Edge Function Sliding-Window Rate Limiting**: In `supabase/functions/stock-proxy/index.ts`, implemented an in-memory sliding window rate limiter allowing up to 100 requests per minute per client IP/token. Exceeding requests are rejected immediately with HTTP 429 and `Retry-After: 60` headers, preventing external quote API quota exhaustion.
+- **5-Minute Master Catalog Sync Cooldown**: Applied a 5-minute memory cooldown on `action === 'sync-funds'`, preventing repeated concurrent triggering of full 5,790+ fund catalog synchronization from exhausting server resources.
+- **Android ADB Backup Mitigation**: Configured `"allowBackup": false` under `"android"` in `app.json` to prevent local device data extraction via ADB backup commands on unlocked devices.
+
 ---
 
 ## 6. Project File Structure
@@ -779,11 +792,14 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - `utils/dateUtils.ts`: Timezone-safe local date formatting and manipulation utilities preventing 1-day drift
 - `scripts/`
   - `patch-expo-notifications.js`: Patch script resolving Expo Go Android notification crashes
-  - `test_dividend_logic.js`: Comprehensive automated unit & integration test suite (31 test cases) runnable via `npm test`
+  - `test_dividend_logic.js`: Comprehensive automated unit & integration test suite (33 test cases) runnable via `npm test`
+  - `test_security_hardening.js`: Automated security hardening and penetration test suite (27 test cases) verifying auth guards, catalog write revocation, sliding window rate limits, cooldowns, and velocity guards (total 60 automated tests across suites)
 - `supabase/migrations/`
   - `005_unified_schema_update.sql`: Idempotent migration script adding sector, currency, exchange_rate, and is_special columns
   - `006_thai_funds_catalog.sql`: Master catalog table for 5,790+ registered Thai mutual funds with multi-column B-Tree indexes and public read access
   - `007_portfolio_snapshots_and_splits.sql`: Migration adding `assets.last_split_date` column and creating `portfolio_snapshots` table with RLS for authentic daily portfolio valuation history
   - `008_add_received_fx_rate_to_dividend_schedules.sql`: Migration script adding `received_fx_rate` column to `dividend_schedules` to freeze historical USD/THB exchange rates upon payout confirmation
   - `009_harden_rls_policies.sql`: Migration script hardening RLS policies on thai_funds_catalog (no DELETE for authenticated) and portfolio_snapshots (revoking anon, enforcing auth.uid() = user_id)
-- `supabase/functions/stock-proxy/`: Supabase Edge Function source code proxying Yahoo Finance and SEC Open API requests
+  - `010_secure_thai_funds_catalog.sql`: Migration script permanently revoking INSERT, UPDATE, DELETE permissions from public and authenticated on thai_funds_catalog, enforcing strict SELECT read-only access with server-side service role sync
+  - `011_anti_spam_velocity_guard.sql`: Migration script creating PostgreSQL trigger `trg_check_transaction_rate_limit` on `transactions` table enforcing rolling velocity limit of 500 inserts per 24 hours per user without lifetime caps
+- `supabase/functions/stock-proxy/`: Supabase Edge Function proxying Yahoo Finance and SEC Open API requests with cryptographic JWT verification, sliding window rate limiter (100 req/min), and 5-minute cooldown on sync-funds

@@ -12,6 +12,8 @@ import { getLocalDateString } from '../utils/dateUtils';
 import { detectCashFrequency } from './taxService';
 import { getSpecialScheduleIds } from '../components/AdjustDividendModal';
 
+export const MAX_CSV_IMPORT_ROWS = 500;
+
 export interface CsvAssetRow {
   symbol: string;
   asset_type: AssetType;
@@ -162,6 +164,20 @@ export function parseAndValidateCsv(csvContent: string): ParseResult {
 
   const rawRows = parsed.data || [];
 
+  if (rawRows.length > MAX_CSV_IMPORT_ROWS) {
+    issues.push({
+      rowNumber: 1,
+      field: 'file_size',
+      message: `จำนวนรายการในไฟล์เกินกำหนด (พบ ${rawRows.length} รายการ, สูงสุด ${MAX_CSV_IMPORT_ROWS} รายการต่อไฟล์) กรุณาแบ่งไฟล์นำเข้า`,
+      level: 'error',
+    });
+    return {
+      validRows: [],
+      issues,
+      totalRawRows: rawRows.length,
+    };
+  }
+
   rawRows.forEach((row, index) => {
     const rowNum = index + 2; // +1 for header, +1 for 1-index
 
@@ -285,7 +301,7 @@ export function parseAndValidateCsv(csvContent: string): ParseResult {
       }
     }
 
-    const cleanSymbol = rawSymbol.replace(/^'(?=[=+\-@\t\r])/, '');
+    const cleanSymbol = rawSymbol.replace(/^'(?=[=+\-@\t\r])/, '').slice(0, 30);
 
     validRows.push({
       symbol: cleanSymbol.toUpperCase(),
@@ -368,7 +384,7 @@ export async function importAssetRows(
       const { data: existingAssets } = await supabase
         .from('assets')
         .select('*')
-        .ilike('symbol', item.symbol)
+        .eq('symbol', item.symbol.trim().toUpperCase())
         .eq('asset_type', item.asset_type)
         .eq('is_archived', false)
         .order('created_at', { ascending: true })

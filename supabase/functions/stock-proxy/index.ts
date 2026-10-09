@@ -36,6 +36,49 @@ async function fetchWithTimeout(
   }
 }
 
+// ---------------------------------------------------------------------------
+// In-memory sliding window rate limiter for protecting Edge Function & upstream APIs
+// ---------------------------------------------------------------------------
+interface RateLimitRecord {
+  timestamps: number[];
+}
+
+const rateLimitStore = new Map<string, RateLimitRecord>();
+const syncFundsCooldownStore = new Map<string, number>();
+
+function cleanupRateLimitStore(now: number) {
+  if (rateLimitStore.size > 500) {
+    for (const [key, record] of rateLimitStore.entries()) {
+      const active = record.timestamps.filter((t) => now - t < 120000);
+      if (active.length === 0) {
+        rateLimitStore.delete(key);
+      } else {
+        rateLimitStore.set(key, { timestamps: active });
+      }
+    }
+  }
+}
+
+function isRateLimited(
+  clientId: string,
+  limit: number = 100,
+  windowMs: number = 60000
+): boolean {
+  const now = Date.now();
+  cleanupRateLimitStore(now);
+
+  const record = rateLimitStore.get(clientId) || { timestamps: [] };
+  const validTimestamps = record.timestamps.filter((t) => now - t < windowMs);
+
+  if (validTimestamps.length >= limit) {
+    return true;
+  }
+
+  validTimestamps.push(now);
+  rateLimitStore.set(clientId, { timestamps: validTimestamps });
+  return false;
+}
+
 serve(async (req: Request) => {
   // Handle CORS preflight request
   if (req.method === "OPTIONS") {
@@ -60,29 +103,23 @@ serve(async (req: Request) => {
     isAuthorized = true;
   }
 
-  // Check B: Verify JWT Token format and Supabase project signature
-  if (!isAuthorized && token) {
+  // Check B: Cryptographically verify user session JWT via Supabase Auth API
+  if (!isAuthorized && token && supabaseUrl && expectedAnonKey) {
     try {
-      const parts = token.split(".");
-      if (parts.length === 3) {
-        const base64Url = parts[1];
-        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-        const payload = JSON.parse(atob(base64));
-
-        const nowSec = Math.floor(Date.now() / 1000);
-        const isNotExpired = !payload.exp || payload.exp > nowSec;
-        const isSupabaseIssuer = payload.iss === "supabase";
-        const isValidRole = payload.role === "authenticated" || payload.role === "anon";
-
-        const projectRef = supabaseUrl ? supabaseUrl.replace(/^https?:\/\//, "").split(".")[0] : "";
-        const isMatchingProject = !projectRef || !payload.ref || payload.ref === projectRef;
-
-        if (isSupabaseIssuer && isNotExpired && isValidRole && isMatchingProject) {
+      const authVerifyRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "apikey": expectedAnonKey,
+        },
+      });
+      if (authVerifyRes.ok) {
+        const userData = await authVerifyRes.json();
+        if (userData && userData.id) {
           isAuthorized = true;
         }
       }
     } catch {
-      // Invalid JWT format -> remain unauthorized
+      // Cryptographic verification failed -> remain unauthorized
     }
   }
 
@@ -90,6 +127,30 @@ serve(async (req: Request) => {
     return new Response(
       JSON.stringify({ error: "Unauthorized: Missing or invalid API credentials" }),
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // 1.1 Rate Limiting Guard: Max 100 requests per 60 seconds per client
+  const clientIp =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("cf-connecting-ip") ||
+    req.headers.get("x-real-ip") ||
+    "client-default";
+  const rateLimitKey = `${clientIp}__${token.slice(-16)}`;
+
+  if (isRateLimited(rateLimitKey, 100, 60000)) {
+    return new Response(
+      JSON.stringify({
+        error: "Rate limit exceeded: Too many requests. Please wait a moment before trying again.",
+      }),
+      {
+        status: 429,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+          "Retry-After": "60",
+        },
+      }
     );
   }
 
@@ -466,6 +527,26 @@ serve(async (req: Request) => {
 
     // 8. Action: Sync funds catalog from SEC Open API (30-day periodic cycle)
     if (action === "sync-funds") {
+      // Cooldown protection: sync-funds is heavy and limited to 1 call per 5 minutes
+      const now = Date.now();
+      const lastSync = syncFundsCooldownStore.get("global") || 0;
+      if (now - lastSync < 300000) {
+        return new Response(
+          JSON.stringify({
+            error: "Sync funds rate limit exceeded: Please wait at least 5 minutes between catalog sync attempts.",
+            synced: 0,
+          }),
+          {
+            status: 429,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+              "Retry-After": "300",
+            },
+          }
+        );
+      }
+      syncFundsCooldownStore.set("global", now);
       const secKey = Deno.env.get("SEC_API_KEY") || "";
       if (!secKey) {
         return new Response(
@@ -490,6 +571,36 @@ serve(async (req: Request) => {
         const text = await res.text();
         const profileData = text ? JSON.parse(text) : { items: [] };
         const items = profileData.items || [];
+
+        // Server-Side Master Data Sync using Service Role Key (bypassing client RLS securely)
+        if (items.length > 0 && supabaseUrl && expectedServiceKey) {
+          const records = items.map((it: any) => ({
+            symbol: it.class_abbr_name || it.proj_abbr_name || it.fund_class_name,
+            name_th: it.proj_name_th || it.fund_name_th,
+            name_en: it.proj_name_en || it.fund_name_en,
+            amc_name: it.unique_id || it.amc_name || 'บลจ.ไทย',
+            exchange: it.amc_abbr || 'FUNDS',
+            proj_id: it.proj_id,
+            updated_at: new Date().toISOString(),
+          })).filter((r: any) => Boolean(r.symbol));
+
+          if (records.length > 0) {
+            try {
+              await fetch(`${supabaseUrl}/rest/v1/thai_funds_catalog`, {
+                method: "POST",
+                headers: {
+                  "apikey": expectedServiceKey,
+                  "Authorization": `Bearer ${expectedServiceKey}`,
+                  "Content-Type": "application/json",
+                  "Prefer": "resolution=merge-duplicates",
+                },
+                body: JSON.stringify(records),
+              });
+            } catch (dbErr: any) {
+              console.warn("[stock-proxy] Failed to persist SEC funds to thai_funds_catalog:", dbErr?.message || dbErr);
+            }
+          }
+        }
 
         return new Response(
           JSON.stringify({

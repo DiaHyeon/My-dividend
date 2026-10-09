@@ -118,7 +118,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         const { data, error } = await supabase
           .from('view_asset_summary')
           .select('id, net_shares, weighted_average_cost')
-          .ilike('symbol', trimmed)
+          .eq('symbol', trimmed)
           .eq('asset_type', assetType)
           .limit(1);
 
@@ -554,7 +554,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
         const { data: existingCashAssets } = await supabase
           .from('assets')
           .select('*')
-          .ilike('symbol', trimmedAccount)
+          .eq('symbol', trimmedAccount)
           .eq('asset_type', 'CASH')
           .eq('is_archived', false)
           .order('created_at', { ascending: true })
@@ -733,7 +733,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       const { data: existingAssets } = await supabase
         .from('assets')
         .select('*')
-        .ilike('symbol', trimmedSymbol)
+        .eq('symbol', trimmedSymbol)
         .eq('asset_type', assetType)
         .eq('is_archived', false)
         .order('created_at', { ascending: true })
