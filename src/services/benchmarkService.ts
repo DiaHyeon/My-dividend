@@ -227,6 +227,29 @@ function sampleCurvePoints(closes: number[], targetPoints: number): number[] {
 }
 
 /**
+ * สุ่มตัวอย่างจุดข้อมูลจากชุดเปอร์เซ็นต์ผลตอบแทนจริง (เช่น Snapshot ของผู้ใช้)
+ * ไม่คำนวณฐานราคาซ้ำซ้อน เพราะข้อมูลแต่ละจุดเป็น % อยู่แล้ว
+ */
+function samplePercentagePoints(vals: number[], targetPoints: number): number[] {
+  if (!vals || vals.length === 0) {
+    return new Array(targetPoints).fill(0);
+  }
+  if (vals.length === 1) {
+    return new Array(targetPoints).fill(vals[0]);
+  }
+
+  const result: number[] = [];
+  for (let i = 0; i < targetPoints; i++) {
+    const idx = Math.min(
+      vals.length - 1,
+      Math.round((i / (targetPoints - 1)) * (vals.length - 1))
+    );
+    result.push(Math.round(vals[idx] * 10) / 10);
+  }
+  return result;
+}
+
+/**
  * Synchronizes real market returns and authentic historical curves for benchmark indices (SET, S&P 500, NASDAQ).
  * Prioritizes Supabase Edge Function to avoid browser CORS errors, with direct fallback.
  */
@@ -389,23 +412,24 @@ export function getBenchmarkComparison(
   const daysSinceInception = Math.max(1, Math.floor((now.getTime() - inceptMs) / (1000 * 60 * 60 * 24)));
   const monthsSinceInception = Math.max(1, Math.round(daysSinceInception / 30.4375));
 
+  const timeframeDaysMap: Record<TimeframeType, number> = {
+    '1M': 31,
+    '3M': 92,
+    '6M': 184,
+    '1Y': 366,
+    'ALL': Math.max(1, daysSinceInception),
+  };
+  const targetDays = timeframeDaysMap[timeframe] || 366;
+  const isShorterThanTimeframe = timeframe !== 'ALL' && daysSinceInception < targetDays;
+
   // 1. คำนวณผลตอบแทนพอร์ตตาม Timeframe จริง
   let currentReturn: number;
-  if (timeframe === 'ALL' || daysSinceInception <= 35) {
-    // สำหรับ ALL หรือพอร์ตที่เพิ่งเริ่มลงทุนไม่เกิน 35 วัน: ใช้ผลตอบแทนสะสมทั้งหมดจริง
-    currentReturn = totalUnrealizedPLPercent;
-  } else if (daysSinceInception <= 95 && (timeframe === '3M' || timeframe === '6M' || timeframe === '1Y')) {
+  if (timeframe === 'ALL' || isShorterThanTimeframe) {
+    // สำหรับ ALL หรือกรณีที่เพิ่งเริ่มลงทุนไม่ถึงกรอบเวลา (เช่น เริ่ม 1 เดือนเมื่อดู 3M/6M/1Y):
+    // ผลตอบแทนทั้งหมดเกิดขึ้นในช่วงเวลาที่ลงทุนจริง นับจาก Inception Date
     currentReturn = totalUnrealizedPLPercent;
   } else {
     // ตรวจสอบว่ามี Snapshot ช่วงเริ่มต้นของ Timeframe หรือไม่ เพื่อคำนวณผลตอบแทนแท้จริงของช่วงเวลานั้น
-    const timeframeDays: Record<TimeframeType, number> = {
-      '1M': 31,
-      '3M': 92,
-      '6M': 184,
-      '1Y': 366,
-      'ALL': Math.max(366, daysSinceInception),
-    };
-    const targetDays = timeframeDays[timeframe];
     let snapAtStart: number | null = null;
 
     if (memoryUserSnapshots && memoryUserSnapshots.length >= 2) {
@@ -422,20 +446,13 @@ export function getBenchmarkComparison(
     if (snapAtStart !== null) {
       currentReturn = totalUnrealizedPLPercent - snapAtStart;
     } else {
-      const timeframeMultiplier: Record<TimeframeType, number> = {
-        '1M': 0.15,
-        '3M': 0.35,
-        '6M': 0.65,
-        '1Y': 1.0,
-        'ALL': 1.0,
-      };
-      currentReturn = totalUnrealizedPLPercent * (timeframeMultiplier[timeframe] || 1.0);
+      currentReturn = totalUnrealizedPLPercent;
     }
   }
 
   const roundedPortfolioReturn = Math.round(currentReturn * 10) / 10;
 
-  // 2. คำนวณผลตอบแทนและเส้นกราฟของ Benchmark ให้เป็นธรรมตามช่วงเวลาจริง (Since Inception สำหรับ ALL)
+  // 2. คำนวณผลตอบแทนและเส้นกราฟของ Benchmark ให้เป็นธรรมตามช่วงเวลาจริง (Since Inception เมื่อพอร์ตสั้นกว่าช่วงเวลา)
   let roundedBenchmarkReturn = 0;
   let rawBmCurve: number[] = [];
   const isLive = isBenchmarkLiveMap[benchmark] || false;
@@ -443,12 +460,15 @@ export function getBenchmarkComparison(
   if (benchmark !== 'NONE') {
     const bmCloses = memoryBenchmarkCloses[benchmark] || [];
     const bmCurvesMap = memoryBenchmarkCurves[benchmark] || BENCHMARK_BASELINE_CURVES[benchmark] || BENCHMARK_BASELINE_CURVES.NONE;
+    const effectiveMonths = (timeframe === 'ALL' || isShorterThanTimeframe)
+      ? monthsSinceInception
+      : ({ '1M': 1, '3M': 3, '6M': 6, '1Y': 12, 'ALL': monthsSinceInception }[timeframe] || 12);
 
-    if (timeframe === 'ALL') {
-      // สำหรับ ALL: คำนวณดัชนีตลาดตั้งแต่วันที่เริ่มลงทุนจริง (Since Inception) เท่านั้น ไม่ย้อนหลังไปก่อนเกิดพอร์ต
+    if (timeframe === 'ALL' || isShorterThanTimeframe) {
+      // คำนวณดัชนีตลาดตั้งแต่วันที่เริ่มลงทุนจริง (Since Inception) เพื่อความยุติธรรมแบบ Apples-to-Apples
       if (bmCloses && bmCloses.length >= 2) {
         const latest = bmCloses[bmCloses.length - 1];
-        const startIndex = Math.max(0, bmCloses.length - 1 - monthsSinceInception);
+        const startIndex = Math.max(0, bmCloses.length - 1 - effectiveMonths);
         const startClose = bmCloses[startIndex];
         if (startClose > 0) {
           roundedBenchmarkReturn = Number((((latest - startClose) / startClose) * 100).toFixed(1));
@@ -458,9 +478,9 @@ export function getBenchmarkComparison(
       } else {
         // Baseline fallback: สเกลผลตอบแทนตลาดตามสัดส่วนอายุจริงของพอร์ตเทียบกับ 2 ปี
         const baseReturn = BENCHMARK_BASELINE_RETURNS[benchmark]?.['ALL'] || 0;
-        const scale = Math.min(1.0, Math.max(0.05, monthsSinceInception / 24));
+        const scale = Math.min(1.0, Math.max(0.05, effectiveMonths / 24));
         roundedBenchmarkReturn = Math.round(baseReturn * scale * 10) / 10;
-        const baseCurve = bmCurvesMap['ALL'] || new Array(numPoints).fill(0);
+        const baseCurve = bmCurvesMap[timeframe] || bmCurvesMap['ALL'] || new Array(numPoints).fill(0);
         rawBmCurve = baseCurve.map((v) => Math.round(v * scale * 10) / 10);
       }
     } else {
@@ -471,30 +491,15 @@ export function getBenchmarkComparison(
     }
   }
 
+  // 3. คำนวณเส้นกราฟของพอร์ตผู้ใช้ (Portfolio Data) และ Benchmark
   const benchmarkPoints: number[] = [];
-  for (let i = 0; i < numPoints; i++) {
-    const val = typeof rawBmCurve[i] === 'number' ? rawBmCurve[i] : (roundedBenchmarkReturn * (i / (numPoints - 1)));
-    benchmarkPoints.push(Math.round(val * 10) / 10);
-  }
-
-  const benchmarkData: ChartPoint[] = benchmarkPoints.map((val) => ({
-    value: val,
-  }));
-
-  // 3. คำนวณเส้นกราฟของพอร์ตผู้ใช้ (Portfolio Data)
   const portfolioData: ChartPoint[] = [];
-  let realPoints: number[] | null = null;
 
+  // ตรวจสอบ Snapshot จริง
+  let realPoints: number[] | null = null;
   if (memoryUserSnapshots && memoryUserSnapshots.length >= 2) {
     const nowMs = Date.now();
-    const timeframeDays: Record<TimeframeType, number> = {
-      '1M': 31,
-      '3M': 92,
-      '6M': 184,
-      '1Y': 366,
-      'ALL': Math.max(366, daysSinceInception),
-    };
-    const maxDays = timeframeDays[timeframe] || 366;
+    const maxDays = targetDays;
     const filteredSnaps = memoryUserSnapshots.filter((s) => {
       const snapMs = new Date(s.snapshot_date).getTime();
       return (nowMs - snapMs) / (1000 * 60 * 60 * 24) <= maxDays;
@@ -506,13 +511,13 @@ export function getBenchmarkComparison(
       const spanDays = (lastSnapMs - firstSnapMs) / (1000 * 60 * 60 * 24);
 
       // ป้องกันการยืด Snapshot: ข้อมูลต้องครอบคลุมช่วงเวลาจริงเพียงพอ
-      const minRequiredSpan = timeframe === 'ALL'
+      const minRequiredSpan = (timeframe === 'ALL' || isShorterThanTimeframe)
         ? Math.min(7, Math.max(2, daysSinceInception * 0.3))
         : Math.min(maxDays * 0.3, 14);
 
       if (spanDays >= minRequiredSpan) {
         const vals = filteredSnaps.map((s) => s.unrealized_pl_percent);
-        realPoints = sampleCurvePoints(vals, numPoints);
+        realPoints = samplePercentagePoints(vals, numPoints);
         realPoints[realPoints.length - 1] = roundedPortfolioReturn;
       }
     }
@@ -520,28 +525,47 @@ export function getBenchmarkComparison(
 
   for (let i = 0; i < numPoints; i++) {
     const progress = i / (numPoints - 1);
-    let val: number;
+    const pointDaysAgo = targetDays * (1 - progress);
 
-    if (realPoints && realPoints.length === numPoints) {
-      val = realPoints[i];
-    } else if (benchmark !== 'NONE' && benchmarkPoints.length === numPoints) {
-      // จำลองตามความผันผวนของตลาดในช่วงเวลาของพอร์ต
-      const bmVal = benchmarkPoints[i];
-      const bmExpected = roundedBenchmarkReturn * progress;
-      const marketFluctuation = (bmVal - bmExpected) * 0.6;
-      val = Math.round((currentReturn * progress + marketFluctuation) * 10) / 10;
+    if (isShorterThanTimeframe && pointDaysAgo > daysSinceInception) {
+      // ก่อนวันเริ่มซื้อไม้แรก (ก่อน Inception): พอร์ตยังไม่ถูกสร้าง ค่าผลตอบแทนคือ 0.0% เสมอ
+      portfolioData.push({ value: 0.0 });
+      benchmarkPoints.push(0.0);
     } else {
-      const easeProgress = Math.sin((progress * Math.PI) / 2);
-      val = Math.round((currentReturn * easeProgress) * 10) / 10;
+      // ตั้งแต่วันเริ่มซื้อไม้แรกเป็นต้นไป: ลากเส้นกราฟจาก 0.0% ไปสู่ผลตอบแทนปัจจุบันอย่างสมูท (ลากจาก 0 ไป)
+      const activeProgress = isShorterThanTimeframe
+        ? Math.max(0, Math.min(1, (daysSinceInception - pointDaysAgo) / Math.max(1, daysSinceInception)))
+        : progress;
+
+      // 3.1 Portfolio point
+      let pVal: number;
+      if (realPoints && realPoints.length === numPoints) {
+        pVal = realPoints[i];
+      } else {
+        const easeProgress = Math.sin((activeProgress * Math.PI) / 2);
+        pVal = Math.round((currentReturn * easeProgress) * 10) / 10;
+      }
+      if (i === 0) pVal = 0.0;
+      if (i === numPoints - 1) pVal = roundedPortfolioReturn;
+      portfolioData.push({ value: pVal });
+
+      // 3.2 Benchmark point
+      let bVal: number;
+      if (typeof rawBmCurve[i] === 'number' && !isShorterThanTimeframe) {
+        bVal = rawBmCurve[i];
+      } else {
+        const easeProgress = Math.sin((activeProgress * Math.PI) / 2);
+        bVal = Math.round((roundedBenchmarkReturn * easeProgress) * 10) / 10;
+      }
+      if (i === 0) bVal = 0.0;
+      if (i === numPoints - 1) bVal = roundedBenchmarkReturn;
+      benchmarkPoints.push(bVal);
     }
-
-    if (i === 0) val = 0.0;
-    if (i === numPoints - 1) val = roundedPortfolioReturn;
-
-    portfolioData.push({
-      value: val,
-    });
   }
+
+  const benchmarkData: ChartPoint[] = benchmarkPoints.map((val) => ({
+    value: val,
+  }));
 
   const alpha = Math.round((roundedPortfolioReturn - roundedBenchmarkReturn) * 10) / 10;
   const benchmarkObj = BENCHMARKS.find((b) => b.id === benchmark);

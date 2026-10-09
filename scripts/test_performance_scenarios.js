@@ -324,42 +324,65 @@ async function main() {
   });
 
   // -------------------------------------------------------------------------
-  // SCENARIO 6: Once-a-Day Caching Verification
+  // SCENARIO 7: Drawing From Zero for 3M, 6M, 1Y (Inception Alignment)
   // -------------------------------------------------------------------------
-  console.log('\n--- SCENARIO 6: Once-a-Day Caching Verification ---');
+  console.log('\n--- SCENARIO 7: Drawing From Zero for 3M, 6M, 1Y (Inception Alignment) ---');
 
-  runAsyncScenario('6.1 syncBenchmarkReturns honors Once-a-Day cache and bypasses on forceSync', async () => {
-    const BENCHMARK_SYNC_DATE_KEY = '@my_dividend_last_benchmark_sync_date';
-    let mockStorage = {};
-    let networkCallCount = 0;
+  runScenario('7.1 1Y curve for recent inception starts with 0.0% prior points and curves smoothly from 0 to current return', () => {
+    // Investor started 45 days ago (in late August / September 2026)
+    const inceptDate = '2026-08-25';
+    const res = getBenchmarkComparison('1Y', 'SET', 6.5, [], inceptDate);
 
-    const mockSyncBenchmark = async (force = false) => {
-      const todayStr = '2026-10-09';
-      if (!force) {
-        const lastSync = mockStorage[BENCHMARK_SYNC_DATE_KEY];
-        if (lastSync === todayStr) {
-          return true; // Cache hit: 0 network calls!
-        }
+    assert.strictEqual(res.portfolioReturnPct, 6.5, 'Total return holds without fractional dilution');
+    assert.strictEqual(res.portfolioData.length, 7, '1Y must have 7 points');
+
+    // Points prior to 45 days ago (points 0, 1, 2, 3, 4) must be 0.0% (user had no stocks)
+    assert.strictEqual(res.portfolioData[0].value, 0.0);
+    assert.strictEqual(res.portfolioData[1].value, 0.0);
+    assert.strictEqual(res.portfolioData[2].value, 0.0);
+    assert.strictEqual(res.portfolioData[3].value, 0.0);
+
+    // Latest point must reach authentic 6.5%
+    assert.strictEqual(res.portfolioData[6].value, 6.5);
+
+    // Benchmark must also start with 0.0% prior points and draw from 0
+    assert.strictEqual(res.benchmarkData[0].value, 0.0);
+    assert.strictEqual(res.benchmarkData[1].value, 0.0);
+    assert.strictEqual(res.benchmarkData[2].value, 0.0);
+    assert.strictEqual(res.benchmarkData[3].value, 0.0);
+    assert.ok(res.benchmarkData[6].value >= 0);
+  });
+
+  runScenario('7.2 3M and 6M preserve total return without artificial 0.35/0.65 multiplier when started recently', () => {
+    const inceptDate = '2026-09-01'; // ~38 days ago
+    const res3M = getBenchmarkComparison('3M', 'SP500', 8.0, [], inceptDate);
+    const res6M = getBenchmarkComparison('6M', 'SP500', 8.0, [], inceptDate);
+
+    assert.strictEqual(res3M.portfolioReturnPct, 8.0, '3M should not be cut down to 2.8%');
+    assert.strictEqual(res6M.portfolioReturnPct, 8.0, '6M should not be cut down to 5.2%');
+
+    // Benchmark return is scaled since inception, not full 6-month or 1-year S&P 500
+    assert.ok(res6M.benchmarkReturnPct < 5.0, `6M benchmark must be scaled since inception (~38 days), got ${res6M.benchmarkReturnPct}%`);
+    assert.strictEqual(res6M.outperforming, true, 'User (+8%) beat scaled S&P 500');
+  });
+
+  runScenario('7.3 Snapshot percentage sampling preserves authentic returns without compounding distortion or zeroing negative starts', () => {
+    const samplePercentagePoints = (vals, targetPoints) => {
+      if (!vals || vals.length === 0) return new Array(targetPoints).fill(0);
+      if (vals.length === 1) return new Array(targetPoints).fill(vals[0]);
+      const result = [];
+      for (let i = 0; i < targetPoints; i++) {
+        const idx = Math.min(vals.length - 1, Math.round((i / (targetPoints - 1)) * (vals.length - 1)));
+        result.push(Math.round(vals[idx] * 10) / 10);
       }
-
-      // Simulate network request
-      networkCallCount++;
-      mockStorage[BENCHMARK_SYNC_DATE_KEY] = todayStr;
-      return true;
+      return result;
     };
 
-    // First call (cold start): executes network call
-    await mockSyncBenchmark(false);
-    assert.strictEqual(networkCallCount, 1);
-    assert.strictEqual(mockStorage[BENCHMARK_SYNC_DATE_KEY], '2026-10-09');
+    const posSnaps = [2.0, 3.0, 4.0, 5.0];
+    assert.deepStrictEqual(samplePercentagePoints(posSnaps, 6), [2.0, 3.0, 3.0, 4.0, 4.0, 5.0]);
 
-    // Second call on same day (tab switch): throttled by Once-a-Day cache
-    await mockSyncBenchmark(false);
-    assert.strictEqual(networkCallCount, 1, 'Network call must be bypassed on same-day tab switch');
-
-    // Third call on same day (pull-to-refresh with force = true): executes fresh call
-    await mockSyncBenchmark(true);
-    assert.strictEqual(networkCallCount, 2, 'Force sync must bypass date check');
+    const negSnaps = [-1.5, 0.0, 2.0, 4.5];
+    assert.deepStrictEqual(samplePercentagePoints(negSnaps, 6), [-1.5, 0.0, 0.0, 2.0, 2.0, 4.5]);
   });
 
   console.log('\n============================================================');

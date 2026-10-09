@@ -384,21 +384,48 @@ export const Portfolio: React.FC<PortfolioProps> = ({
     } else if (timeframe === '3M') {
       const p1 = new Date(now); p1.setMonth(p1.getMonth() - 2);
       const p2 = new Date(now); p2.setMonth(p2.getMonth() - 1);
+      const yr1 = p1.getFullYear() !== curYear ? ` ${p1.getFullYear()}` : '';
+      const yr2 = p2.getFullYear() !== curYear ? ` ${p2.getFullYear()}` : '';
       return [
-        { label: `${thMonths[p1.getMonth()]} ${p1.getFullYear()}`, percent: 12 },
-        { label: `${thMonths[p2.getMonth()]} ${p2.getFullYear()}`, percent: 50 },
+        { label: `${thMonths[p1.getMonth()]}${yr1}`, percent: 12 },
+        { label: `${thMonths[p2.getMonth()]}${yr2}`, percent: 50 },
         { label: `${thMonths[now.getMonth()]} ${curYear}`, percent: 88 },
       ];
     } else if (timeframe === '6M') {
       const p1 = new Date(now); p1.setMonth(p1.getMonth() - 5);
       const p2 = new Date(now); p2.setMonth(p2.getMonth() - 3);
       const p3 = new Date(now); p3.setMonth(p3.getMonth() - 1);
+      const yr1 = p1.getFullYear() !== curYear ? ` ${p1.getFullYear()}` : '';
+      const yr2 = p2.getFullYear() !== curYear ? ` ${p2.getFullYear()}` : '';
+      const yr3 = p3.getFullYear() !== curYear ? ` ${p3.getFullYear()}` : '';
       return [
-        { label: `${thMonths[p1.getMonth()]} ${p1.getFullYear()}`, percent: 10 },
-        { label: `${thMonths[p2.getMonth()]} ${p2.getFullYear()}`, percent: 45 },
-        { label: `${thMonths[now.getMonth()]} ${curYear}`, percent: 88 },
+        { label: `${thMonths[p1.getMonth()]}${yr1}`, percent: 10 },
+        { label: `${thMonths[p2.getMonth()]}${yr2}`, percent: 45 },
+        { label: `${thMonths[p3.getMonth()]}${yr3}`, percent: 68 },
+        { label: `${thMonths[now.getMonth()]} ${curYear}`, percent: 90 },
       ];
     } else if (timeframe === '1Y') {
+      const incept = inceptionDate ? new Date(inceptionDate) : now;
+      const inceptYear = isNaN(incept.getTime()) ? curYear : incept.getFullYear();
+      const inceptMonth = isNaN(incept.getTime()) ? 0 : incept.getMonth();
+
+      if (inceptYear === curYear) {
+        // เมื่อเริ่มลงทุนในปีปัจจุบัน: แสดงเดือนของปีปัจจุบัน ไม่ย้อนหลังไปปีก่อนหน้า (2025)
+        const curMonth = now.getMonth();
+        const mStart = Math.min(inceptMonth, 2);
+        const monthSpan = Math.max(1, curMonth - mStart);
+        const m1 = mStart;
+        const m2 = Math.min(11, mStart + Math.round(monthSpan * 0.35));
+        const m3 = Math.min(11, mStart + Math.round(monthSpan * 0.7));
+        const m4 = curMonth;
+        return [
+          { label: `${thMonths[m1]} ${curYear}`, percent: 8 },
+          { label: `${thMonths[m2]} ${curYear}`, percent: 36 },
+          { label: `${thMonths[m3]} ${curYear}`, percent: 64 },
+          { label: `${thMonths[m4]} ${curYear}`, percent: 90 },
+        ];
+      }
+
       const p1 = new Date(now); p1.setMonth(p1.getMonth() - 11);
       const p2 = new Date(now); p2.setMonth(p2.getMonth() - 7);
       const p3 = new Date(now); p3.setMonth(p3.getMonth() - 3);
