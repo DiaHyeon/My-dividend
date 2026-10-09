@@ -408,12 +408,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const totalUnrealizedPL = totalMarketValue - totalCost;
   const totalUnrealizedPLPercent = totalCost > 0 ? (totalUnrealizedPL / totalCost) * 100 : 0;
 
-  // บันทึก Snapshot มูลค่าและผลตอบแทนพอร์ตประจำวันลงตาราง portfolio_snapshots บน Cloud
+  // บันทึก Snapshot มูลค่าและผลตอบแทนพอร์ตลงทุนประจำวัน (เฉพาะ STOCKS & FUNDS) ลงตาราง portfolio_snapshots บน Cloud
   useEffect(() => {
-    if (totalCost > 0 || totalMarketValue > 0) {
-      recordDailyPortfolioSnapshot(totalMarketValue, totalCost, totalUnrealizedPL, totalUnrealizedPLPercent);
+    const invAssets = assets.filter((a) => a.asset_type !== 'CASH');
+    const invMVal = invAssets.reduce((sum, item) => sum + (Number(item.market_value) || 0), 0);
+    const invCost = invAssets.reduce((sum, item) => sum + (Number(item.total_cost) || 0), 0);
+    const invPL = invMVal - invCost;
+    const invPLPercent = invCost > 0 ? (invPL / invCost) * 100 : 0;
+
+    if (invCost > 0 || invMVal > 0) {
+      recordDailyPortfolioSnapshot(invMVal, invCost, invPL, invPLPercent);
     }
-  }, [totalMarketValue, totalCost, totalUnrealizedPL, totalUnrealizedPLPercent]);
+  }, [assets]);
 
   // Realized Dividends & Total Return Metrics
   const returnMetrics = calculatePortfolioReturns(

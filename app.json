@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.mydividend.app",
-      "versionCode": 6,
+      "versionCode": 7,
       "allowBackup": false,
       "splash": {
         "image": "./assets/splash-icon.png",

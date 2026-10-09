@@ -445,7 +445,10 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
      - **Asset Return Ranking**: Ranked leaderboard of portfolio assets sorted from highest to lowest % gain (investment assets exclusively).
      - **Investment Isolation from Cash Deposits (Option A)**: In the Performance Tab, calculations for cumulative return, total invested cost, unrealized capital gain, benchmark curves (SET, S&P 500, NASDAQ), and the asset return ranking strictly isolate investment assets (STOCKS & FUNDS) from bank deposits (CASH). This eliminates return dilution (0% cash capital gain) and ensures fair, apple-to-apple equity index comparison. The Allocation Tab continues to display 100% of all asset classes.
      - **Daily Portfolio Snapshot Tracking & Authentic Trajectory (`portfolio_snapshots`)**:
-       - Automatically records daily end-of-day portfolio valuation (`recordDailyPortfolioSnapshot` in `benchmarkService.ts`) on Dashboard/Portfolio calculation, tracking `total_market_value`, `total_cost`, `unrealized_pl`, and `unrealized_pl_percent`.
+       - Automatically records daily end-of-day portfolio valuation (`recordDailyPortfolioSnapshot` in `benchmarkService.ts`) on Dashboard/Portfolio calculation, tracking `total_market_value`, `total_cost`, `unrealized_pl`, and `unrealized_pl_percent` exclusively for investment assets (STOCKS & FUNDS) to maintain pure equity index parity.
+      - **Authentic Inception Date & Dynamic Timeframe Alignment (Since Inception)**:
+        - Automatically detects the user's authentic inception date (`inceptionDate`) from the first BUY transaction of investment assets (`transactions.transaction_date`).
+        - For Timeframe `ALL`, evaluates strictly Since Inception: slices the benchmark market curve starting from the inception date rather than a fixed 2-year lookback for 100% fair apples-to-apples comparison, dynamically adapts `floorTimelineLabels` across the active year (e.g. `มี.ค. 26`, `พ.ค. 26`, `ส.ค. 26`, `ต.ค. 26`) eliminating phantom historical years (2023–2025), and enforces snapshot span validation preventing short 2-day snapshots from stretching across multi-year spans.
        - When historical snapshots exist ($\ge 2$ points within the active timeframe), plots the user's authentic portfolio trajectory rather than synthetic straight lines, transitioning seamlessly with beta correlation fallback when snapshots are not yet populated.
 
 ---
@@ -782,7 +785,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - `services/csvService.ts`: Portfolio CSV export, import parsing, column mapping, and automated asset creation service
   - `services/notificationService.ts`: Local ex-dividend (XD) notification scheduling service for Android
   - `services/assetConsolidationService.ts`: Position accumulation, duplicate asset consolidation, and schedule deduplication service
-  - `services/benchmarkService.ts`: Portfolio cumulative return, alpha calculation, market benchmark comparison service (SET, S&P 500, NASDAQ), and daily portfolio snapshot trajectory plotting
+  - `services/benchmarkService.ts`: Portfolio cumulative return, alpha calculation, market benchmark comparison service (SET, S&P 500, NASDAQ) with Once-a-Day Caching, and daily portfolio snapshot trajectory plotting
   - `services/historyService.ts`: 7-day historical closing price caching service with Once-a-Day EOD cache and on-demand refresh
   - `services/priceSyncService.ts`: Automated daily market price and NAV synchronization service updating Supabase database with Same-Month Next-Year (+1 Year Roll) schedule generation and trailing 365-day frequency guards
   - `services/proxyClient.ts`: Centralized client helper for securely invoking the stock-proxy Supabase Edge Function with automatic authentication headers and timeout control
@@ -792,8 +795,9 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - `utils/dateUtils.ts`: Timezone-safe local date formatting and manipulation utilities preventing 1-day drift
 - `scripts/`
   - `patch-expo-notifications.js`: Patch script resolving Expo Go Android notification crashes
-  - `test_dividend_logic.js`: Comprehensive automated unit & integration test suite (33 test cases) runnable via `npm test`
-  - `test_security_hardening.js`: Automated security hardening and penetration test suite (27 test cases) verifying auth guards, catalog write revocation, sliding window rate limits, cooldowns, and velocity guards (total 60 automated tests across suites)
+  - `test_dividend_logic.js`: Comprehensive automated unit & integration test suite (39 test cases) runnable via `npm test`
+  - `test_security_hardening.js`: Automated security hardening and penetration test suite (27 test cases) verifying auth guards, catalog write revocation, sliding window rate limits, cooldowns, and velocity guards
+  - `test_performance_scenarios.js`: Scenario-based portfolio simulation runner (9 test cases) validating inception scaling, timeline axis generation, timeframe Baht/percentage harmony, alpha formatting, cash exclusion, and daily caching (total 75 automated tests across suites)
 - `supabase/migrations/`
   - `005_unified_schema_update.sql`: Idempotent migration script adding sector, currency, exchange_rate, and is_special columns
   - `006_thai_funds_catalog.sql`: Master catalog table for 5,790+ registered Thai mutual funds with multi-column B-Tree indexes and public read access

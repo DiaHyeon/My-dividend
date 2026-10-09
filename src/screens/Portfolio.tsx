@@ -23,6 +23,7 @@ import { getSectorsForType, getAssetSector, SectorDefinition } from '../services
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
 import { usePrivacyMode } from '../services/privacyService';
 import { ensureAuthenticated } from '../services/authService';
+import { getLocalDateString } from '../utils/dateUtils';
 import { syncDailyPricesIfNeeded } from '../services/priceSyncService';
 import {
   BenchmarkType,
@@ -63,6 +64,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
   const [timeframe, setTimeframe] = useState<TimeframeType>('1Y');
   const [selectedBenchmark, setSelectedBenchmark] = useState<BenchmarkType>('NONE');
   const [isBenchmarkPickerVisible, setIsBenchmarkPickerVisible] = useState(false);
+  const [inceptionDate, setInceptionDate] = useState<string>('');
 
   useEffect(() => {
     if (initialCategoryFilter) {
@@ -126,8 +128,36 @@ export const Portfolio: React.FC<PortfolioProps> = ({
 
       setAssets(loadedAssets);
 
+      // 1.2 Fetch earliest buy transaction date for investment assets (STOCKS & FUNDS) to determine authentic inception date
+      const investmentAssetIds = loadedAssets.filter((a) => a.asset_type !== 'CASH').map((a) => a.id);
+      if (investmentAssetIds.length > 0) {
+        try {
+          const { data: firstTx } = await supabase
+            .from('transactions')
+            .select('transaction_date')
+            .in('asset_id', investmentAssetIds)
+            .eq('type', 'BUY')
+            .order('transaction_date', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+          if (firstTx?.transaction_date) {
+            setInceptionDate(firstTx.transaction_date);
+          } else {
+            const earliestCreated = loadedAssets
+              .filter((a) => a.asset_type !== 'CASH')
+              .map((a) => a.created_at?.split('T')[0])
+              .filter(Boolean)
+              .sort()[0];
+            setInceptionDate(earliestCreated || getLocalDateString());
+          }
+        } catch {
+          // fallback
+        }
+      }
+
       // Background sync benchmark indices (SET, S&P 500, NASDAQ) without blocking UI
-      syncBenchmarkReturns(forceSync).catch(() => {});
+      syncBenchmarkReturns(forceSync).catch(() => { });
 
       const activeAssetIds = loadedAssets.map((a) => a.id).filter(Boolean);
       let schedulesData: DividendSchedule[] = [];
@@ -206,13 +236,6 @@ export const Portfolio: React.FC<PortfolioProps> = ({
   const totalUnrealizedPL = totalMarketValue - totalCost;
   const totalUnrealizedPLPercent = totalCost > 0 ? (totalUnrealizedPL / totalCost) * 100 : 0;
 
-  // บันทึก Snapshot มูลค่าและผลตอบแทนพอร์ตประจำวันลงตาราง portfolio_snapshots บน Cloud
-  useEffect(() => {
-    if (totalCost > 0 || totalMarketValue > 0) {
-      recordDailyPortfolioSnapshot(totalMarketValue, totalCost, totalUnrealizedPL, totalUnrealizedPLPercent);
-    }
-  }, [totalMarketValue, totalCost, totalUnrealizedPL, totalUnrealizedPLPercent]);
-
   // Investment Assets Metrics (STOCKS & FUNDS exclusively, excluding CASH deposits)
   const investmentAssets = useMemo(() => {
     return assets.filter((a) => a.asset_type !== 'CASH');
@@ -228,6 +251,18 @@ export const Portfolio: React.FC<PortfolioProps> = ({
 
   const investmentUnrealizedPL = investmentMarketValue - investmentCost;
   const investmentUnrealizedPLPercent = investmentCost > 0 ? (investmentUnrealizedPL / investmentCost) * 100 : 0;
+
+  // บันทึก Snapshot มูลค่าและผลตอบแทนพอร์ตลงทุนประจำวัน (เฉพาะ STOCKS & FUNDS) ลงตาราง portfolio_snapshots บน Cloud
+  useEffect(() => {
+    if (investmentCost > 0 || investmentMarketValue > 0) {
+      recordDailyPortfolioSnapshot(
+        investmentMarketValue,
+        investmentCost,
+        investmentUnrealizedPL,
+        investmentUnrealizedPLPercent
+      );
+    }
+  }, [investmentMarketValue, investmentCost, investmentUnrealizedPL, investmentUnrealizedPLPercent]);
 
   // Category values for Pie Chart
   const stocksTotal = useMemo(() => {
@@ -248,9 +283,17 @@ export const Portfolio: React.FC<PortfolioProps> = ({
       timeframe,
       selectedBenchmark,
       investmentUnrealizedPLPercent,
-      investmentAssets
+      investmentAssets,
+      inceptionDate
     );
-  }, [timeframe, selectedBenchmark, investmentUnrealizedPLPercent, investmentAssets]);
+  }, [timeframe, selectedBenchmark, investmentUnrealizedPLPercent, investmentAssets, inceptionDate]);
+
+  // กำไร/ขาดทุนเป็นเงินบาทที่สอดคล้องกับ % ของ Timeframe ที่เลือก (ไม่ขัดแย้งกัน)
+  const periodPL = useMemo(() => {
+    if (investmentCost <= 0) return 0;
+    if (timeframe === 'ALL') return investmentUnrealizedPL;
+    return (investmentCost * comparisonResult.portfolioReturnPct) / 100;
+  }, [investmentCost, timeframe, investmentUnrealizedPL, comparisonResult.portfolioReturnPct]);
 
   // Dynamic Chart Y-Axis Scale Bounds: tight, responsive headroom (~8-10%) adapting to active timeframe data without wasteful space
   const chartScale = useMemo(() => {
@@ -366,18 +409,64 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         { label: `${thMonths[now.getMonth()]} ${curYear}`, percent: 90 },
       ];
     } else {
-      // ALL
-      const p1 = new Date(now); p1.setFullYear(p1.getFullYear() - 3);
-      const p2 = new Date(now); p2.setFullYear(p2.getFullYear() - 2);
-      const p3 = new Date(now); p3.setFullYear(p3.getFullYear() - 1);
-      return [
-        { label: `${p1.getFullYear()}`, percent: 10 },
-        { label: `${p2.getFullYear()}`, percent: 38 },
-        { label: `${p3.getFullYear()}`, percent: 66 },
-        { label: `${curYear}`, percent: 92 },
-      ];
+      // ALL (Since Inception)
+      const incept = inceptionDate ? new Date(inceptionDate) : now;
+      const inceptYear = isNaN(incept.getTime()) ? curYear : incept.getFullYear();
+      const inceptMonth = isNaN(incept.getTime()) ? 0 : incept.getMonth();
+      const curMonth = now.getMonth();
+      const yearDiff = curYear - inceptYear;
+
+      if (yearDiff === 0) {
+        // ลงทุนในปีปัจจุบัน (เช่น เริ่มปี 2026): แสดงเฉพาะช่วงเดือนจริงของปี 2026 ไม่ย้อนหลังไปปีก่อนหน้า
+        const monthSpan = Math.max(1, curMonth - inceptMonth);
+        if (monthSpan <= 1) {
+          const p1 = new Date(incept);
+          const p2 = new Date(incept.getTime() + (now.getTime() - incept.getTime()) * 0.35);
+          const p3 = new Date(incept.getTime() + (now.getTime() - incept.getTime()) * 0.7);
+          return [
+            { label: `${p1.getDate()} ${thMonths[p1.getMonth()]}`, percent: 10 },
+            { label: `${p2.getDate()} ${thMonths[p2.getMonth()]}`, percent: 38 },
+            { label: `${p3.getDate()} ${thMonths[p3.getMonth()]}`, percent: 66 },
+            { label: `${now.getDate()} ${thMonths[now.getMonth()]}`, percent: 92 },
+          ];
+        }
+
+        const m1 = inceptMonth;
+        const m2 = Math.min(11, inceptMonth + Math.round(monthSpan * 0.35));
+        const m3 = Math.min(11, inceptMonth + Math.round(monthSpan * 0.7));
+        const m4 = curMonth;
+
+        return [
+          { label: `${thMonths[m1]} ${curYear}`, percent: 10 },
+          { label: `${thMonths[m2]} ${curYear}`, percent: 38 },
+          { label: `${thMonths[m3]} ${curYear}`, percent: 66 },
+          { label: `${thMonths[m4]} ${curYear}`, percent: 92 },
+        ];
+      } else if (yearDiff === 1) {
+        // ลงทุนข้าม 1 ปี (เช่น เริ่มปลายปี 2025 ถึงปัจจุบัน 2026)
+        const mMid1 = Math.min(11, inceptMonth + 3);
+        const mMid2 = Math.max(0, curMonth - 3);
+        return [
+          { label: `${thMonths[inceptMonth]} ${inceptYear}`, percent: 10 },
+          { label: `${thMonths[mMid1]} ${inceptYear}`, percent: 38 },
+          { label: `${thMonths[mMid2]} ${curYear}`, percent: 66 },
+          { label: `${thMonths[curMonth]} ${curYear}`, percent: 92 },
+        ];
+      } else {
+        // ลงทุนมามากกว่า 2 ปี: แสดงปีเริ่มต้นจริงจนถึงปีปัจจุบัน
+        const step = yearDiff / 3;
+        const y1 = inceptYear;
+        const y2 = Math.round(inceptYear + step);
+        const y3 = Math.round(inceptYear + step * 2);
+        return [
+          { label: `${y1}`, percent: 10 },
+          { label: `${y2}`, percent: 38 },
+          { label: `${y3}`, percent: 66 },
+          { label: `${curYear}`, percent: 92 },
+        ];
+      }
     }
-  }, [timeframe]);
+  }, [timeframe, inceptionDate]);
 
   // Asset Performance Ranking (% Unrealized P/L descending) - investment assets only (exclude CASH)
   const performanceRanking = useMemo(() => {
@@ -658,257 +747,257 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         {portfolioView === 'ALLOCATION' && (
           <>
             {/* Category Filter Pills */}
-        <View style={styles.filterPillsRow}>
-          {[
-            { key: 'ALL', label: 'ทั้งหมด' },
-            { key: 'STOCKS', label: 'หุ้น (STOCKS)' },
-            { key: 'FUNDS', label: 'กองทุน (FUNDS)' },
-            { key: 'CASH', label: 'เงินฝาก (CASH)' },
-          ].map((pill) => {
-            const isActive = activeCategoryFilter === pill.key;
-            return (
-              <TouchableOpacity
-                key={pill.key}
-                style={[styles.filterPill, isActive && styles.filterPillActive]}
-                onPress={() => setActiveCategoryFilter(pill.key as any)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
-                  {pill.label}
+            <View style={styles.filterPillsRow}>
+              {[
+                { key: 'ALL', label: 'ทั้งหมด' },
+                { key: 'STOCKS', label: 'หุ้น (STOCKS)' },
+                { key: 'FUNDS', label: 'กองทุน (FUNDS)' },
+                { key: 'CASH', label: 'เงินฝาก (CASH)' },
+              ].map((pill) => {
+                const isActive = activeCategoryFilter === pill.key;
+                return (
+                  <TouchableOpacity
+                    key={pill.key}
+                    style={[styles.filterPill, isActive && styles.filterPillActive]}
+                    onPress={() => setActiveCategoryFilter(pill.key as any)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
+                      {pill.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Donut Pie Chart Card */}
+            <View style={styles.chartCard}>
+              <View style={styles.chartHeaderRow}>
+                <Ionicons name="pie-chart" size={18} color="#38BDF8" />
+                <Text style={styles.chartCardTitle}>
+                  {activeCategoryFilter === 'ALL'
+                    ? 'สัดส่วนสินทรัพย์ตามหมวดหมู่ (Asset Allocation)'
+                    : `สัดส่วนสินทรัพย์ในหมวด ${activeCategoryFilter}`}
                 </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Donut Pie Chart Card */}
-        <View style={styles.chartCard}>
-          <View style={styles.chartHeaderRow}>
-            <Ionicons name="pie-chart" size={18} color="#38BDF8" />
-            <Text style={styles.chartCardTitle}>
-              {activeCategoryFilter === 'ALL'
-                ? 'สัดส่วนสินทรัพย์ตามหมวดหมู่ (Asset Allocation)'
-                : `สัดส่วนสินทรัพย์ในหมวด ${activeCategoryFilter}`}
-            </Text>
-          </View>
-
-          {totalMarketValue <= 0 ? (
-            <View style={styles.emptyChartBox}>
-              <Ionicons name="pie-chart-outline" size={40} color="#64748B" />
-              <Text style={styles.emptyChartText}>ยังไม่มีสินทรัพย์ในพอร์ต</Text>
-            </View>
-          ) : (
-            <View style={styles.chartContainer}>
-              <PieChart
-                data={pieData}
-                donut={true}
-                radius={SCREEN_WIDTH * 0.19}
-                innerRadius={SCREEN_WIDTH * 0.11}
-                innerCircleColor="#0F172A"
-                strokeWidth={2}
-                strokeColor="#0F172A"
-                extraRadius={48}
-                paddingHorizontal={32}
-                paddingVertical={6}
-                showExternalLabels={true}
-                labelLineConfig={{
-                  color: '#FFFFFF',
-                  thickness: 1.5,
-                  length: 16,
-                  tailLength: 10,
-                  avoidOverlappingOfLabels: true,
-                  labelComponentHeight: 26,
-                  labelComponentWidth: 62,
-                  labelComponentMargin: 4,
-                }}
-                externalLabelComponent={(item?: any) => {
-                  if (item?.hideLabel) return null;
-                  const shortLabel = item?.shortLabel || item?.label || '';
-                  const percentText = item?.percentText || (item?.value !== undefined ? `${item.value}%` : '');
-                  const strokeColor = item?.color || '#38BDF8';
-                  return (
-                    <SvgG>
-                      <Rect
-                        x={0}
-                        y={-26}
-                        width={62}
-                        height={26}
-                        rx={5}
-                        fill="#0F172A"
-                        stroke={strokeColor}
-                        strokeWidth={1.5}
-                      />
-                      <SvgText
-                        x={31}
-                        y={-15}
-                        fill="#94A3B8"
-                        fontSize={8}
-                        fontWeight="600"
-                        textAnchor="middle"
-                      >
-                        {shortLabel}
-                      </SvgText>
-                      <SvgText
-                        x={31}
-                        y={-4}
-                        fill="#FFFFFF"
-                        fontSize={10}
-                        fontWeight="bold"
-                        textAnchor="middle"
-                      >
-                        {percentText}
-                      </SvgText>
-                    </SvgG>
-                  );
-                }}
-                centerLabelComponent={() => (
-                  <View style={styles.centerLabelBox}>
-                    <Text style={styles.centerLabelText}>
-                      {activeCategoryFilter === 'ALL' ? 'ทั้งพอร์ต' : activeCategoryFilter}
-                    </Text>
-                    <Text style={styles.centerLabelAmount}>
-                      {isPrivateMode
-                        ? '฿••••••'
-                        : `฿${((activeCategoryFilter === 'ALL'
-                            ? totalMarketValue
-                            : (activeCategoryFilter === 'STOCKS' ? stocksTotal : (activeCategoryFilter === 'FUNDS' ? fundsTotal : cashTotal))) / 1000).toFixed(0)}k`}
-                    </Text>
-                  </View>
-                )}
-              />
-
-              {/* Legends Row */}
-              <View style={styles.legendContainer}>
-                {legendItems.map((item) => (
-                  <View key={item.id} style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                    <Text style={styles.legendLabel} numberOfLines={1} ellipsizeMode="tail">
-                      {item.label}
-                    </Text>
-                    <Text style={styles.legendVal}>
-                      {isPrivateMode ? '฿••••••' : `฿${item.val.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`}
-                    </Text>
-                  </View>
-                ))}
               </View>
-            </View>
-          )}
-        </View>
 
-        {/* Section Header: Holdings Preview & Link to AssetsScreen */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>
-            สินทรัพย์หลัก ({Math.min(3, filteredAssets.length)} จาก {filteredAssets.length} รายการ)
-          </Text>
-          {onNavigateToAssets && (
-            <TouchableOpacity
-              onPress={() => onNavigateToAssets('HOLDINGS', activeCategoryFilter)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={styles.seeAllText}>ดูทั้งหมด →</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Top 3 Preview or Empty */}
-        {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="small" color="#059669" />
-            <Text style={styles.loadingText}>กำลังโหลดข้อมูล...</Text>
-          </View>
-        ) : filteredAssets.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons name="wallet-outline" size={48} color="#94A3B8" />
-            <Text style={styles.emptyTitle}>ไม่มีสินทรัพย์ในหมวดนี้</Text>
-            <Text style={styles.emptySubtitle}>แตะปุ่ม + ด้านล่างเพื่อเพิ่มสินทรัพย์ใหม่</Text>
-          </View>
-        ) : (
-          <>
-            {filteredAssets.slice(0, 3).map((item) => {
-              const isUS = isUSStock(item);
-              const rate = exchangeRate > 0 ? exchangeRate : 34.00;
-              const currentPriceTHB = Number(item.current_price);
-              const costPriceTHB = Number(item.weighted_average_cost);
-              const currentPriceUSD = isUS ? currentPriceTHB / rate : 0;
-              const costPriceUSD = isUS ? costPriceTHB / rate : 0;
-
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.assetCard}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    setSelectedAssetForEdit(item);
-                    setIsEditModalVisible(true);
-                  }}
-                >
-                  <View style={styles.assetHeader}>
-                    <View style={styles.assetSymbolContainer}>
-                      <View style={styles.assetSymbolTitleRow}>
-                        <Text style={styles.assetSymbol}>{item.symbol}</Text>
-                        {isUS && (
-                          <View style={styles.usBadge}>
-                            <Text style={styles.usBadgeText}>USD $</Text>
-                          </View>
-                        )}
-                        <View style={styles.editBadge}>
-                          <Ionicons name="pencil" size={11} color="#059669" />
-                          <Text style={styles.editBadgeText}>แก้ไข</Text>
-                        </View>
-                      </View>
-                      <View style={styles.assetTagRow}>
-                        <Text style={styles.assetTypeTag}>{item.asset_type}</Text>
-                        <Text style={styles.assetSharesTag}>
-                          {item.asset_type === 'CASH'
-                            ? (isPrivateMode ? 'เงินต้น ฿••••••' : `เงินต้น ฿${Number(item.market_value).toLocaleString()}`)
-                            : isPrivateMode
-                            ? (item.asset_type === 'FUNDS' ? '•••• หน่วย' : '•••• หุ้น')
-                            : (item.asset_type === 'FUNDS'
-                              ? `${Number(item.net_shares).toLocaleString('th-TH', { maximumFractionDigits: 4 })} หน่วย`
-                              : `${Number(item.net_shares).toLocaleString('th-TH', { maximumFractionDigits: 4 })} หุ้น`)}
+              {totalMarketValue <= 0 ? (
+                <View style={styles.emptyChartBox}>
+                  <Ionicons name="pie-chart-outline" size={40} color="#64748B" />
+                  <Text style={styles.emptyChartText}>ยังไม่มีสินทรัพย์ในพอร์ต</Text>
+                </View>
+              ) : (
+                <View style={styles.chartContainer}>
+                  <PieChart
+                    data={pieData}
+                    donut={true}
+                    radius={SCREEN_WIDTH * 0.19}
+                    innerRadius={SCREEN_WIDTH * 0.11}
+                    innerCircleColor="#0F172A"
+                    strokeWidth={2}
+                    strokeColor="#0F172A"
+                    extraRadius={48}
+                    paddingHorizontal={32}
+                    paddingVertical={6}
+                    showExternalLabels={true}
+                    labelLineConfig={{
+                      color: '#FFFFFF',
+                      thickness: 1.5,
+                      length: 16,
+                      tailLength: 10,
+                      avoidOverlappingOfLabels: true,
+                      labelComponentHeight: 26,
+                      labelComponentWidth: 62,
+                      labelComponentMargin: 4,
+                    }}
+                    externalLabelComponent={(item?: any) => {
+                      if (item?.hideLabel) return null;
+                      const shortLabel = item?.shortLabel || item?.label || '';
+                      const percentText = item?.percentText || (item?.value !== undefined ? `${item.value}%` : '');
+                      const strokeColor = item?.color || '#38BDF8';
+                      return (
+                        <SvgG>
+                          <Rect
+                            x={0}
+                            y={-26}
+                            width={62}
+                            height={26}
+                            rx={5}
+                            fill="#0F172A"
+                            stroke={strokeColor}
+                            strokeWidth={1.5}
+                          />
+                          <SvgText
+                            x={31}
+                            y={-15}
+                            fill="#94A3B8"
+                            fontSize={8}
+                            fontWeight="600"
+                            textAnchor="middle"
+                          >
+                            {shortLabel}
+                          </SvgText>
+                          <SvgText
+                            x={31}
+                            y={-4}
+                            fill="#FFFFFF"
+                            fontSize={10}
+                            fontWeight="bold"
+                            textAnchor="middle"
+                          >
+                            {percentText}
+                          </SvgText>
+                        </SvgG>
+                      );
+                    }}
+                    centerLabelComponent={() => (
+                      <View style={styles.centerLabelBox}>
+                        <Text style={styles.centerLabelText}>
+                          {activeCategoryFilter === 'ALL' ? 'ทั้งพอร์ต' : activeCategoryFilter}
+                        </Text>
+                        <Text style={styles.centerLabelAmount}>
+                          {isPrivateMode
+                            ? '฿••••••'
+                            : `฿${((activeCategoryFilter === 'ALL'
+                              ? totalMarketValue
+                              : (activeCategoryFilter === 'STOCKS' ? stocksTotal : (activeCategoryFilter === 'FUNDS' ? fundsTotal : cashTotal))) / 1000).toFixed(0)}k`}
                         </Text>
                       </View>
-                    </View>
-                    <View style={styles.assetValueCol}>
-                      <Text style={styles.assetMarketValue}>
-                        {isPrivateMode
-                          ? '฿••••••'
-                          : `฿${Number(item.market_value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.assetPL,
-                          Number(item.unrealized_pl) >= 0 ? styles.profitColor : styles.lossColor,
-                        ]}
-                      >
-                        {isPrivateMode
-                          ? `(${Number(item.unrealized_pl) >= 0 ? '+' : ''}${Number(item.unrealized_pl_percent).toFixed(2)}%)`
-                          : `${Number(item.unrealized_pl) >= 0 ? '+' : ''}${Number(item.unrealized_pl).toLocaleString('th-TH', { minimumFractionDigits: 2 })} (${Number(item.unrealized_pl_percent).toFixed(2)}%)`}
-                      </Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+                    )}
+                  />
 
-            {onNavigateToAssets && (
-              <TouchableOpacity
-                style={styles.viewAllAssetsBtn}
-                onPress={() => onNavigateToAssets('HOLDINGS', activeCategoryFilter)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="receipt-outline" size={18} color="#059669" />
-                <Text style={styles.viewAllAssetsBtnText}>
-                  {filteredAssets.length > 3
-                    ? `ดูสินทรัพย์ทั้งหมดอีก ${filteredAssets.length - 3} รายการ & ประวัติ ในแท็บสินทรัพย์ →`
-                    : 'เปิดดูรายละเอียดและประวัติในแท็บสินทรัพย์ & ธุรกรรม →'}
-                </Text>
-              </TouchableOpacity>
+                  {/* Legends Row */}
+                  <View style={styles.legendContainer}>
+                    {legendItems.map((item) => (
+                      <View key={item.id} style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                        <Text style={styles.legendLabel} numberOfLines={1} ellipsizeMode="tail">
+                          {item.label}
+                        </Text>
+                        <Text style={styles.legendVal}>
+                          {isPrivateMode ? '฿••••••' : `฿${item.val.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* Section Header: Holdings Preview & Link to AssetsScreen */}
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>
+                สินทรัพย์หลัก ({Math.min(3, filteredAssets.length)} จาก {filteredAssets.length} รายการ)
+              </Text>
+              {onNavigateToAssets && (
+                <TouchableOpacity
+                  onPress={() => onNavigateToAssets('HOLDINGS', activeCategoryFilter)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.seeAllText}>ดูทั้งหมด →</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Top 3 Preview or Empty */}
+            {loading ? (
+              <View style={styles.loadingBox}>
+                <ActivityIndicator size="small" color="#059669" />
+                <Text style={styles.loadingText}>กำลังโหลดข้อมูล...</Text>
+              </View>
+            ) : filteredAssets.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Ionicons name="wallet-outline" size={48} color="#94A3B8" />
+                <Text style={styles.emptyTitle}>ไม่มีสินทรัพย์ในหมวดนี้</Text>
+                <Text style={styles.emptySubtitle}>แตะปุ่ม + ด้านล่างเพื่อเพิ่มสินทรัพย์ใหม่</Text>
+              </View>
+            ) : (
+              <>
+                {filteredAssets.slice(0, 3).map((item) => {
+                  const isUS = isUSStock(item);
+                  const rate = exchangeRate > 0 ? exchangeRate : 34.00;
+                  const currentPriceTHB = Number(item.current_price);
+                  const costPriceTHB = Number(item.weighted_average_cost);
+                  const currentPriceUSD = isUS ? currentPriceTHB / rate : 0;
+                  const costPriceUSD = isUS ? costPriceTHB / rate : 0;
+
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.assetCard}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setSelectedAssetForEdit(item);
+                        setIsEditModalVisible(true);
+                      }}
+                    >
+                      <View style={styles.assetHeader}>
+                        <View style={styles.assetSymbolContainer}>
+                          <View style={styles.assetSymbolTitleRow}>
+                            <Text style={styles.assetSymbol}>{item.symbol}</Text>
+                            {isUS && (
+                              <View style={styles.usBadge}>
+                                <Text style={styles.usBadgeText}>USD $</Text>
+                              </View>
+                            )}
+                            <View style={styles.editBadge}>
+                              <Ionicons name="pencil" size={11} color="#059669" />
+                              <Text style={styles.editBadgeText}>แก้ไข</Text>
+                            </View>
+                          </View>
+                          <View style={styles.assetTagRow}>
+                            <Text style={styles.assetTypeTag}>{item.asset_type}</Text>
+                            <Text style={styles.assetSharesTag}>
+                              {item.asset_type === 'CASH'
+                                ? (isPrivateMode ? 'เงินต้น ฿••••••' : `เงินต้น ฿${Number(item.market_value).toLocaleString()}`)
+                                : isPrivateMode
+                                  ? (item.asset_type === 'FUNDS' ? '•••• หน่วย' : '•••• หุ้น')
+                                  : (item.asset_type === 'FUNDS'
+                                    ? `${Number(item.net_shares).toLocaleString('th-TH', { maximumFractionDigits: 4 })} หน่วย`
+                                    : `${Number(item.net_shares).toLocaleString('th-TH', { maximumFractionDigits: 4 })} หุ้น`)}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.assetValueCol}>
+                          <Text style={styles.assetMarketValue}>
+                            {isPrivateMode
+                              ? '฿••••••'
+                              : `฿${Number(item.market_value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.assetPL,
+                              Number(item.unrealized_pl) >= 0 ? styles.profitColor : styles.lossColor,
+                            ]}
+                          >
+                            {isPrivateMode
+                              ? `(${Number(item.unrealized_pl) >= 0 ? '+' : ''}${Number(item.unrealized_pl_percent).toFixed(2)}%)`
+                              : `${Number(item.unrealized_pl) >= 0 ? '+' : ''}${Number(item.unrealized_pl).toLocaleString('th-TH', { minimumFractionDigits: 2 })} (${Number(item.unrealized_pl_percent).toFixed(2)}%)`}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+
+                {onNavigateToAssets && (
+                  <TouchableOpacity
+                    style={styles.viewAllAssetsBtn}
+                    onPress={() => onNavigateToAssets('HOLDINGS', activeCategoryFilter)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="receipt-outline" size={18} color="#059669" />
+                    <Text style={styles.viewAllAssetsBtnText}>
+                      {filteredAssets.length > 3
+                        ? `ดูสินทรัพย์ทั้งหมดอีก ${filteredAssets.length - 3} รายการ & ประวัติ ในแท็บสินทรัพย์ →`
+                        : 'เปิดดูรายละเอียดและประวัติในแท็บสินทรัพย์ & ธุรกรรม →'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
           </>
         )}
-      </>
-    )}
 
         {/* ========================================================================= */}
         {/* VIEW 2: PORTFOLIO PERFORMANCE VIEW (BENCHMARK COMPARISON & RANKINGS) */}
@@ -940,27 +1029,27 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                 <View
                   style={[
                     styles.perfHeroBadge,
-                    investmentUnrealizedPL >= 0 ? styles.perfHeroBadgeProfit : styles.perfHeroBadgeLoss,
+                    periodPL >= 0 ? styles.perfHeroBadgeProfit : styles.perfHeroBadgeLoss,
                   ]}
                 >
                   <Ionicons
-                    name={investmentUnrealizedPL >= 0 ? 'trending-up' : 'trending-down'}
+                    name={periodPL >= 0 ? 'trending-up' : 'trending-down'}
                     size={12}
-                    color={investmentUnrealizedPL >= 0 ? '#059669' : '#DC2626'}
+                    color={periodPL >= 0 ? '#059669' : '#DC2626'}
                   />
                   <Text
                     style={[
                       styles.perfHeroBadgeText,
-                      investmentUnrealizedPL >= 0 ? styles.profitColor : styles.lossColor,
+                      periodPL >= 0 ? styles.profitColor : styles.lossColor,
                     ]}
                   >
-                    {investmentUnrealizedPL >= 0 ? 'กำไร ' : 'ขาดทุน '}
+                    {periodPL >= 0 ? 'กำไร ' : 'ขาดทุน '}
                     {isPrivateMode
                       ? '฿••••••'
-                      : `${investmentUnrealizedPL >= 0 ? '+' : ''}฿${Math.abs(investmentUnrealizedPL).toLocaleString('th-TH', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}`}
+                      : `${periodPL >= 0 ? '+' : ''}฿${Math.abs(periodPL).toLocaleString('th-TH', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}`}
                   </Text>
                 </View>
                 <Text style={styles.perfHeroCostText}>
@@ -975,8 +1064,8 @@ export const Portfolio: React.FC<PortfolioProps> = ({
             {/* Performance Comparison Line Chart Card */}
             <View style={styles.perfChartCard}>
               <View style={styles.perfChartHeader}>
-                {/* Outperformance / Alpha Badge */}
-                {selectedBenchmark !== 'NONE' ? (
+                {/* Outperformance / Alpha Badge (แสดงเฉพาะเมื่อมีสินทรัพย์ลงทุน) */}
+                {selectedBenchmark !== 'NONE' && investmentCost > 0 ? (
                   <View
                     style={[
                       styles.perfAlphaBanner,
@@ -998,7 +1087,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                     >
                       {comparisonResult.outperforming
                         ? `พอร์ตของคุณชนะ ${selectedBenchmarkObj?.label} อยู่ +${comparisonResult.alphaPct.toFixed(1)}% (Outperforming)`
-                        : `พอร์ตของคุณตามหลัง ${selectedBenchmarkObj?.label} อยู่ ${comparisonResult.alphaPct.toFixed(1)}%`}
+                        : `พอร์ตของคุณตามหลัง ${selectedBenchmarkObj?.label} อยู่ ${Math.abs(comparisonResult.alphaPct).toFixed(1)}%`}
                     </Text>
                   </View>
                 ) : null}
@@ -1088,10 +1177,10 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                       data={comparisonResult.portfolioData.map((d) => ({ value: d.value }))}
                       {...(selectedBenchmark !== 'NONE'
                         ? {
-                            data2: comparisonResult.benchmarkData.map((d) => ({
-                              value: d.value,
-                            })),
-                          }
+                          data2: comparisonResult.benchmarkData.map((d) => ({
+                            value: d.value,
+                          })),
+                        }
                         : {})}
                       color="#10B981"
                       color2={selectedBenchmarkObj?.color || '#F59E0B'}
@@ -1110,9 +1199,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                       stepHeight={chartScale.stepHeight}
                       {...(chartScale.mostNegativeValue < 0
                         ? {
-                            mostNegativeValue: chartScale.mostNegativeValue,
-                            noOfSectionsBelowXAxis: chartScale.noOfSectionsBelowXAxis,
-                          }
+                          mostNegativeValue: chartScale.mostNegativeValue,
+                          noOfSectionsBelowXAxis: chartScale.noOfSectionsBelowXAxis,
+                        }
                         : {})}
                       overflowTop={16}
                       height={chartScale.chartHeight}
@@ -1122,12 +1211,12 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                       spacing={(SCREEN_WIDTH - 110) / (comparisonResult.portfolioData.length || 6)}
                       {...(selectedBenchmark === 'NONE'
                         ? {
-                            areaChart: true,
-                            startFillColor: '#10B981',
-                            endFillColor: '#10B981',
-                            startOpacity: 0.18,
-                            endOpacity: 0.02,
-                          }
+                          areaChart: true,
+                          startFillColor: '#10B981',
+                          endFillColor: '#10B981',
+                          startOpacity: 0.18,
+                          endOpacity: 0.02,
+                        }
                         : {})}
                     />
                   </View>
@@ -1246,9 +1335,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                           {isPrivateMode
                             ? '฿••••••'
                             : `${isProfit ? '+' : ''}฿${plAmount.toLocaleString('th-TH', {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}`}
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}`}
                         </Text>
                       </View>
                     </TouchableOpacity>

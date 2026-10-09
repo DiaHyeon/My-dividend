@@ -42,6 +42,7 @@ export const TIMEFRAMES: { id: TimeframeType; label: string; points: number }[] 
 
 const BENCHMARK_CACHE_KEY = '@my_dividend_benchmark_cache_v2';
 const SNAPSHOTS_CACHE_KEY = '@my_dividend_portfolio_snapshots_v1';
+const BENCHMARK_SYNC_DATE_KEY = '@my_dividend_last_benchmark_sync_date';
 
 // In-memory cache for user's historical portfolio snapshots
 let memoryUserSnapshots: { snapshot_date: string; unrealized_pl_percent: number }[] = [];
@@ -89,6 +90,12 @@ const BENCHMARK_BASELINE_CURVES: Record<BenchmarkType, Record<TimeframeType, num
 // In-memory cache for 0ms synchronous access inside useMemo
 let memoryBenchmarkReturns: Record<BenchmarkType, Record<TimeframeType, number>> = { ...BENCHMARK_BASELINE_RETURNS };
 let memoryBenchmarkCurves: Record<BenchmarkType, Record<TimeframeType, number[]>> = { ...BENCHMARK_BASELINE_CURVES };
+let memoryBenchmarkCloses: Record<BenchmarkType, number[]> = {
+  NONE: [],
+  SET: [],
+  SP500: [],
+  NASDAQ: [],
+};
 let isBenchmarkLiveMap: Record<BenchmarkType, boolean> = {
   NONE: true,
   SET: false,
@@ -107,6 +114,9 @@ let isBenchmarkLiveMap: Record<BenchmarkType, boolean> = {
       }
       if (cached?.curves) {
         memoryBenchmarkCurves = cached.curves;
+      }
+      if (cached?.closes) {
+        memoryBenchmarkCloses = cached.closes;
       }
       if (cached?.isLive) {
         isBenchmarkLiveMap = cached.isLive;
@@ -222,7 +232,20 @@ function sampleCurvePoints(closes: number[], targetPoints: number): number[] {
  */
 export async function syncBenchmarkReturns(force: boolean = false): Promise<boolean> {
   try {
-    // 0. ดึงประวัติ Snapshot พอร์ตสะสมของผู้ใช้จาก Supabase
+    const todayStr = getLocalDateString();
+    // 0. ตรวจสอบ Once-a-Day Caching: ถ้าซิงก์ไปแล้วในวันนี้และไม่ได้ force ให้ใช้ข้อมูลเดิมเพื่อลดภาระ API
+    if (!force) {
+      try {
+        const lastSyncDate = await AsyncStorage.getItem(BENCHMARK_SYNC_DATE_KEY);
+        if (lastSyncDate === todayStr) {
+          return true;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // 1. ดึงประวัติ Snapshot พอร์ตสะสมของผู้ใช้จาก Supabase
     try {
       const { data: snaps } = await supabase
         .from('portfolio_snapshots')
@@ -314,6 +337,7 @@ export async function syncBenchmarkReturns(force: boolean = false): Promise<bool
 
             memoryBenchmarkReturns[bm.id] = realReturns;
             memoryBenchmarkCurves[bm.id] = realCurves;
+            memoryBenchmarkCloses[bm.id] = closes;
             isBenchmarkLiveMap[bm.id] = true;
             updatedAny = true;
           }
@@ -330,9 +354,11 @@ export async function syncBenchmarkReturns(force: boolean = false): Promise<bool
           timestamp: Date.now(),
           returns: memoryBenchmarkReturns,
           curves: memoryBenchmarkCurves,
+          closes: memoryBenchmarkCloses,
           isLive: isBenchmarkLiveMap,
         })
       );
+      await AsyncStorage.setItem(BENCHMARK_SYNC_DATE_KEY, todayStr);
     }
 
     return updatedAny;
@@ -350,57 +376,102 @@ export function getBenchmarkComparison(
   timeframe: TimeframeType,
   benchmark: BenchmarkType,
   totalUnrealizedPLPercent: number,
-  _assets: AssetSummary[]
+  _assets: AssetSummary[],
+  inceptionDate?: string
 ): BenchmarkComparisonResult {
   const tfConfig = TIMEFRAMES.find((t) => t.id === timeframe) || TIMEFRAMES[3];
   const numPoints = tfConfig.points;
 
-  // Scale current portfolio return based on timeframe
-  const timeframeMultiplier: Record<TimeframeType, number> = {
-    '1M': 0.15,
-    '3M': 0.35,
-    '6M': 0.65,
-    '1Y': 1.0,
-    'ALL': 1.0,
-  };
-
-  const currentReturn = totalUnrealizedPLPercent * (timeframeMultiplier[timeframe] || 1.0);
-  const roundedPortfolioReturn = Math.round(currentReturn * 10) / 10;
-
-  const returnMap = memoryBenchmarkReturns[benchmark] || BENCHMARK_BASELINE_RETURNS[benchmark] || BENCHMARK_BASELINE_RETURNS.NONE;
-  const benchmarkReturn = returnMap[timeframe] || 0;
-  const roundedBenchmarkReturn = Math.round(benchmarkReturn * 10) / 10;
-  const isLive = isBenchmarkLiveMap[benchmark] || false;
-
-  // Generate smooth timeline labels
+  // คำนวณอายุจริงของพอร์ตลงทุนนับจากวันเริ่มลงทุน (Inception Date)
   const now = new Date();
-  const labels: string[] = [];
+  const incept = inceptionDate ? new Date(inceptionDate) : now;
+  const inceptMs = isNaN(incept.getTime()) ? now.getTime() : incept.getTime();
+  const daysSinceInception = Math.max(1, Math.floor((now.getTime() - inceptMs) / (1000 * 60 * 60 * 24)));
+  const monthsSinceInception = Math.max(1, Math.round(daysSinceInception / 30.4375));
 
-  for (let i = numPoints - 1; i >= 0; i--) {
-    const d = new Date(now);
-    if (timeframe === '1M') {
-      d.setDate(d.getDate() - i * 7);
-      labels.push(`${d.getDate()}/${d.getMonth() + 1}`);
-    } else if (timeframe === '3M') {
-      d.setDate(d.getDate() - i * 15);
-      labels.push(`${d.getDate()}/${d.getMonth() + 1}`);
-    } else if (timeframe === '6M') {
-      d.setMonth(d.getMonth() - i);
-      const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-      labels.push(thMonths[d.getMonth()]);
+  // 1. คำนวณผลตอบแทนพอร์ตตาม Timeframe จริง
+  let currentReturn: number;
+  if (timeframe === 'ALL' || daysSinceInception <= 35) {
+    // สำหรับ ALL หรือพอร์ตที่เพิ่งเริ่มลงทุนไม่เกิน 35 วัน: ใช้ผลตอบแทนสะสมทั้งหมดจริง
+    currentReturn = totalUnrealizedPLPercent;
+  } else if (daysSinceInception <= 95 && (timeframe === '3M' || timeframe === '6M' || timeframe === '1Y')) {
+    currentReturn = totalUnrealizedPLPercent;
+  } else {
+    // ตรวจสอบว่ามี Snapshot ช่วงเริ่มต้นของ Timeframe หรือไม่ เพื่อคำนวณผลตอบแทนแท้จริงของช่วงเวลานั้น
+    const timeframeDays: Record<TimeframeType, number> = {
+      '1M': 31,
+      '3M': 92,
+      '6M': 184,
+      '1Y': 366,
+      'ALL': Math.max(366, daysSinceInception),
+    };
+    const targetDays = timeframeDays[timeframe];
+    let snapAtStart: number | null = null;
+
+    if (memoryUserSnapshots && memoryUserSnapshots.length >= 2) {
+      const targetMs = now.getTime() - targetDays * 24 * 60 * 60 * 1000;
+      const candidates = memoryUserSnapshots.filter((s) => {
+        const sMs = new Date(s.snapshot_date).getTime();
+        return Math.abs(sMs - targetMs) <= targetDays * 0.3 * 24 * 60 * 60 * 1000;
+      });
+      if (candidates.length > 0) {
+        snapAtStart = candidates[0].unrealized_pl_percent;
+      }
+    }
+
+    if (snapAtStart !== null) {
+      currentReturn = totalUnrealizedPLPercent - snapAtStart;
     } else {
-      // 1Y or ALL
-      d.setMonth(d.getMonth() - i * 2);
-      const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-      labels.push(thMonths[d.getMonth()]);
+      const timeframeMultiplier: Record<TimeframeType, number> = {
+        '1M': 0.15,
+        '3M': 0.35,
+        '6M': 0.65,
+        '1Y': 1.0,
+        'ALL': 1.0,
+      };
+      currentReturn = totalUnrealizedPLPercent * (timeframeMultiplier[timeframe] || 1.0);
     }
   }
 
-  // 1. ดึงชุดข้อมูลเส้นกราฟของ Benchmark จากประวัติราคาปิดจริง (Authentic Historical Curve)
-  const bmCurvesMap = memoryBenchmarkCurves[benchmark] || BENCHMARK_BASELINE_CURVES[benchmark] || BENCHMARK_BASELINE_CURVES.NONE;
-  const rawBmCurve = bmCurvesMap[timeframe] || new Array(numPoints).fill(0);
-  const benchmarkPoints: number[] = [];
+  const roundedPortfolioReturn = Math.round(currentReturn * 10) / 10;
 
+  // 2. คำนวณผลตอบแทนและเส้นกราฟของ Benchmark ให้เป็นธรรมตามช่วงเวลาจริง (Since Inception สำหรับ ALL)
+  let roundedBenchmarkReturn = 0;
+  let rawBmCurve: number[] = [];
+  const isLive = isBenchmarkLiveMap[benchmark] || false;
+
+  if (benchmark !== 'NONE') {
+    const bmCloses = memoryBenchmarkCloses[benchmark] || [];
+    const bmCurvesMap = memoryBenchmarkCurves[benchmark] || BENCHMARK_BASELINE_CURVES[benchmark] || BENCHMARK_BASELINE_CURVES.NONE;
+
+    if (timeframe === 'ALL') {
+      // สำหรับ ALL: คำนวณดัชนีตลาดตั้งแต่วันที่เริ่มลงทุนจริง (Since Inception) เท่านั้น ไม่ย้อนหลังไปก่อนเกิดพอร์ต
+      if (bmCloses && bmCloses.length >= 2) {
+        const latest = bmCloses[bmCloses.length - 1];
+        const startIndex = Math.max(0, bmCloses.length - 1 - monthsSinceInception);
+        const startClose = bmCloses[startIndex];
+        if (startClose > 0) {
+          roundedBenchmarkReturn = Number((((latest - startClose) / startClose) * 100).toFixed(1));
+          const bmSlice = bmCloses.slice(startIndex);
+          rawBmCurve = sampleCurvePoints(bmSlice, numPoints);
+        }
+      } else {
+        // Baseline fallback: สเกลผลตอบแทนตลาดตามสัดส่วนอายุจริงของพอร์ตเทียบกับ 2 ปี
+        const baseReturn = BENCHMARK_BASELINE_RETURNS[benchmark]?.['ALL'] || 0;
+        const scale = Math.min(1.0, Math.max(0.05, monthsSinceInception / 24));
+        roundedBenchmarkReturn = Math.round(baseReturn * scale * 10) / 10;
+        const baseCurve = bmCurvesMap['ALL'] || new Array(numPoints).fill(0);
+        rawBmCurve = baseCurve.map((v) => Math.round(v * scale * 10) / 10);
+      }
+    } else {
+      const returnMap = memoryBenchmarkReturns[benchmark] || BENCHMARK_BASELINE_RETURNS[benchmark] || BENCHMARK_BASELINE_RETURNS.NONE;
+      const benchmarkReturn = returnMap[timeframe] || 0;
+      roundedBenchmarkReturn = Math.round(benchmarkReturn * 10) / 10;
+      rawBmCurve = bmCurvesMap[timeframe] || new Array(numPoints).fill(0);
+    }
+  }
+
+  const benchmarkPoints: number[] = [];
   for (let i = 0; i < numPoints; i++) {
     const val = typeof rawBmCurve[i] === 'number' ? rawBmCurve[i] : (roundedBenchmarkReturn * (i / (numPoints - 1)));
     benchmarkPoints.push(Math.round(val * 10) / 10);
@@ -410,11 +481,10 @@ export function getBenchmarkComparison(
     value: val,
   }));
 
-  // 2. คำนวณเส้นกราฟของพอร์ตผู้ใช้ (Portfolio Data)
-  // หากมี Snapshot จริงสะสมตั้งแต่ 2 จุดขึ้นไป ให้นำจุดข้อมูลจริงมาพล็อต
+  // 3. คำนวณเส้นกราฟของพอร์ตผู้ใช้ (Portfolio Data)
   const portfolioData: ChartPoint[] = [];
-
   let realPoints: number[] | null = null;
+
   if (memoryUserSnapshots && memoryUserSnapshots.length >= 2) {
     const nowMs = Date.now();
     const timeframeDays: Record<TimeframeType, number> = {
@@ -422,7 +492,7 @@ export function getBenchmarkComparison(
       '3M': 92,
       '6M': 184,
       '1Y': 366,
-      'ALL': 3650,
+      'ALL': Math.max(366, daysSinceInception),
     };
     const maxDays = timeframeDays[timeframe] || 366;
     const filteredSnaps = memoryUserSnapshots.filter((s) => {
@@ -431,9 +501,20 @@ export function getBenchmarkComparison(
     });
 
     if (filteredSnaps.length >= 2) {
-      const vals = filteredSnaps.map((s) => s.unrealized_pl_percent);
-      realPoints = sampleCurvePoints(vals, numPoints);
-      realPoints[realPoints.length - 1] = roundedPortfolioReturn;
+      const firstSnapMs = new Date(filteredSnaps[0].snapshot_date).getTime();
+      const lastSnapMs = new Date(filteredSnaps[filteredSnaps.length - 1].snapshot_date).getTime();
+      const spanDays = (lastSnapMs - firstSnapMs) / (1000 * 60 * 60 * 24);
+
+      // ป้องกันการยืด Snapshot: ข้อมูลต้องครอบคลุมช่วงเวลาจริงเพียงพอ
+      const minRequiredSpan = timeframe === 'ALL'
+        ? Math.min(7, Math.max(2, daysSinceInception * 0.3))
+        : Math.min(maxDays * 0.3, 14);
+
+      if (spanDays >= minRequiredSpan) {
+        const vals = filteredSnaps.map((s) => s.unrealized_pl_percent);
+        realPoints = sampleCurvePoints(vals, numPoints);
+        realPoints[realPoints.length - 1] = roundedPortfolioReturn;
+      }
     }
   }
 
@@ -442,16 +523,14 @@ export function getBenchmarkComparison(
     let val: number;
 
     if (realPoints && realPoints.length === numPoints) {
-      // ใช้จุดข้อมูลประวัติจริงจาก Snapshot ของผู้ใช้
       val = realPoints[i];
     } else if (benchmark !== 'NONE' && benchmarkPoints.length === numPoints) {
-      // เมื่อยังไม่มี Snapshot สะสม: สะท้อนความผันผวนตามการขึ้นลงของตลาด (Beta correlation)
+      // จำลองตามความผันผวนของตลาดในช่วงเวลาของพอร์ต
       const bmVal = benchmarkPoints[i];
       const bmExpected = roundedBenchmarkReturn * progress;
-      const marketFluctuation = (bmVal - bmExpected) * 0.6; // ~0.6 beta factor
+      const marketFluctuation = (bmVal - bmExpected) * 0.6;
       val = Math.round((currentReturn * progress + marketFluctuation) * 10) / 10;
     } else {
-      // เมื่อไม่เปรียบเทียบ: สร้างเส้นโค้งธรรมชาติไปสู่ผลตอบแทนปัจจุบัน
       const easeProgress = Math.sin((progress * Math.PI) / 2);
       val = Math.round((currentReturn * easeProgress) * 10) / 10;
     }
@@ -461,7 +540,6 @@ export function getBenchmarkComparison(
 
     portfolioData.push({
       value: val,
-      label: i % 2 === 0 || i === numPoints - 1 ? labels[i] : undefined,
     });
   }
 

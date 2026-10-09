@@ -12,6 +12,7 @@ import {
   ScrollView,
   TouchableWithoutFeedback,
   Keyboard,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -214,7 +215,11 @@ export const AuthScreen: React.FC = () => {
           {/* Logo & App Title */}
           <View style={styles.brandHeader}>
             <View style={styles.logoBadge}>
-              <Ionicons name="pie-chart" size={34} color="#10B981" />
+              <Image
+                source={require('../../assets/icon.png')}
+                style={styles.logoImage}
+                resizeMode="cover"
+              />
             </View>
             <Text style={styles.appName}>My Dividend</Text>
             <Text style={styles.appTagline}>
@@ -400,15 +405,26 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   logoBadge: {
-    width: 64,
-    height: 64,
+    width: 72,
+    height: 72,
     borderRadius: 20,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0F172A',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#334155',
     marginBottom: 12,
+    overflow: 'hidden',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  logoImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
   },
   appName: {
     fontSize: 28,

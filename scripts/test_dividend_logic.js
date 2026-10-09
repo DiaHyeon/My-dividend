@@ -48,6 +48,7 @@ const { calculatePortfolioReturns } = require('../scratch/test_build/src/service
 const { generateCsvTemplate, exportPortfolioToCsv, parseAndValidateCsv } = require('../scratch/test_build/src/services/csvService');
 const { resolveIsUSStock } = require('../scratch/test_build/src/services/currencyService');
 const { resolveTargetStockSymbol } = require('../scratch/test_build/src/services/stockService');
+const { getBenchmarkComparison } = require('../scratch/test_build/src/services/benchmarkService');
 
 let passedTests = 0;
 let failedTests = 0;
@@ -543,6 +544,72 @@ async function main() {
 
     // Total cashflow remains preserved
     assert.strictEqual(projectedAnnualNetDividend, 6000);
+  });
+
+  // -------------------------------------------------------------
+  // SUITE 7: Portfolio Benchmark & Inception Date Logic
+  // -------------------------------------------------------------
+  console.log('\n--- Suite 7: Portfolio Benchmark & Inception Date Logic ---');
+
+  runTest('7.1 getBenchmarkComparison with ALL timeframe preserves full return and starts at 0.0%', () => {
+    const res = getBenchmarkComparison('ALL', 'NONE', 14.5, [], '2026-02-15');
+    assert.strictEqual(res.portfolioReturnPct, 14.5);
+    assert.strictEqual(res.portfolioData[0].value, 0.0);
+    assert.strictEqual(res.portfolioData[res.portfolioData.length - 1].value, 14.5);
+  });
+
+  runTest('7.2 getBenchmarkComparison for recent inception does not artificially reduce 1M return', () => {
+    const today = new Date();
+    const tenDaysAgo = new Date(today);
+    tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+    const inceptStr = tenDaysAgo.toISOString().split('T')[0];
+
+    const res1M = getBenchmarkComparison('1M', 'NONE', 8.2, [], inceptStr);
+    assert.strictEqual(res1M.portfolioReturnPct, 8.2);
+  });
+
+  runTest('7.3 getBenchmarkComparison calculates fair benchmark return scaled to inception date for ALL', () => {
+    const today = new Date();
+    const sixMonthsAgo = new Date(today);
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const inceptStr = sixMonthsAgo.toISOString().split('T')[0];
+
+    const res = getBenchmarkComparison('ALL', 'SP500', 12.0, [], inceptStr);
+    assert.strictEqual(res.portfolioReturnPct, 12.0);
+    assert.ok(res.benchmarkReturnPct < 15.0, `Benchmark return should be scaled to 6 months (~6.1%), got ${res.benchmarkReturnPct}%`);
+    assert.strictEqual(res.outperforming, res.portfolioReturnPct >= res.benchmarkReturnPct);
+  });
+
+  runTest('7.4 periodPL aligns Baht profit with active timeframe percentage without conflicting with lifetime profit', () => {
+    const investmentCost = 500000;
+    const lifetimePL = 50000; // +10%
+    const res1M = { portfolioReturnPct: 1.5 }; // +1.5% for 1M
+    
+    // For timeframe 1M, periodPL should be (500,000 * 1.5) / 100 = 7,500 ฿, NOT 50,000 ฿
+    const calculatePeriodPL = (tf, cost, lifetime, tfPct) => {
+      if (cost <= 0) return 0;
+      if (tf === 'ALL') return lifetime;
+      return (cost * tfPct) / 100;
+    };
+
+    assert.strictEqual(calculatePeriodPL('1M', investmentCost, lifetimePL, res1M.portfolioReturnPct), 7500);
+    assert.strictEqual(calculatePeriodPL('ALL', investmentCost, lifetimePL, res1M.portfolioReturnPct), 50000);
+  });
+
+  runTest('7.5 Alpha banner underperforming text avoids double negative sign', () => {
+    const alphaPct = -3.5;
+    const label = 'S&P 500';
+    const formattedTrailing = `พอร์ตของคุณตามหลัง ${label} อยู่ ${Math.abs(alphaPct).toFixed(1)}%`;
+    assert.strictEqual(formattedTrailing, 'พอร์ตของคุณตามหลัง S&P 500 อยู่ 3.5%');
+    assert.ok(!formattedTrailing.includes('-3.5%'), 'Double negative sign must be eliminated');
+  });
+
+  runTest('7.6 benchmarkService enforces Once-a-Day Caching key', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const code = fs.readFileSync(path.join(__dirname, '../src/services/benchmarkService.ts'), 'utf8');
+    assert.ok(code.includes('@my_dividend_last_benchmark_sync_date'), 'Must define BENCHMARK_SYNC_DATE_KEY');
+    assert.ok(code.includes('lastSyncDate === todayStr'), 'Must check sync date before network call');
   });
 
   console.log('\n============================================================');

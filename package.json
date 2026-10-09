@@ -37,7 +37,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "postinstall": "node ./scripts/patch-expo-notifications.js",
-    "test": "node -e \"const fs = require('fs'); fs.rmSync('scratch/test_build', { recursive: true, force: true });\" && npx tsc --outDir scratch/test_build --target ES2022 --module CommonJS --noEmit false && node --env-file=.env scripts/test_dividend_logic.js && node --env-file=.env scripts/test_security_hardening.js"
+    "test": "node -e \"const fs = require('fs'); fs.rmSync('scratch/test_build', { recursive: true, force: true });\" && npx tsc --outDir scratch/test_build --target ES2022 --module CommonJS --noEmit false && node --env-file=.env scripts/test_dividend_logic.js && node --env-file=.env scripts/test_security_hardening.js && node --env-file=.env scripts/test_performance_scenarios.js"
   },
   "private": true
 }
