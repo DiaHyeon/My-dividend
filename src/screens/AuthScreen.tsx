@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -13,8 +13,9 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   Image,
+  Animated,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { signInWithEmail, signUpWithEmail, resetPasswordForEmail } from '../services/authService';
 import { setUserDisplayName } from '../services/userService';
@@ -22,7 +23,14 @@ import { colors, borderWidth, radii, fonts } from '../theme/tokens';
 
 type AuthMode = 'SIGN_IN' | 'SIGN_UP' | 'FORGOT_PASSWORD';
 
+interface StatusBannerInfo {
+  title: string;
+  message: string;
+  submessage?: string;
+}
+
 export const AuthScreen: React.FC = () => {
+  const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<AuthMode>('SIGN_IN');
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
@@ -30,6 +38,62 @@ export const AuthScreen: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resetCooldown, setResetCooldown] = useState<number>(0);
+
+  // แจ้งเตือน In-App Banner สไตล์ Calm Mint
+  const [statusBanner, setStatusBanner] = useState<StatusBannerInfo | null>(null);
+  const bannerOpacity = useRef(new Animated.Value(0)).current;
+  const bannerTranslateY = useRef(new Animated.Value(-16)).current;
+  const bannerTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showBannerNotice = (banner: StatusBannerInfo, autoSwitchMode?: AuthMode, durationMs: number = 2000) => {
+    if (bannerTimerRef.current) {
+      clearTimeout(bannerTimerRef.current);
+    }
+    setStatusBanner(banner);
+
+    // Animate in
+    Animated.parallel([
+      Animated.timing(bannerOpacity, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(bannerTranslateY, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Auto dismiss & switch after duration (e.g. 2 seconds)
+    bannerTimerRef.current = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(bannerOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bannerTranslateY, {
+          toValue: -12,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setStatusBanner(null);
+        if (autoSwitchMode) {
+          setMode(autoSwitchMode);
+        }
+      });
+    }, durationMs);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (bannerTimerRef.current) {
+        clearTimeout(bannerTimerRef.current);
+      }
+    };
+  }, []);
 
   // ตัวนับถอยหลัง Cooldown 60 วินาที สำหรับป้องกันการสแปมส่งอีเมลรีเซ็ตรหัสผ่าน
   useEffect(() => {
@@ -135,10 +199,14 @@ export const AuthScreen: React.FC = () => {
             'ยินดีต้อนรับ! บัญชีของคุณถูกสร้างเรียบร้อยแล้วและเข้าสู่ระบบพอร์ตส่วนตัวของคุณแล้ว'
           );
         } else {
-          Alert.alert(
-            'ยืนยันอีเมลของคุณ / Verify Email ✉️',
-            `ส่งลิงก์ยืนยันไปที่ ${email.trim()} แล้ว กรุณาตรวจสอบ Inbox หรือ Spam ก่อนเข้าสู่ระบบ\n\nA confirmation link has been sent to your email. Please check your inbox or spam folder.`,
-            [{ text: 'เข้าสู่ระบบ / Sign In', onPress: () => setMode('SIGN_IN') }]
+          showBannerNotice(
+            {
+              title: 'ยืนยันอีเมลของคุณ / Verify Email ✉️',
+              message: `ส่งลิงก์ยืนยันไปที่ ${email.trim()} แล้ว กรุณาตรวจสอบ Inbox หรือ Spam ก่อนเข้าสู่ระบบ`,
+              submessage: 'A confirmation link has been sent to your email. Please check your inbox or spam.',
+            },
+            'SIGN_IN',
+            2000
           );
         }
       }
@@ -201,6 +269,41 @@ export const AuthScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Calm Mint In-App Status Banner (holds for 2s on sign up) */}
+      {statusBanner && (
+        <Animated.View
+          style={[
+            styles.bannerContainer,
+            {
+              top: Math.max(insets.top, 16) + 8,
+              opacity: bannerOpacity,
+              transform: [{ translateY: bannerTranslateY }],
+            },
+          ]}
+        >
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={styles.bannerCard}
+            onPress={() => {
+              if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+              setStatusBanner(null);
+              setMode('SIGN_IN');
+            }}
+          >
+            <View style={styles.bannerIconBadge}>
+              <Ionicons name="mail" size={20} color={colors.accent} />
+            </View>
+            <View style={styles.bannerTextContainer}>
+              <Text style={styles.bannerTitle}>{statusBanner.title}</Text>
+              <Text style={styles.bannerMessage}>{statusBanner.message}</Text>
+              {statusBanner.submessage && (
+                <Text style={styles.bannerSubmessage}>{statusBanner.submessage}</Text>
+              )}
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
@@ -583,6 +686,70 @@ const styles = StyleSheet.create({
     color: colors.ink,
     textAlign: 'center',
     flexShrink: 1,
+  },
+  bannerContainer: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    zIndex: 99999,
+  },
+  bannerCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: colors.ink,
+    borderWidth: 2,
+    borderColor: colors.accent,
+    borderRadius: 20,
+    padding: 14,
+    gap: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.shadow,
+        shadowOffset: { width: 4, height: 4 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
+      },
+      android: {
+        elevation: 8,
+      },
+      web: {
+        boxShadow: '0 6px 20px rgba(18, 61, 42, 0.35)',
+      },
+    }),
+  },
+  bannerIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(111, 205, 168, 0.15)',
+    borderWidth: 1.5,
+    borderColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  bannerTextContainer: {
+    flex: 1,
+    gap: 3,
+  },
+  bannerTitle: {
+    fontFamily: fonts.thaiBold,
+    fontSize: 13.5,
+    color: colors.accent,
+    letterSpacing: -0.2,
+  },
+  bannerMessage: {
+    fontFamily: fonts.thai,
+    fontSize: 12.5,
+    color: '#FBFFFD',
+    lineHeight: 18,
+  },
+  bannerSubmessage: {
+    fontFamily: fonts.thai,
+    fontSize: 11,
+    color: '#A9CDB9',
+    lineHeight: 16,
+    marginTop: 2,
   },
 });
 
