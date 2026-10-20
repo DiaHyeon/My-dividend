@@ -5,6 +5,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
@@ -27,7 +28,8 @@ import { CalendarPickerModal } from './CalendarPickerModal';
 import { SectorPickerModal } from './SectorPickerModal';
 import { getLocalDateString } from '../utils/dateUtils';
 import { portfolioEvents } from '../services/eventService';
-import { colors } from '../theme/tokens';
+import { colors, borderWidth, radii, fonts, minHitSize } from '../theme/tokens';
+import { DashedDivider } from './ui/DashedDivider';
 
 interface AddAssetModalProps {
   visible?: boolean;
@@ -39,7 +41,7 @@ interface AddAssetModalProps {
 const ASSET_TYPES: { label: string; shortLabel: string; value: AssetType; icon: keyof typeof Ionicons.glyphMap }[] = [
   { label: 'หุ้น (STOCKS)', shortLabel: 'หุ้น', value: 'STOCKS', icon: 'trending-up' },
   { label: 'กองทุน (FUNDS)', shortLabel: 'กองทุน', value: 'FUNDS', icon: 'pie-chart' },
-  { label: 'เงินฝาก (CASH)', shortLabel: 'เงินฝาก', value: 'CASH', icon: 'wallet' },
+  { label: 'เงินฝาก (CASH)', shortLabel: 'เงินฝาก', value: 'CASH', icon: 'wallet-outline' },
 ];
 
 const formatReviewDate = (dateStr: string) => {
@@ -934,17 +936,29 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
           behavior={Platform.OS === 'android' ? 'height' : 'padding'}
           style={styles.modalOverlay}
         >
+          <Pressable style={styles.backdropPressable} onPress={handleClose} accessibilityLabel="ปิด" />
           <View style={styles.sheetContainer}>
+            {/* Grab handle */}
+            <View style={styles.sheetHandle} />
+
             {/* Header */}
             <View style={styles.sheetHeader}>
               <View>
                 <Text style={styles.sheetTitle}>เพิ่มสินทรัพย์ใหม่</Text>
                 <Text style={styles.sheetSubtitle}>บันทึกรายการเข้าพอร์ตการลงทุน</Text>
               </View>
-              <TouchableOpacity onPress={handleClose} style={styles.closeButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Ionicons name="close" size={24} color="#64748B" />
+              <TouchableOpacity
+                onPress={handleClose}
+                style={styles.closeButton}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="ปิด"
+              >
+                <Ionicons name="close" size={20} color={colors.ink} />
               </TouchableOpacity>
             </View>
+
+            <DashedDivider marginVertical={14} color={colors.shadow} />
 
             <ScrollView
               contentContainerStyle={styles.scrollContent}
@@ -964,8 +978,8 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                     >
                       <Ionicons
                         name={item.icon}
-                        size={15}
-                        color={isSelected ? '#0F172A' : '#64748B'}
+                        size={20}
+                        color={isSelected ? colors.accent : colors.ink}
                       />
                       <Text style={[styles.typeSegmentText, isSelected && styles.typeSegmentTextSelected]}>
                         {item.shortLabel}
@@ -1806,41 +1820,58 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: colors.scrim,
     justifyContent: 'flex-end',
   },
+  backdropPressable: {
+    flex: 1,
+  },
   sheetContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '90%',
+    backgroundColor: colors.surface,
+    borderTopWidth: borderWidth,
+    borderColor: colors.ink,
+    borderTopLeftRadius: radii.sheet,
+    borderTopRightRadius: radii.sheet,
+    maxHeight: '92%',
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    paddingTop: 14,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+  },
+  sheetHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: colors.shadow,
+    alignSelf: 'center',
+    marginBottom: 12,
   },
   sheetHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
   },
   sheetTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
+    lineHeight: 28,
   },
   sheetSubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    fontFamily: fonts.thai,
+    color: colors.muted,
     marginTop: 2,
   },
   closeButton: {
-    padding: 6,
-    borderRadius: 20,
-    backgroundColor: '#F1F5F9',
+    width: minHitSize,
+    height: minHitSize,
+    borderRadius: 999,
+    borderWidth,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
     paddingBottom: 24,
@@ -1854,11 +1885,12 @@ const styles = StyleSheet.create({
   },
   typeSegmentContainer: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 3,
-    marginTop: 4,
-    marginBottom: 14,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 999,
+    padding: 4,
+    marginBottom: 16,
     gap: 4,
   },
   typeSegmentTab: {
@@ -1866,26 +1898,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 9,
-    borderRadius: 9,
-    gap: 6,
+    minHeight: 44,
+    borderRadius: 999,
+    gap: 8,
+    backgroundColor: 'transparent',
   },
   typeSegmentTabSelected: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: colors.ink,
   },
   typeSegmentText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
+    fontSize: 14,
+    fontFamily: fonts.thaiBold,
+    fontWeight: '700',
+    color: colors.ink,
   },
   typeSegmentTextSelected: {
-    color: '#0F172A',
-    fontWeight: '700',
+    color: colors.accent,
   },
   input: {
     backgroundColor: '#F8FAFC',
