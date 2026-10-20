@@ -1283,9 +1283,9 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                       {currency === 'USD' && (
                         <View style={styles.usdExchangeBox}>
                           <View style={styles.usdExchangeHeader}>
-                            <Ionicons name="swap-horizontal" size={16} color="#2563EB" />
+                            <Ionicons name="swap-horizontal" size={16} color={colors.ink} />
                             <Text style={styles.usdExchangeTitle}>อัตราแลกเปลี่ยน (1 USD = กี่บาท)</Text>
-                            {isFetchingRate && <ActivityIndicator size="small" color="#2563EB" />}
+                            {isFetchingRate && <ActivityIndicator size="small" color={colors.ink} />}
                           </View>
                           <View style={styles.usdExchangeInputRow}>
                             <TextInput
@@ -1294,13 +1294,15 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                               onChangeText={setExchangeRate}
                               keyboardType="decimal-pad"
                               placeholder="34.00"
+                              placeholderTextColor={colors.muted}
                             />
                             <TouchableOpacity
                               style={styles.fetchRateBtn}
                               onPress={refreshExchangeRate}
                               disabled={isFetchingRate}
+                              activeOpacity={0.7}
                             >
-                              <Ionicons name="refresh" size={14} color="#2563EB" />
+                              <Ionicons name="refresh" size={14} color={colors.ink} />
                               <Text style={styles.fetchRateBtnText}>ดึงเรทสด</Text>
                             </TouchableOpacity>
                           </View>
@@ -2219,13 +2221,13 @@ const styles = StyleSheet.create({
     color: colors.accent,
   },
   usdExchangeBox: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 14,
-    padding: 12,
-    marginTop: 6,
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
+    backgroundColor: '#EAF3EE',
+    borderRadius: 18,
+    padding: 14,
+    marginTop: 4,
+    marginBottom: 12,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
   },
   usdExchangeHeader: {
     flexDirection: 'row',
@@ -2234,9 +2236,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   usdExchangeTitle: {
-    fontSize: 12,
+    fontSize: 13,
+    fontFamily: fonts.thaiBold,
     fontWeight: '700',
-    color: '#1E40AF',
+    color: colors.ink,
     flex: 1,
   },
   usdExchangeInputRow: {
@@ -2246,35 +2249,45 @@ const styles = StyleSheet.create({
   },
   usdExchangeInput: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#93C5FD',
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
+    height: 44,
+    fontSize: 15,
+    fontFamily: fonts.mono,
     fontWeight: '700',
-    color: '#1E3A8A',
+    color: colors.ink,
   },
   fetchRateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 10,
+    gap: 6,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
+    paddingHorizontal: 14,
+    height: 44,
+    borderRadius: 999,
   },
   fetchRateBtnText: {
-    fontSize: 12,
+    fontSize: 12.5,
+    fontFamily: fonts.thaiBold,
     fontWeight: '700',
-    color: '#1D4ED8',
+    color: colors.ink,
   },
   usdConvertedHint: {
-    fontSize: 11,
+    fontSize: 12,
+    fontFamily: fonts.mono,
     fontWeight: '600',
-    color: '#1E40AF',
-    marginTop: 6,
+    color: colors.muted,
+    marginTop: 8,
   },
   dpuHeaderLeft: {
     flexDirection: 'row',
