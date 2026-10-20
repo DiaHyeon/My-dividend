@@ -23,6 +23,7 @@ import { getSectorsForType, getAssetSector, SectorDefinition } from '../services
 import { consolidateDuplicateAssets } from '../services/assetConsolidationService';
 import { usePrivacyMode } from '../services/privacyService';
 import { ensureAuthenticated } from '../services/authService';
+import { portfolioEvents } from '../services/eventService';
 import { getLocalDateString } from '../utils/dateUtils';
 import { syncDailyPricesIfNeeded } from '../services/priceSyncService';
 import {
@@ -35,9 +36,11 @@ import {
   recordDailyPortfolioSnapshot,
 } from '../services/benchmarkService';
 import { getCachedPortfolio, savePortfolioCache, notifyOffline } from '../services/portfolioCacheService';
-import { portfolioEvents } from '../services/eventService';
-import { colors, fonts } from '../theme/tokens';
+import { colors, fonts, trend } from '../theme/tokens';
 import { CalmText } from '../components/ui/CalmText';
+import { Card } from '../components/ui/Card';
+import { Pill } from '../components/ui/Pill';
+import { DashedDivider } from '../components/ui/DashedDivider';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -781,41 +784,40 @@ export const Portfolio: React.FC<PortfolioProps> = ({
             <View style={styles.filterPillsRow}>
               {[
                 { key: 'ALL', label: 'ทั้งหมด' },
-                { key: 'STOCKS', label: 'หุ้น (STOCKS)' },
-                { key: 'FUNDS', label: 'กองทุน (FUNDS)' },
-                { key: 'CASH', label: 'เงินฝาก (CASH)' },
+                { key: 'STOCKS', label: 'หุ้น' },
+                { key: 'FUNDS', label: 'กองทุน' },
+                { key: 'CASH', label: 'เงินฝาก' },
               ].map((pill) => {
                 const isActive = activeCategoryFilter === pill.key;
                 return (
-                  <TouchableOpacity
+                  <Pill
                     key={pill.key}
-                    style={[styles.filterPill, isActive && styles.filterPillActive]}
+                    kind={isActive ? 'ink' : 'outline'}
+                    size="md"
+                    label={pill.label}
                     onPress={() => setActiveCategoryFilter(pill.key as any)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
-                      {pill.label}
-                    </Text>
-                  </TouchableOpacity>
+                  />
                 );
               })}
             </View>
 
             {/* Donut Pie Chart Card */}
-            <View style={styles.chartCard}>
+            <Card variant="dark" shadow="lg" padding={18} style={{ marginBottom: 16 }}>
               <View style={styles.chartHeaderRow}>
-                <Ionicons name="pie-chart" size={18} color="#38BDF8" />
-                <Text style={styles.chartCardTitle}>
+                <Ionicons name="pie-chart" size={16} color={colors.accent} />
+                <CalmText variant="mono" size={11} color={colors.projected} style={{ letterSpacing: 0.6 }}>
                   {activeCategoryFilter === 'ALL'
-                    ? 'สัดส่วนสินทรัพย์ตามหมวดหมู่ (Asset Allocation)'
-                    : `สัดส่วนสินทรัพย์ในหมวด ${activeCategoryFilter}`}
-                </Text>
+                    ? 'ASSET ALLOCATION'
+                    : `สัดส่วนหมวด ${activeCategoryFilter}`}
+                </CalmText>
               </View>
 
               {totalMarketValue <= 0 ? (
                 <View style={styles.emptyChartBox}>
-                  <Ionicons name="pie-chart-outline" size={40} color="#64748B" />
-                  <Text style={styles.emptyChartText}>ยังไม่มีสินทรัพย์ในพอร์ต</Text>
+                  <Ionicons name="pie-chart-outline" size={40} color={colors.shadow} />
+                  <CalmText variant="bodyBold" size={14} color={colors.surface} style={{ marginTop: 8 }}>
+                    ยังไม่มีสินทรัพย์ในพอร์ต
+                  </CalmText>
                 </View>
               ) : (
                 <View style={styles.chartContainer}>
@@ -824,15 +826,15 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                     donut={true}
                     radius={SCREEN_WIDTH * 0.19}
                     innerRadius={SCREEN_WIDTH * 0.11}
-                    innerCircleColor="#0F172A"
+                    innerCircleColor={colors.ink}
                     strokeWidth={2}
-                    strokeColor="#0F172A"
+                    strokeColor={colors.ink}
                     extraRadius={48}
                     paddingHorizontal={32}
                     paddingVertical={6}
                     showExternalLabels={true}
                     labelLineConfig={{
-                      color: '#FFFFFF',
+                      color: colors.shadow,
                       thickness: 1.5,
                       length: 16,
                       tailLength: 10,
@@ -845,7 +847,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                       if (item?.hideLabel) return null;
                       const shortLabel = item?.shortLabel || item?.label || '';
                       const percentText = item?.percentText || (item?.value !== undefined ? `${item.value}%` : '');
-                      const strokeColor = item?.color || '#38BDF8';
+                      const strokeColor = item?.color || colors.accent;
                       return (
                         <SvgG>
                           <Rect
@@ -854,14 +856,14 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                             width={62}
                             height={26}
                             rx={5}
-                            fill="#0F172A"
+                            fill={colors.ink}
                             stroke={strokeColor}
                             strokeWidth={1.5}
                           />
                           <SvgText
                             x={31}
                             y={-15}
-                            fill="#94A3B8"
+                            fill={colors.projected}
                             fontSize={8}
                             fontWeight="600"
                             textAnchor="middle"
@@ -871,7 +873,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                           <SvgText
                             x={31}
                             y={-4}
-                            fill="#FFFFFF"
+                            fill={colors.surface}
                             fontSize={10}
                             fontWeight="bold"
                             textAnchor="middle"
@@ -883,131 +885,144 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                     }}
                     centerLabelComponent={() => (
                       <View style={styles.centerLabelBox}>
-                        <Text style={styles.centerLabelText}>
+                        <CalmText variant="monoRegular" size={10} color={colors.shadow}>
                           {activeCategoryFilter === 'ALL' ? 'ทั้งพอร์ต' : activeCategoryFilter}
-                        </Text>
-                        <Text style={styles.centerLabelAmount}>
+                        </CalmText>
+                        <CalmText variant="display" size={28} color={colors.surface} style={{ marginTop: 2 }}>
                           {isPrivateMode
                             ? '฿••••••'
                             : `฿${((activeCategoryFilter === 'ALL'
                               ? totalMarketValue
                               : (activeCategoryFilter === 'STOCKS' ? stocksTotal : (activeCategoryFilter === 'FUNDS' ? fundsTotal : cashTotal))) / 1000).toFixed(0)}k`}
-                        </Text>
+                        </CalmText>
                       </View>
                     )}
                   />
+
+                  {/* Dashed Divider between Donut & Legends */}
+                  <DashedDivider color={colors.shadow} marginVertical={10} />
 
                   {/* Legends Row */}
                   <View style={styles.legendContainer}>
                     {legendItems.map((item) => (
                       <View key={item.id} style={styles.legendItem}>
-                        <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                        <Text style={styles.legendLabel} numberOfLines={1} ellipsizeMode="tail">
-                          {item.label}
-                        </Text>
-                        <Text style={styles.legendVal}>
+                        <View style={styles.legendLeft}>
+                          <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                          <CalmText variant="bodyBold" size={14} color={colors.surface} numberOfLines={1}>
+                            {item.label}
+                          </CalmText>
+                        </View>
+                        <CalmText variant="mono" size={14} color={colors.surface}>
                           {isPrivateMode ? '฿••••••' : `฿${item.val.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`}
-                        </Text>
+                        </CalmText>
                       </View>
                     ))}
                   </View>
                 </View>
               )}
-            </View>
+            </Card>
 
             {/* Section Header: Holdings Preview & Link to AssetsScreen */}
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>
+              <CalmText variant="display" size={22} color={colors.ink}>
                 สินทรัพย์หลัก ({Math.min(3, filteredAssets.length)} จาก {filteredAssets.length} รายการ)
-              </Text>
+              </CalmText>
               {onNavigateToAssets && (
-                <TouchableOpacity
+                <Pill
+                  kind="ink"
+                  size="md"
+                  label="ดูทั้งหมด →"
                   onPress={() => onNavigateToAssets('HOLDINGS', activeCategoryFilter)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text style={styles.seeAllText}>ดูทั้งหมด →</Text>
-                </TouchableOpacity>
+                />
               )}
             </View>
 
             {/* Top 3 Preview or Empty */}
             {loading ? (
               <View style={styles.loadingBox}>
-                <ActivityIndicator size="small" color="#059669" />
-                <Text style={styles.loadingText}>กำลังโหลดข้อมูล...</Text>
+                <ActivityIndicator size="small" color={colors.ink} />
+                <CalmText variant="monoRegular" size={12} color={colors.muted} style={{ marginTop: 8 }}>
+                  กำลังโหลดข้อมูล...
+                </CalmText>
               </View>
             ) : filteredAssets.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Ionicons name="wallet-outline" size={48} color="#94A3B8" />
-                <Text style={styles.emptyTitle}>ไม่มีสินทรัพย์ในหมวดนี้</Text>
-                <Text style={styles.emptySubtitle}>แตะปุ่ม + ด้านล่างเพื่อเพิ่มสินทรัพย์ใหม่</Text>
-              </View>
+              <Card shadow="md" padding={24} style={{ alignItems: 'center', justifyContent: 'center', marginVertical: 12 }}>
+                <Ionicons name="wallet-outline" size={44} color={colors.muted} />
+                <CalmText variant="bodyBold" size={15} color={colors.ink} style={{ marginTop: 8 }}>
+                  ไม่มีสินทรัพย์ในหมวดนี้
+                </CalmText>
+                <CalmText variant="monoRegular" size={11} color={colors.muted} style={{ marginTop: 4 }}>
+                  แตะปุ่ม + ด้านล่างเพื่อเพิ่มสินทรัพย์ใหม่
+                </CalmText>
+              </Card>
             ) : (
               <>
                 {filteredAssets.slice(0, 3).map((item) => {
                   const isUS = isUSStock(item);
-                  const rate = exchangeRate > 0 ? exchangeRate : 34.00;
-                  const currentPriceTHB = Number(item.current_price);
-                  const costPriceTHB = Number(item.weighted_average_cost);
-                  const currentPriceUSD = isUS ? currentPriceTHB / rate : 0;
-                  const costPriceUSD = isUS ? costPriceTHB / rate : 0;
+                  const plTrend = trend(item.unrealized_pl, false);
+                  const plSign = Number(item.unrealized_pl) > 0 ? '+' : '';
+                  const plGlyph = plTrend.glyph ? `${plTrend.glyph} ` : '';
 
                   return (
-                    <TouchableOpacity
+                    <Card
                       key={item.id}
-                      style={styles.assetCard}
-                      activeOpacity={0.7}
+                      shadow="md"
+                      padding={14}
+                      style={{ marginBottom: 12 }}
                       onPress={() => {
                         setSelectedAssetForEdit(item);
                         setIsEditModalVisible(true);
                       }}
                     >
-                      <View style={styles.assetHeader}>
-                        <View style={styles.assetSymbolContainer}>
-                          <View style={styles.assetSymbolTitleRow}>
-                            <Text style={styles.assetSymbol}>{item.symbol}</Text>
-                            {isUS && (
-                              <View style={styles.usBadge}>
-                                <Text style={styles.usBadgeText}>USD $</Text>
-                              </View>
-                            )}
-                            <View style={styles.editBadge}>
-                              <Ionicons name="pencil" size={11} color="#059669" />
-                              <Text style={styles.editBadgeText}>แก้ไข</Text>
-                            </View>
-                          </View>
-                          <View style={styles.assetTagRow}>
-                            <Text style={styles.assetTypeTag}>{item.asset_type}</Text>
-                            <Text style={styles.assetSharesTag}>
-                              {item.asset_type === 'CASH'
-                                ? (isPrivateMode ? 'เงินต้น ฿••••••' : `เงินต้น ฿${Number(item.market_value).toLocaleString()}`)
-                                : isPrivateMode
-                                  ? (item.asset_type === 'FUNDS' ? '•••• หน่วย' : '•••• หุ้น')
-                                  : (item.asset_type === 'FUNDS'
-                                    ? `${Number(item.net_shares).toLocaleString('th-TH', { maximumFractionDigits: 4 })} หน่วย`
-                                    : `${Number(item.net_shares).toLocaleString('th-TH', { maximumFractionDigits: 4 })} หุ้น`)}
-                            </Text>
-                          </View>
+                      {/* Row 1: Symbol + USD tag + Asset Type tag + Edit Pill */}
+                      <View style={styles.assetHeaderRow}>
+                        <View style={styles.assetHeaderLeft}>
+                          <CalmText variant="display" size={24} color={colors.ink}>
+                            {item.symbol}
+                          </CalmText>
+                          {isUS && <Pill kind="outline" size="sm" label="USD $" />}
+                          <Pill kind="ink" size="sm" label={item.asset_type} />
                         </View>
-                        <View style={styles.assetValueCol}>
-                          <Text style={styles.assetMarketValue}>
-                            {isPrivateMode
-                              ? '฿••••••'
-                              : `฿${Number(item.market_value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.assetPL,
-                              Number(item.unrealized_pl) >= 0 ? styles.profitColor : styles.lossColor,
-                            ]}
-                          >
-                            {isPrivateMode
-                              ? `(${Number(item.unrealized_pl) >= 0 ? '+' : ''}${Number(item.unrealized_pl_percent).toFixed(2)}%)`
-                              : `${Number(item.unrealized_pl) >= 0 ? '+' : ''}${Number(item.unrealized_pl).toLocaleString('th-TH', { minimumFractionDigits: 2 })} (${Number(item.unrealized_pl_percent).toFixed(2)}%)`}
-                          </Text>
-                        </View>
+                        <Pill
+                          kind="dashed"
+                          size="sm"
+                          label="✎ แก้ไข"
+                          onPress={() => {
+                            setSelectedAssetForEdit(item);
+                            setIsEditModalVisible(true);
+                          }}
+                        />
                       </View>
-                    </TouchableOpacity>
+
+                      {/* Row 2: Market value + Unrealized P/L */}
+                      <View style={styles.assetValueRow}>
+                        <CalmText variant="display" size={26} color={colors.ink}>
+                          {isPrivateMode
+                            ? '฿••••••'
+                            : `฿${Number(item.market_value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        </CalmText>
+                        <CalmText
+                          variant="mono"
+                          size={12}
+                          color={plTrend.color}
+                        >
+                          {isPrivateMode
+                            ? `(${plGlyph}${Number(item.unrealized_pl_percent).toFixed(2)}%)`
+                            : `${plGlyph}${plSign}${Number(item.unrealized_pl).toLocaleString('th-TH', { minimumFractionDigits: 2 })} (${Number(item.unrealized_pl_percent).toFixed(2)}%)`}
+                        </CalmText>
+                      </View>
+
+                      {/* Row 3: Shares info */}
+                      <CalmText variant="monoRegular" size={11} color={colors.muted} style={{ marginTop: 4 }}>
+                        {item.asset_type === 'CASH'
+                          ? (isPrivateMode ? 'เงินต้น ฿••••••' : `เงินต้น ฿${Number(item.market_value).toLocaleString()}`)
+                          : isPrivateMode
+                            ? (item.asset_type === 'FUNDS' ? '•••• หน่วย' : '•••• หุ้น')
+                            : (item.asset_type === 'FUNDS'
+                              ? `${Number(item.net_shares).toLocaleString('th-TH', { maximumFractionDigits: 4 })} หน่วย`
+                              : `${Number(item.net_shares).toLocaleString('th-TH', { maximumFractionDigits: 4 })} หุ้น`)}
+                      </CalmText>
+                    </Card>
                   );
                 })}
 
@@ -1017,12 +1032,12 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                     onPress={() => onNavigateToAssets('HOLDINGS', activeCategoryFilter)}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="receipt-outline" size={18} color="#059669" />
-                    <Text style={styles.viewAllAssetsBtnText}>
+                    <Ionicons name="receipt-outline" size={16} color={colors.accent} />
+                    <CalmText variant="mono" size={12} color={colors.accent}>
                       {filteredAssets.length > 3
-                        ? `ดูสินทรัพย์ทั้งหมดอีก ${filteredAssets.length - 3} รายการ & ประวัติ ในแท็บสินทรัพย์ →`
-                        : 'เปิดดูรายละเอียดและประวัติในแท็บสินทรัพย์ & ธุรกรรม →'}
-                    </Text>
+                        ? `ดูสินทรัพย์ทั้งหมดอีก ${filteredAssets.length - 3} รายการ & ประวัติ →`
+                        : 'เปิดดูรายละเอียดและประวัติในแท็บสินทรัพย์ →'}
+                    </CalmText>
                   </TouchableOpacity>
                 )}
               </>
@@ -2023,41 +2038,8 @@ const styles = StyleSheet.create({
   },
   filterPillsRow: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 14,
-  },
-  filterPill: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterPillActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
-  },
-  filterPillText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  filterPillTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  chartCard: {
-    backgroundColor: '#0F172A',
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#1E293B',
-    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
   },
   chartHeaderRow: {
     flexDirection: 'row',
@@ -2066,155 +2048,83 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginBottom: 8,
   },
-  chartCardTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#F8FAFC',
-  },
   chartContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 2,
     width: '100%',
   },
   centerLabelBox: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  centerLabelText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#94A3B8',
-  },
-  centerLabelAmount: {
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    minHeight: 17,
-  },
   legendContainer: {
     width: '100%',
-    marginTop: 10,
-    gap: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#1E293B',
-    paddingTop: 10,
+    gap: 4,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 20,
+    paddingVertical: 4,
   },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 8,
-  },
-  legendLabel: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '600',
-    color: '#CBD5E1',
+  legendLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     flex: 1,
   },
-  legendVal: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '700',
-    color: '#F8FAFC',
-    minHeight: 16,
+  legendDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 999,
   },
   emptyChartBox: {
     paddingVertical: 30,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyChartText: {
-    fontSize: 13,
-    color: '#94A3B8',
-    marginTop: 8,
-  },
-  taxQuotaBox: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#1E293B',
-    width: '100%',
-  },
-  taxQuotaHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  taxQuotaTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#34D399',
-  },
-  progressBarBackground: {
-    height: 6,
-    backgroundColor: '#334155',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginVertical: 4,
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  taxQuotaFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  taxQuotaText: {
-    fontSize: 10,
-    color: '#64748B',
-  },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
-    marginBottom: 10,
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  assetHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  assetHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  assetValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
     marginTop: 4,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  seeAllText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#059669',
   },
   viewAllAssetsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    paddingVertical: 14,
+    backgroundColor: colors.ink,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 14,
-    marginTop: 8,
+    borderRadius: 999,
+    marginTop: 4,
+    marginBottom: 16,
     gap: 8,
-  },
-  viewAllAssetsBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#059669',
-    textAlign: 'center',
-  },
-  sectionHint: {
-    fontSize: 11,
-    color: '#94A3B8',
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   loadingBox: {
     paddingVertical: 30,

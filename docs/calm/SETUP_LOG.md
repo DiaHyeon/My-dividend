@@ -573,6 +573,39 @@
   - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
   - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
 
+---
+
+## 24. Step 3B — มุมมองสัดส่วนสินทรัพย์ (Allocation View) ใน Portfolio Screen (`Portfolio.tsx`)
+
+- **ไฟล์ที่แก้ไข**: `src/screens/Portfolio.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. นำเข้าคอมโพเนนต์ UI Kit: `Card`, `Pill`, `DashedDivider`, `trend`, และ `portfolioEvents`
+  2. ปรับปรุง Category Filter Pills (`filterPillsRow`):
+     - แทนที่ปุ่มแท็บเดิมด้วยคอมโพเนนต์ `<Pill kind={activeCategoryFilter === item.key ? 'ink' : 'outline'}>`
+     - รองรับ 4 ตัวเลือก: `ทั้งหมด`, `หุ้น`, `กองทุน`, `เงินฝาก`
+     - สลับฟิลเตอร์และกรองสัดส่วนได้อย่างราบรื่น
+  3. ปรับปรุงการ์ดกราฟโดนัท Donut Chart (`chartCard`):
+     - ห่อหุ้มด้วย `<Card variant="dark" shadow="lg" padding={18}>` สไตล์การ์ดมืด Ink พร้อมเงาแข็ง `shadow="lg"`
+     - แถบหัวข้อกราฟ: แสดงป้ายแท็ก `<CalmText variant="mono" size={11} color={colors.accent}>` คำว่า `ASSET ALLOCATION`
+     - ปรับสีแกนกลางและรอยต่อของกราฟ: `innerCircleColor={colors.ink}` และ `strokeColor={colors.ink}` เพื่อให้กลมกลืนกับพื้นหลังการ์ดมืด 100%
+     - ป้ายตรงกลางวงโดนัท: ใช้ `<CalmText variant="mono" size={10} color={colors.muted}>` ("มูลค่ารวม") และ `<CalmText variant="display" size={16} color={colors.surface}>`
+     - ป้ายอธิบาย (Legend): คั่นด้วย `<DashedDivider color={colors.shadow} marginVertical={10} />` และแสดงชื่อสินทรัพย์ด้วย `<CalmText variant="bodyBold" size={12} color={colors.surface}>` พร้อมสัดส่วนเปอร์เซ็นต์ด้วย `<CalmText variant="mono" size={12} color={colors.surface}>`
+     - รักษากฎ Single Minor Callout Suppression และสีของชิ้นข้อมูล (Slice colors) ไว้สมบูรณ์ 100%
+  4. ปรับปรุง Section Header "สินทรัพย์หลัก":
+     - ใช้ `<CalmText variant="display" size={18} color={colors.ink}>` สำหรับหัวข้อ
+     - ขวามือเป็นปุ่มลิงก์สไตล์ `<Pill kind="ink">` ("ดูทั้งหมด →") เพื่อนำทางไปยังแท็บ Holdings
+  5. ปรับปรุงการ์ดพรีวิวสินทรัพย์ 3 อันดับแรก (Top 3 Holdings Cards):
+     - ห่อหุ้มด้วย `<Card shadow="md" padding={14}>`
+     - แถวบน: แสดงชื่อหุ้นด้วย `<CalmText variant="display" size={24} color={colors.ink}>`, ป้ายประเภทสินทรัพย์ (`Pill kind="ink"` หรือ `outline`), และป้ายสัดส่วนพอร์ต (`Pill kind="accent">` เช่น `28.5%`)
+     - แถวกลาง: แสดงมูลค่าตลาดด้วย `<CalmText variant="display" size={16} color={colors.ink}>` ควบคู่กับกำไร/ขาดทุน (P/L) ด้วย `<CalmText variant="mono" size={12}>` พร้อมสีและสัญลักษณ์ glyph `▲`/`▼` คำนวณจาก `trend()`
+     - แถวล่าง: แสดงจำนวนหุ้น/หน่วยลงทุนด้วย `<CalmText variant="monoRegular" size={11} color={colors.muted}>` พร้อมรองรับ Privacy Mode
+  6. ปรับปรุงปุ่ม "ดูสินทรัพย์ทั้งหมดอีก...":
+     - เปลี่ยนเป็นปุ่มแคปซูลทรงมน 999: พื้นหลัง `colors.ink`, ขอบ 2px, เงาแข็ง `colors.shadow` 3px 3px
+     - ไอคอนใบเสร็จและข้อความใช้สี `colors.accent` สีนวลเขียวมิ้นต์ ฟอนต์ Mono 12px
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
 
 
 
