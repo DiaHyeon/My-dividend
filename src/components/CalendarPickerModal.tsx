@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getLocalDateString } from '../utils/dateUtils';
+import { colors, borderWidth, radii, fonts } from '../theme/tokens';
+import { DashedDivider } from './ui/DashedDivider';
 
 export interface CalendarPickerModalProps {
   visible: boolean;
@@ -147,7 +149,9 @@ export const CalendarPickerModal: React.FC<CalendarPickerModalProps> = ({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerTitleRow}>
-              <Ionicons name="calendar" size={18} color="#059669" />
+              <View style={styles.iconCircle}>
+                <Ionicons name="calendar-outline" size={18} color="#1F7A52" />
+              </View>
               <Text style={styles.headerTitle}>{headerTitle}</Text>
             </View>
             <TouchableOpacity
@@ -155,9 +159,11 @@ export const CalendarPickerModal: React.FC<CalendarPickerModalProps> = ({
               onPress={onClose}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="close" size={20} color="#64748B" />
+              <Ionicons name="close" size={18} color={colors.ink} />
             </TouchableOpacity>
           </View>
+
+          <DashedDivider color="#A9CDB9" marginVertical={10} />
 
           {/* Presets */}
           <View style={styles.presetRow}>
@@ -179,13 +185,13 @@ export const CalendarPickerModal: React.FC<CalendarPickerModalProps> = ({
           {/* Month / Year Navigator */}
           <View style={styles.navRow}>
             <TouchableOpacity style={styles.navBtn} onPress={prevMonth} activeOpacity={0.7}>
-              <Ionicons name="chevron-back" size={18} color="#0F172A" />
+              <Ionicons name="chevron-back" size={18} color={colors.ink} />
             </TouchableOpacity>
             <Text style={styles.monthYearText}>
               {THAI_MONTHS[calendarViewDate.getMonth()]} {calendarViewDate.getFullYear() + 543}
             </Text>
             <TouchableOpacity style={styles.navBtn} onPress={nextMonth} activeOpacity={0.7}>
-              <Ionicons name="chevron-forward" size={18} color="#0F172A" />
+              <Ionicons name="chevron-forward" size={18} color={colors.ink} />
             </TouchableOpacity>
           </View>
 
@@ -250,7 +256,7 @@ export const CalendarPickerModal: React.FC<CalendarPickerModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: colors.scrim,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 9999,
@@ -264,37 +270,53 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '92%',
-    maxWidth: 350,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    maxWidth: 360,
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 15,
-    elevation: 10,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 4,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
   },
   headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+  },
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: radii.pill,
+    backgroundColor: '#EAF3EE',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   closeBtn: {
-    padding: 4,
+    width: 32,
+    height: 32,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   presetRow: {
     flexDirection: 'row',
@@ -303,17 +325,18 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   presetPill: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: '#EAF3EE',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radii.pill,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
   },
   presetText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#334155',
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   navRow: {
     flexDirection: 'row',
@@ -323,32 +346,37 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   monthYearText: {
-    fontSize: 13.5,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   navBtn: {
-    padding: 6,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    width: 34,
+    height: 34,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   weekRow: {
     flexDirection: 'row',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   weekCol: {
     flex: 1,
     alignItems: 'center',
   },
   weekDayText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.muted,
   },
   weekendText: {
-    color: '#EF4444',
+    color: colors.lossOnLight,
   },
   daysGrid: {
     flexDirection: 'row',
@@ -356,30 +384,40 @@ const styles = StyleSheet.create({
   },
   dayCell: {
     width: '14.28%',
-    height: 36,
+    height: 38,
     justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: 1,
-    borderRadius: 18,
+    marginVertical: 2,
+    borderRadius: radii.pill,
   },
   daySelected: {
-    backgroundColor: '#059669',
+    backgroundColor: colors.ink,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
   },
   dayToday: {
-    borderWidth: 1.5,
-    borderColor: '#059669',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    backgroundColor: '#EAF3EE',
   },
   dayText: {
-    fontSize: 12.5,
-    fontWeight: '500',
-    color: '#0F172A',
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   dayTextSelected: {
-    color: '#FFFFFF',
+    color: colors.accent,
     fontWeight: '700',
   },
   dayTextToday: {
-    color: '#059669',
+    color: '#1F7A52',
     fontWeight: '700',
   },
 });
+
