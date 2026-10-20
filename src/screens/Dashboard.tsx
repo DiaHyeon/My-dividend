@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Line, Rect, Text as SvgText, G } from 'react-native-svg';
 import { Card } from '../components/ui/Card';
 import { Pill } from '../components/ui/Pill';
 import { CalmText } from '../components/ui/CalmText';
@@ -1128,7 +1129,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
           }}
         />
 
-        {/* Unified Filter Bar: Left Inflow Dropdown + Right Year Selector (Option 2 แบบที่ 1) */}
+        {/* Section Title */}
+        <CalmText
+          variant="display"
+          size={24}
+          color={colors.ink}
+          style={{ marginBottom: 12 }}
+        >
+          กระแสเงินปันผลและดอกเบี้ย 12 เดือน
+        </CalmText>
+
+        {/* Unified Filter Bar: Left Inflow Dropdown + Right Year Selector */}
         <View style={styles.forecastFilterRow}>
           {/* Left: Dropdown for Inflow Filter */}
           <Pill
@@ -1144,7 +1155,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             onPress={() => setIsInflowFilterModalVisible(true)}
           />
 
-          {/* Right: Year Selector with Prev/Next arrows (แบบที่ 1) */}
+          {/* Right: Year Selector with Prev/Next arrows */}
           <View style={styles.yearSelectorContainer}>
             <TouchableOpacity
               style={styles.yearArrowBtn}
@@ -1197,195 +1208,274 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </View>
             ) : (
               <>
-                {/* Year Summary Header Row (ข้อ 3 แบบ A) */}
+                {/* Year Summary Header Row matching 03-chart-12m.html */}
                 <View style={styles.chartHeaderRow}>
-                  <View style={styles.chartHeaderLeft}>
-                    <View style={styles.chartHeaderTitleRow}>
-                      <CalmText variant="bodyBold" size={13} color={colors.ink}>
-                        {selectedYear === 'ROLLING'
-                          ? 'กระแสเงินสดคาดการณ์ 12 เดือนข้างหน้า'
-                          : `กระแสเงินสดปี ${selectedYear}`}
-                      </CalmText>
-                      <Pill
-                        kind={selectedYear === currentYear || selectedYear === 'ROLLING' ? 'accent' : 'outline'}
-                        size="sm"
-                        label={
-                          selectedYear === 'ROLLING'
-                            ? 'Rolling 12M'
-                            : selectedYear === currentYear
-                            ? 'ปีนี้'
-                            : typeof selectedYear === 'number' && selectedYear < currentYear
-                            ? 'ประวัติย้อนหลัง'
-                            : 'คาดการณ์'
-                        }
-                      />
-                    </View>
+                  <View style={{ flex: 1 }}>
+                    <CalmText
+                      variant="monoRegular"
+                      size={11}
+                      color={colors.ink}
+                      style={{ letterSpacing: 0.5, marginBottom: 2 }}
+                    >
+                      {selectedYear === 'ROLLING'
+                        ? 'กระแสเงินสดคาดการณ์ 12 เดือนข้างหน้า'
+                        : `รวมทั้งปี ${selectedYear}`}
+                    </CalmText>
+                    <CalmText
+                      variant="display"
+                      size={40}
+                      color={colors.ink}
+                      style={{ lineHeight: 44 }}
+                    >
+                      {formatMoney(forecastYearTotal)}
+                    </CalmText>
+                  </View>
+                  <Pill
+                    kind="ink"
+                    size="md"
+                    label={`เฉลี่ย ${formatMoney(forecastMonthlyAvg)}/ด.`}
+                  />
+                </View>
 
-                    {/* Total Amount & Monthly Average */}
-                    <View style={styles.chartTotalRow}>
-                      <CalmText variant="display" size={40} color={colors.ink}>
-                        {formatMoney(forecastYearTotal)}
-                      </CalmText>
-                      <Pill
-                        kind="ink"
-                        size="md"
-                        label={`เฉลี่ย ${formatMoney(forecastMonthlyAvg)}/ด.`}
-                      />
-                    </View>
-
-                    {/* Subrow for Received vs Pending breakdown if current year */}
-                    {selectedYear === currentYear && (
-                      <View style={styles.receivedPendingRow}>
-                        <View style={styles.receivedPill}>
-                          <View style={styles.dotReceived} />
-                          <CalmText variant="mono" size={11} color={colors.ink}>
-                            รับแล้ว {formatMoney(forecastYearReceived)}
-                          </CalmText>
-                        </View>
-                        <View style={styles.pendingPill}>
-                          <View style={styles.dotPending} />
-                          <CalmText variant="mono" size={11} color={colors.muted}>
-                            รอรับ {formatMoney(forecastYearPending)}
-                          </CalmText>
-                        </View>
-                      </View>
-                    )}
+                {/* Subrow for Received vs Pending breakdown */}
+                <View style={styles.chartBreakdownRow}>
+                  <View style={styles.chartBreakdownItem}>
+                    <View style={styles.squareReceived} />
+                    <CalmText variant="mono" size={11} color={colors.ink}>
+                      รับแล้ว {formatMoney(forecastYearReceived)}
+                    </CalmText>
+                  </View>
+                  <View style={styles.chartBreakdownItem}>
+                    <View style={styles.squareProjected} />
+                    <CalmText variant="mono" size={11} color={colors.ink}>
+                      รอรับ {formatMoney(forecastYearPending)}
+                    </CalmText>
                   </View>
                 </View>
 
-              {/* Monthly Bar Chart View (ข้อ 3 แบบ A) */}
-              <View style={styles.barsContainer}>
-                {monthlyForecasts.map((item) => {
-                  const hasPayout = item.amount > 0;
-                  const barHeightRatio = hasPayout
-                    ? Math.max(0.12, item.amount / maxMonthlyAmount)
-                    : 0.05;
-                  const isSelected = selectedMonth === item.monthIndex;
-                  const isCurrentMonth = item.isCurrent;
-                  const isPastMonth = item.isPast;
+                {/* Dashed Divider before chart */}
+                <DashedDivider color={colors.shadow} marginVertical={10} />
 
-                  return (
-                    <TouchableOpacity
-                      key={item.monthIndex}
-                      style={styles.barColumn}
-                      onPress={() => setSelectedMonth(isSelected ? null : item.monthIndex)}
-                      activeOpacity={0.7}
-                    >
-                      {/* Amount tooltip above bar if has payout */}
-                      {hasPayout && (
-                        <Text
-                          style={[
-                            styles.barTopAmount,
-                            isSelected && styles.barTopAmountSelected,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {isPrivateMode
-                            ? '••••'
-                            : item.amount >= 1000
-                            ? `${(item.amount / 1000).toFixed(item.amount >= 10000 ? 0 : 1)}k`
-                            : item.amount.toFixed(0)}
-                        </Text>
-                      )}
+                {/* Svg Bar Chart View matching 03-chart-12m.html */}
+                <View style={styles.chartSvgContainer}>
+                  <Svg viewBox="0 0 326 244" width="100%" height={244}>
+                    {/* Horizontal Dashed Gridlines */}
+                    <Line
+                      x1="0"
+                      x2="326"
+                      y1="120.6"
+                      y2="120.6"
+                      stroke={colors.shadow}
+                      strokeWidth="1.5"
+                      strokeDasharray="5, 5"
+                    />
+                    <Line
+                      x1="0"
+                      x2="326"
+                      y1="51.1"
+                      y2="51.1"
+                      stroke={colors.shadow}
+                      strokeWidth="1.5"
+                      strokeDasharray="5, 5"
+                    />
 
-                      {/* Bar Graphic Track & Fill */}
-                      <View
-                        style={[
-                          styles.barTrack,
-                          isCurrentMonth && styles.barTrackCurrent,
-                          isSelected && styles.barTrackSelected,
-                        ]}
-                      >
-                        <View
-                          style={[
-                            styles.barFill,
-                            { height: `${barHeightRatio * 100}%` },
-                            hasPayout
-                              ? isPastMonth
-                                ? styles.barFillPast
-                                : isCurrentMonth
-                                ? styles.barFillCurrent
-                                : styles.barFillFuture
-                              : styles.barFillInactive,
-                            isSelected && styles.barFillSelected,
-                          ]}
-                        />
-                      </View>
+                    {/* Solid Baseline 2px across all 12 bars */}
+                    <Line
+                      x1="0"
+                      x2="326"
+                      y1="190"
+                      y2="190"
+                      stroke={colors.ink}
+                      strokeWidth="2"
+                    />
 
-                      {/* Month Label with Current Month Indicator */}
-                      <View
-                        style={[
-                          styles.monthLabelWrapper,
-                          isCurrentMonth && styles.monthLabelWrapperCurrent,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.barMonthLabel,
-                            isSelected && styles.barMonthLabelSelected,
-                            isCurrentMonth && styles.barMonthLabelCurrent,
-                          ]}
-                        >
-                          {item.monthName}
-                        </Text>
-                      </View>
+                    {/* 12 Months Columns */}
+                    {monthlyForecasts.map((item, i) => {
+                      const colX = 4.5 + i * 27;
+                      const colCenter = colX + 9;
+                      const isCurrent = item.isCurrent;
+                      const isPast = item.isPast;
+                      const isSelected = selectedMonth === item.monthIndex;
+                      const hasPayout = item.amount > 0;
+                      const ratio =
+                        hasPayout && maxMonthlyAmount > 0
+                          ? Math.min(1, Math.max(0.08, item.amount / maxMonthlyAmount))
+                          : 0;
+                      const maxBarH = 150;
+                      const barH = hasPayout ? Math.max(16, ratio * maxBarH) : 4;
+                      const barY = 190 - barH;
 
-                      {isCurrentMonth ? (
-                        <View style={styles.nowBadge}>
-                          <Ionicons
-                            name="caret-up"
-                            size={8}
-                            color={colors.accent}
-                            style={{ marginBottom: -2 }}
+                      const displayAmount = isPrivateMode
+                        ? '••••'
+                        : item.amount >= 1000
+                        ? `${(item.amount / 1000).toFixed(item.amount >= 10000 ? 0 : 1)}k`
+                        : item.amount.toFixed(0);
+
+                      return (
+                        <G key={item.monthIndex}>
+                          {/* Current Month Background Capsule Rail */}
+                          {isCurrent && (
+                            <Rect
+                              x={colX - 3}
+                              y={24}
+                              width={24}
+                              height={166}
+                              rx={12}
+                              fill="#D5E6DC"
+                            />
+                          )}
+
+                          {/* Selected Month Indicator Outline (when user tapped this month) */}
+                          {isSelected && !isCurrent && (
+                            <Rect
+                              x={colX - 2}
+                              y={barY - 2}
+                              width={22}
+                              height={barH + 4}
+                              rx={8}
+                              fill="none"
+                              stroke={colors.accent}
+                              strokeWidth="2"
+                              strokeDasharray="3, 2"
+                            />
+                          )}
+
+                          {/* Bar Graphic */}
+                          {hasPayout ? (
+                            isCurrent ? (
+                              <Rect
+                                x={colX}
+                                y={barY}
+                                width={18}
+                                height={barH}
+                                rx={6}
+                                fill={colors.accent}
+                                stroke={colors.ink}
+                                strokeWidth="2.5"
+                              />
+                            ) : isPast ? (
+                              <Rect
+                                x={colX}
+                                y={barY}
+                                width={18}
+                                height={barH}
+                                rx={6}
+                                fill={colors.ink}
+                                stroke={colors.ink}
+                                strokeWidth="2"
+                              />
+                            ) : (
+                              <Rect
+                                x={colX}
+                                y={barY}
+                                width={18}
+                                height={barH}
+                                rx={6}
+                                fill={colors.projected}
+                                stroke={colors.ink}
+                                strokeWidth="2"
+                                strokeDasharray="4, 3"
+                              />
+                            )
+                          ) : (
+                            <Rect
+                              x={colX}
+                              y={188}
+                              width={18}
+                              height={2}
+                              rx={1}
+                              fill={colors.shadow}
+                            />
+                          )}
+
+                          {/* Amount on top of bar */}
+                          {hasPayout && (
+                            <SvgText
+                              x={colCenter}
+                              y={barY - 6}
+                              textAnchor="middle"
+                              fill={colors.ink}
+                              fontFamily={fonts.mono}
+                              fontSize={10}
+                              fontWeight="700"
+                            >
+                              {displayAmount}
+                            </SvgText>
+                          )}
+
+                          {/* Month Name below baseline */}
+                          <SvgText
+                            x={colCenter}
+                            y={212}
+                            textAnchor="middle"
+                            fill={colors.ink}
+                            fontFamily={isCurrent || isSelected ? fonts.thaiBold : fonts.thai}
+                            fontSize={11}
+                            fontWeight={isCurrent || isSelected ? '700' : '500'}
+                          >
+                            {item.monthName}
+                          </SvgText>
+
+                          {/* ▲ Now Capsule Badge */}
+                          {isCurrent && (
+                            <>
+                              <Rect
+                                x={colX - 13}
+                                y={220}
+                                width={44}
+                                height={18}
+                                rx={9}
+                                fill={colors.ink}
+                              />
+                              <SvgText
+                                x={colCenter}
+                                y={233}
+                                textAnchor="middle"
+                                fill={colors.accent}
+                                fontFamily={fonts.mono}
+                                fontSize={10}
+                                fontWeight="700"
+                              >
+                                ▲ Now
+                              </SvgText>
+                            </>
+                          )}
+                        </G>
+                      );
+                    })}
+                  </Svg>
+
+                  {/* Transparent Touchable Columns for 100% reliable tap handling */}
+                  <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+                    <View style={{ flex: 1, flexDirection: 'row' }}>
+                      {monthlyForecasts.map((item) => {
+                        const isSelected = selectedMonth === item.monthIndex;
+                        return (
+                          <TouchableOpacity
+                            key={item.monthIndex}
+                            style={{ flex: 1, height: '100%' }}
+                            activeOpacity={0.6}
+                            onPress={() => setSelectedMonth(isSelected ? null : item.monthIndex)}
+                            accessibilityLabel={`เดือน ${item.monthName} ยอดเงิน ${formatMoney(item.amount)}`}
                           />
-                          <Text style={styles.nowBadgeText}>Now</Text>
-                        </View>
-                      ) : (
-                        <View style={styles.nowPlaceholder} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Chart Legend Row */}
-              <View style={styles.chartLegendRow}>
-                <View style={styles.chartLegendItemsWrap}>
-                  {selectedYear === currentYear ? (
-                    <>
-                      <View style={styles.chartLegendItem}>
-                        <View style={[styles.chartLegendDot, styles.chartLegendSquareReceived]} />
-                        <CalmText variant="monoRegular" size={11} color={colors.ink}>รับแล้ว</CalmText>
-                      </View>
-                      <View style={styles.chartLegendItem}>
-                        <View style={[styles.chartLegendDot, styles.chartLegendSquareProjected]} />
-                        <CalmText variant="monoRegular" size={11} color={colors.muted}>รอรับ</CalmText>
-                      </View>
-                      <View style={styles.chartLegendItem}>
-                        <View style={styles.nowBadgeLegend}>
-                          <Ionicons name="caret-up" size={8} color={colors.accent} />
-                          <CalmText variant="mono" size={9} color={colors.accent}>Now</CalmText>
-                        </View>
-                        <CalmText variant="monoRegular" size={11} color={colors.ink}>เดือนปัจจุบัน</CalmText>
-                      </View>
-                    </>
-                  ) : typeof selectedYear === 'number' && selectedYear < currentYear ? (
-                    <View style={styles.chartLegendItem}>
-                      <View style={[styles.chartLegendDot, styles.chartLegendSquareReceived]} />
-                      <CalmText variant="monoRegular" size={11} color={colors.ink}>รับจริงแล้วทั้งหมด</CalmText>
+                        );
+                      })}
                     </View>
-                  ) : (
-                    <View style={styles.chartLegendItem}>
-                      <View style={[styles.chartLegendDot, styles.chartLegendSquareProjected]} />
-                      <CalmText variant="monoRegular" size={11} color={colors.muted}>คาดการณ์ล่วงหน้า</CalmText>
-                    </View>
-                  )}
+                  </View>
                 </View>
-                <CalmText variant="monoRegular" size={11} color={colors.muted}>แตะแท่งกราฟเพื่อดูรายการ</CalmText>
-              </View>
 
-              {/* Selected Month Detail Pop-out */}
-              {activeMonthData && activeMonthData.amount > 0 && (
+                {/* Hint below chart */}
+                <CalmText
+                  variant="monoRegular"
+                  size={11}
+                  color={colors.muted}
+                  style={{ textAlign: 'center', marginTop: 8 }}
+                >
+                  แตะแท่งกราฟเพื่อดูรายการปันผลรายเดือน
+                </CalmText>
+
+                {/* Selected Month Detail Pop-out */}
+                {activeMonthData && activeMonthData.amount > 0 && (
                 <View style={styles.selectedMonthDetails}>
                   <View style={styles.selectedMonthHeader}>
                     <Ionicons name="calendar-outline" size={18} color={colors.ink} />
@@ -2013,58 +2103,37 @@ const styles = StyleSheet.create({
   },
   chartTotalRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 8,
-    marginTop: 12,
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: 6,
   },
-  chartTotalAmount: {
-    fontSize: 40,
-    fontFamily: fonts.display,
-    color: colors.ink,
-  },
-  chartAvgText: {
-    fontSize: 12,
-    fontFamily: fonts.mono,
-  },
-  receivedPendingRow: {
+  chartBreakdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginTop: 6,
+    gap: 14,
+    marginTop: 8,
+    marginBottom: 6,
+    flexWrap: 'wrap',
   },
-  receivedPill: {
+  chartBreakdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  pendingPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  dotReceived: {
-    width: 10,
-    height: 10,
-    borderRadius: 2,
+  squareReceived: {
+    width: 14,
+    height: 14,
+    borderRadius: 4,
     backgroundColor: colors.ink,
   },
-  dotPending: {
-    width: 10,
-    height: 10,
-    borderRadius: 2,
+  squareProjected: {
+    width: 14,
+    height: 14,
+    borderRadius: 4,
     backgroundColor: colors.projected,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: colors.ink,
-  },
-  receivedPillText: {
-    fontSize: 11,
-    color: colors.ink,
-    fontFamily: fonts.mono,
-  },
-  pendingPillText: {
-    fontSize: 11,
-    color: colors.muted,
-    fontFamily: fonts.mono,
+    borderStyle: 'dashed',
   },
   emptyChartBox: {
     paddingVertical: 32,
@@ -2084,165 +2153,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 20,
   },
-  barsContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    height: 180,
-    paddingTop: 24,
-    paddingBottom: 4,
-  },
-  barColumn: {
-    flex: 1,
-    alignItems: 'center',
-    height: '100%',
-    justifyContent: 'flex-end',
-  },
-  barTopAmount: {
-    fontSize: 11,
-    fontFamily: fonts.mono,
-    color: colors.ink,
-    marginBottom: 3,
-  },
-  barTopAmountSelected: {
-    color: colors.ink,
-  },
-  barTrack: {
-    width: 16,
-    height: 110,
-    backgroundColor: colors.track,
-    borderRadius: 8,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  barTrackCurrent: {
-    backgroundColor: '#D5E6DC',
-  },
-  barTrackSelected: {
-    backgroundColor: colors.track,
-  },
-  barFill: {
+  chartSvgContainer: {
     width: '100%',
-    borderRadius: 8,
-  },
-  barFillPast: {
-    backgroundColor: colors.ink,
-    borderWidth: 2,
-    borderColor: colors.ink,
-  },
-  barFillCurrent: {
-    backgroundColor: colors.accent,
-    borderWidth: 2,
-    borderColor: colors.ink,
-  },
-  barFillFuture: {
-    backgroundColor: colors.projected,
-    borderWidth: 2,
-    borderColor: colors.ink,
-  },
-  barFillInactive: {
-    backgroundColor: colors.track,
-    borderWidth: 0,
-  },
-  barFillSelected: {
-    borderColor: colors.ink,
-  },
-  monthLabelWrapper: {
-    marginTop: 4,
-    paddingHorizontal: 2,
-    paddingVertical: 1,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monthLabelWrapperCurrent: {
-    backgroundColor: 'transparent',
-  },
-  barMonthLabel: {
-    fontSize: 11,
-    color: colors.ink,
-    fontFamily: fonts.thai,
-  },
-  barMonthLabelSelected: {
-    color: colors.ink,
-    fontFamily: fonts.thaiBold,
-  },
-  barMonthLabelCurrent: {
-    color: colors.ink,
-    fontFamily: fonts.thaiBold,
-  },
-  nowBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.ink,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 4,
-    marginTop: 2,
-    gap: 1,
-  },
-  nowBadgeText: {
-    fontSize: 9,
-    fontFamily: fonts.mono,
-    color: colors.accent,
-    letterSpacing: -0.2,
-  },
-  nowPlaceholder: {
-    height: 16,
-    marginTop: 2,
-  },
-  nowBadgeLegend: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.ink,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 4,
-    gap: 1,
-  },
-  chartLegendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    paddingTop: 8,
-    borderTopWidth: 1.5,
-    borderTopColor: colors.track,
-  },
-  chartLegendItemsWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  chartLegendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  chartLegendDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 3,
-  },
-  chartLegendSquareReceived: {
-    backgroundColor: colors.ink,
-  },
-  chartLegendSquareProjected: {
-    backgroundColor: colors.projected,
-    borderWidth: 2,
-    borderColor: colors.ink,
-  },
-  chartLegendText: {
-    fontSize: 11,
-    color: colors.ink,
-    fontFamily: fonts.monoRegular,
-  },
-  chartLegendHint: {
-    fontSize: 11,
-    color: colors.muted,
-    fontFamily: fonts.monoRegular,
+    aspectRatio: 326 / 244,
+    position: 'relative',
   },
   selectedMonthDetails: {
     marginTop: 14,
