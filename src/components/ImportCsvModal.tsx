@@ -23,6 +23,8 @@ import {
   ImportSummary,
 } from '../services/csvService';
 import { portfolioEvents } from '../services/eventService';
+import { colors, borderWidth, radii, fonts } from '../theme/tokens';
+import { DashedDivider } from './ui/DashedDivider';
 
 interface ImportCsvModalProps {
   visible: boolean;
@@ -170,11 +172,14 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
+          {/* Grab Handle */}
+          <View style={styles.grabHandle} />
+
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <View style={styles.headerIconContainer}>
-                <Ionicons name="cloud-upload" size={22} color="#4338CA" />
+                <Ionicons name="cloud-upload-outline" size={20} color="#1F7A52" />
               </View>
               <View>
                 <Text style={styles.title}>นำเข้าสินทรัพย์ด้วย CSV</Text>
@@ -189,9 +194,11 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
               disabled={isImporting}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="close" size={20} color="#64748B" />
+              <Ionicons name="close" size={18} color={colors.ink} />
             </TouchableOpacity>
           </View>
+
+          <DashedDivider color="#A9CDB9" marginVertical={0} />
 
           {/* Success Summary View */}
           {importSummary ? (
@@ -263,7 +270,7 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
                   <Ionicons
                     name="document-text-outline"
                     size={16}
-                    color={activeTab === 'FILE' ? '#4338CA' : '#64748B'}
+                    color={activeTab === 'FILE' ? colors.accent : colors.muted}
                   />
                   <Text
                     style={[
@@ -284,7 +291,7 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
                   <Ionicons
                     name="clipboard-outline"
                     size={16}
-                    color={activeTab === 'PASTE' ? '#4338CA' : '#64748B'}
+                    color={activeTab === 'PASTE' ? colors.accent : colors.muted}
                   />
                   <Text
                     style={[
@@ -304,7 +311,7 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
                   onPress={() => setShowTemplateGuide(!showTemplateGuide)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="information-circle-outline" size={15} color="#4338CA" />
+                  <Ionicons name="information-circle-outline" size={15} color="#1F7A52" />
                   <Text style={styles.helperChipText}>รูปแบบหัวคอลัมน์</Text>
                 </TouchableOpacity>
 
@@ -313,8 +320,8 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
                   onPress={handleDownloadTemplate}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="download-outline" size={15} color="#059669" />
-                  <Text style={[styles.helperChipText, { color: '#059669' }]}>
+                  <Ionicons name="download-outline" size={15} color="#1F7A52" />
+                  <Text style={[styles.helperChipText, { color: '#1F7A52' }]}>
                     ดาวน์โหลด Template ตัวอย่าง
                   </Text>
                 </TouchableOpacity>
@@ -375,7 +382,7 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
                     ) : (
                       <View style={styles.dropzoneContent}>
                         <View style={styles.uploadIconBadge}>
-                          <Ionicons name="cloud-upload-outline" size={32} color="#4338CA" />
+                          <Ionicons name="cloud-upload-outline" size={28} color="#1F7A52" />
                         </View>
                         <Text style={styles.dropzoneTitle}>แตะเพื่อเลือกไฟล์ CSV</Text>
                         <Text style={styles.dropzoneSub}>
@@ -595,30 +602,36 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: colors.scrim,
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radii.sheet,
+    borderTopRightRadius: radii.sheet,
+    borderTopWidth: borderWidth,
+    borderLeftWidth: borderWidth,
+    borderRightWidth: borderWidth,
+    borderColor: colors.ink,
     maxHeight: '90%',
     paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 16,
+  },
+  grabHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: radii.pill,
+    backgroundColor: '#A9CDB9',
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 4,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -626,28 +639,34 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   headerIconContainer: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: '#EEF2FF',
+    width: 38,
+    height: 38,
+    borderRadius: radii.pill,
+    backgroundColor: '#EAF3EE',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   subtitle: {
-    fontSize: 12,
-    color: '#64748B',
+    fontSize: 13,
+    color: colors.muted,
+    fontFamily: fonts.thai,
     marginTop: 2,
   },
   closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
+    width: 34,
+    height: 34,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -661,9 +680,11 @@ const styles = StyleSheet.create({
   },
   tabSwitcher: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 4,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: radii.pill,
+    padding: 3,
     marginBottom: 12,
   },
   tabButton: {
@@ -672,25 +693,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
-    borderRadius: 9,
+    borderRadius: radii.pill,
     gap: 6,
   },
   tabButtonActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: colors.ink,
   },
   tabButtonText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.muted,
   },
   tabButtonTextActive: {
-    color: '#4338CA',
-    fontWeight: '700',
+    color: colors.accent,
   },
   actionHelpersRow: {
     flexDirection: 'row',
@@ -701,61 +717,64 @@ const styles = StyleSheet.create({
   helperChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 10,
+    gap: 6,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: radii.pill,
+    paddingHorizontal: 12,
     paddingVertical: 6,
   },
   helperChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#4338CA',
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   templateGuideCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
+    backgroundColor: '#EAF3EE',
+    borderRadius: 16,
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     marginBottom: 12,
   },
   guideTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#1E293B',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
     marginBottom: 6,
   },
   guideItem: {
-    fontSize: 11,
-    color: '#475569',
+    fontSize: 12,
+    color: colors.ink,
+    fontFamily: fonts.thai,
     marginBottom: 3,
-    lineHeight: 16,
+    lineHeight: 18,
   },
   guideCode: {
     fontWeight: '700',
-    color: '#4338CA',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: '#1F7A52',
+    fontFamily: fonts.mono,
   },
   filePickerArea: {
     marginBottom: 14,
   },
   dropzone: {
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     borderStyle: 'dashed',
-    borderRadius: 16,
+    borderRadius: 20,
     paddingVertical: 24,
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.surface,
   },
   dropzoneSelected: {
-    borderColor: '#10B981',
-    backgroundColor: '#ECFDF5',
+    borderStyle: 'solid',
+    backgroundColor: '#EAF3EE',
   },
   dropzoneContent: {
     alignItems: 'center',
@@ -764,8 +783,10 @@ const styles = StyleSheet.create({
   uploadIconBadge: {
     width: 52,
     height: 52,
-    borderRadius: 26,
-    backgroundColor: '#EEF2FF',
+    borderRadius: radii.pill,
+    backgroundColor: '#EAF3EE',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
@@ -773,32 +794,38 @@ const styles = StyleSheet.create({
   fileIconBadge: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: '#D1FAE5',
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
   dropzoneTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#1E293B',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   dropzoneSub: {
-    fontSize: 11,
-    color: '#64748B',
+    fontSize: 12,
+    color: colors.muted,
+    fontFamily: fonts.thai,
     marginTop: 4,
     textAlign: 'center',
   },
   fileNameText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#065F46',
+    fontFamily: fonts.mono,
+    color: colors.ink,
     maxWidth: 240,
   },
   fileChangeHint: {
     fontSize: 11,
-    color: '#059669',
+    color: '#1F7A52',
+    fontFamily: fonts.thaiBold,
     marginTop: 4,
     textDecorationLine: 'underline',
   },
@@ -806,14 +833,14 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   pasteInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 16,
     padding: 12,
-    fontSize: 12,
-    color: '#0F172A',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontSize: 13,
+    color: colors.ink,
+    fontFamily: fonts.mono,
     minHeight: 110,
   },
   clearTextBtn: {
@@ -825,8 +852,9 @@ const styles = StyleSheet.create({
   },
   clearTextBtnLabel: {
     fontSize: 11,
-    color: '#EF4444',
-    fontWeight: '600',
+    color: colors.lossOnLight,
+    fontFamily: fonts.thaiBold,
+    fontWeight: '700',
   },
   previewSection: {
     marginTop: 6,
@@ -839,28 +867,30 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   previewSectionTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   badgeSuccess: {
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
+    backgroundColor: '#EAF3EE',
+    paddingHorizontal: 10,
     paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderRadius: radii.pill,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
   },
   badgeSuccessText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#059669',
+    fontFamily: fonts.mono,
+    color: '#1F7A52',
   },
   issuesCard: {
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: 10,
+    backgroundColor: '#FEF3C7',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 14,
     padding: 10,
     marginBottom: 10,
   },
@@ -873,16 +903,19 @@ const styles = StyleSheet.create({
   issuesTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#B45309',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   issueText: {
-    fontSize: 11,
-    color: '#92400E',
+    fontSize: 11.5,
+    color: colors.ink,
+    fontFamily: fonts.thai,
     marginTop: 2,
   },
   issueTextMore: {
     fontSize: 11,
-    color: '#B45309',
+    color: colors.muted,
+    fontFamily: fonts.thaiBold,
     fontWeight: '600',
     marginTop: 3,
   },
@@ -890,12 +923,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
   },
   previewRowLeft: {
     flex: 1,
@@ -906,80 +939,90 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   previewSymbol: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   assetTypeTag: {
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 5,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.ink,
   },
   tagStock: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#EAF3EE',
   },
   tagFund: {
-    backgroundColor: '#F5F3FF',
+    backgroundColor: '#E0F2FE',
   },
   tagCash: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#FEF3C7',
   },
   assetTypeText: {
     fontSize: 10,
     fontWeight: '700',
+    fontFamily: fonts.thaiBold,
   },
   textStock: {
-    color: '#1D4ED8',
+    color: '#1F7A52',
   },
   textFund: {
-    color: '#6D28D9',
+    color: '#0284C7',
   },
   textCash: {
-    color: '#047857',
+    color: colors.ink,
   },
   tagUsd: {
     backgroundColor: '#FEF3C7',
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
     paddingVertical: 1,
-    borderRadius: 4,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.ink,
   },
   textUsd: {
     fontSize: 9,
     fontWeight: '700',
-    color: '#B45309',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   previewMeta: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: colors.muted,
+    fontFamily: fonts.thai,
     marginTop: 2,
   },
   previewRowRight: {
     alignItems: 'flex-end',
   },
   previewShares: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   previewCost: {
-    fontSize: 11,
-    color: '#64748B',
+    fontSize: 11.5,
+    color: colors.muted,
+    fontFamily: fonts.mono,
     marginTop: 2,
   },
   moreRowsNotice: {
     fontSize: 11,
-    color: '#64748B',
+    color: colors.muted,
     fontStyle: 'italic',
     textAlign: 'center',
     marginTop: 6,
   },
   importingBox: {
-    backgroundColor: '#EEF2FF',
-    borderRadius: 12,
+    backgroundColor: '#EAF3EE',
+    borderRadius: 16,
     padding: 14,
     marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#C7D2FE',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
   },
   importingHeader: {
     flexDirection: 'row',
@@ -988,64 +1031,80 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   importingTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#3730A3',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   progressBarTrack: {
-    height: 6,
-    backgroundColor: '#C7D2FE',
-    borderRadius: 3,
+    height: 8,
+    backgroundColor: '#A9CDB9',
+    borderRadius: 4,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#4338CA',
-    borderRadius: 3,
+    backgroundColor: colors.ink,
+    borderRadius: 4,
   },
   importingSub: {
-    fontSize: 11,
-    color: '#4F46E5',
+    fontSize: 12,
+    color: colors.muted,
+    fontFamily: fonts.mono,
     marginTop: 6,
   },
   footer: {
     flexDirection: 'row',
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 14,
     gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    minHeight: 48,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   cancelButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#64748B',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   confirmButton: {
     flex: 2,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: '#4338CA',
+    borderRadius: radii.pill,
+    backgroundColor: colors.ink,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   confirmButtonDisabled: {
-    backgroundColor: '#94A3B8',
+    opacity: 0.5,
   },
   confirmButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#FFFFFF',
+    fontFamily: fonts.thaiBold,
+    color: colors.accent,
   },
   summaryContainer: {
     padding: 24,
@@ -1055,13 +1114,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   summaryTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 22,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   summarySubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.muted,
+    fontFamily: fonts.thai,
     marginTop: 4,
     textAlign: 'center',
   },
@@ -1074,55 +1135,71 @@ const styles = StyleSheet.create({
   summaryStatBox: {
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    minWidth: 90,
+    paddingVertical: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    minWidth: 100,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   summaryStatValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#10B981',
+    fontSize: 22,
+    fontWeight: '700',
+    fontFamily: fonts.mono,
+    color: '#1F7A52',
   },
   summaryStatLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
+    fontSize: 12,
+    color: colors.muted,
+    fontFamily: fonts.thaiBold,
     marginTop: 2,
   },
   errorLogsBox: {
     width: '100%',
     backgroundColor: '#FEF2F2',
-    borderRadius: 10,
+    borderRadius: 14,
     padding: 10,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#FECACA',
+    borderWidth: borderWidth,
+    borderColor: colors.lossOnLight,
   },
   errorLogsTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#B91C1C',
+    fontFamily: fonts.thaiBold,
+    color: colors.lossOnLight,
     marginBottom: 4,
   },
   errorLogText: {
     fontSize: 11,
-    color: '#991B1B',
+    color: colors.lossOnLight,
+    fontFamily: fonts.mono,
     marginTop: 2,
   },
   primaryButton: {
     width: '100%',
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: '#0F172A',
+    minHeight: 50,
+    borderRadius: radii.pill,
+    backgroundColor: colors.ink,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 4,
   },
   primaryButtonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    fontFamily: fonts.thaiBold,
+    color: colors.accent,
   },
 });
