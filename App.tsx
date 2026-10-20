@@ -1,4 +1,5 @@
 import React, { Component, ReactNode, useState, useEffect } from 'react';
+import { useCalmFonts } from './src/theme/useCalmFonts';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, LogBox, BackHandler, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -213,6 +214,7 @@ function MainNavigator() {
 }
 
 export default function App() {
+  const [fontsLoaded] = useCalmFonts();
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
 
@@ -240,6 +242,10 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  if (!fontsLoaded) {
+    return null;
+  }
 
   return (
     <SafeAreaProvider>

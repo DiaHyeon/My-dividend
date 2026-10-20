@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CalmText } from '../components/ui/CalmText';
+import { colors } from '../theme/tokens';
 import {
   ScrollView,
   View,
@@ -944,10 +946,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Header Title & Sign Out Door Icon */}
         <View style={styles.topHeader}>
           <View style={styles.headerTitleCol}>
-            <Text style={styles.screenTitle}>My Dividend</Text>
-            <Text style={styles.screenSubtitle}>
+            <CalmText variant="display" size={36}>My Dividend</CalmText>
+            <CalmText variant="monoRegular" size={12} color={colors.muted} style={{ marginTop: 2 }}>
               {timeGreeting.greeting}, {userDisplayName} {timeGreeting.icon}
-            </Text>
+            </CalmText>
           </View>
           <TouchableOpacity
             style={styles.headerExitBtn}
@@ -955,7 +957,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             activeOpacity={0.7}
             accessibilityLabel="ออกจากระบบ"
           >
-            <Ionicons name="log-out-outline" size={22} color="#DC2626" />
+            <Ionicons name="log-out-outline" size={22} color={colors.lossOnLight} />
           </TouchableOpacity>
         </View>
 
@@ -1858,7 +1860,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.bg,
   },
   scrollContainer: {
     paddingHorizontal: 16,
@@ -1889,14 +1891,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   headerExitBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: '#FEE2E2',
+    width: 46,
+    height: 46,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#FECACA',
+    borderWidth: 2,
+    borderColor: colors.ink,
   },
   headerRightActions: {
     flexDirection: 'row',

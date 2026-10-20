@@ -1,7 +1,12 @@
 // A zero-jitter hero card displaying total portfolio net worth, unrealized return, dual dividend yields (Current & YoC), and privacy masking.
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Card } from './ui/Card';
+import { CalmText } from './ui/CalmText';
+import { Pill } from './ui/Pill';
+import { DashedDivider } from './ui/DashedDivider';
+import { colors, trend } from '../theme/tokens';
 
 interface HeroNetWorthCardProps {
   totalMarketValue: number;
@@ -53,13 +58,28 @@ export const HeroNetWorthCard: React.FC<HeroNetWorthCardProps> = React.memo(({
     : 0;
   const isPositiveGrowth = yoyPercent >= 0;
 
+  // P/L Trend & Pill formatting
+  const plTrend = trend(totalUnrealizedPL, true);
+  const plKind = totalUnrealizedPL < 0 ? 'lossDark' : 'accent';
+  const plSign = totalUnrealizedPL > 0 ? '+' : '';
+  const plLabel = totalUnrealizedPL === 0
+    ? `${totalUnrealizedPLPercent.toFixed(2)}%`
+    : `${plTrend.glyph} ${plSign}${totalUnrealizedPLPercent.toFixed(2)}%`;
+
+  // Secondary stats trends
+  const plStatTrend = trend(totalUnrealizedPL, true);
+  const plStatSign = totalUnrealizedPL > 0 ? '+' : '';
+  const retTrend = trend(effectiveTotalReturn, true);
+  const retSign = effectiveTotalReturn > 0 ? '+' : '';
 
   return (
-    <View style={styles.heroCard}>
+    <Card variant="dark" shadow="lg" padding={18}>
       {/* Top Row: Label + Frameless Eye Button on left, P/L Badge on right */}
       <View style={styles.heroTopRow}>
         <View style={styles.heroLabelContainer}>
-          <Text style={styles.heroLabel}>มูลค่าพอร์ตรวม (Total Net Worth)</Text>
+          <CalmText variant="mono" size={11} color={colors.surface}>
+            มูลค่าพอร์ตรวม (Total Net Worth)
+          </CalmText>
           <TouchableOpacity
             style={styles.heroEyeBtn}
             onPress={onTogglePrivateMode}
@@ -69,171 +89,134 @@ export const HeroNetWorthCard: React.FC<HeroNetWorthCardProps> = React.memo(({
             <Ionicons
               name={isPrivateMode ? 'eye-off-outline' : 'eye-outline'}
               size={18}
-              color={isPrivateMode ? '#34D399' : '#94A3B8'}
+              color={isPrivateMode ? colors.accent : colors.surface}
             />
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.plBadge, totalUnrealizedPL >= 0 ? styles.plBadgeProfit : styles.plBadgeLoss]}>
-          <Ionicons
-            name={totalUnrealizedPL >= 0 ? 'arrow-up' : 'arrow-down'}
-            size={12}
-            color={totalUnrealizedPL >= 0 ? '#166534' : '#991B1B'}
-          />
-          <Text style={[styles.plBadgeText, totalUnrealizedPL >= 0 ? styles.profitText : styles.lossText]}>
-            {totalUnrealizedPL >= 0 ? '+' : ''}
-            {totalUnrealizedPLPercent.toFixed(2)}%
-          </Text>
-        </View>
+        <Pill size="md" kind={plKind} label={plLabel} />
       </View>
 
       {/* Value Row: Total Market Value */}
       <View style={styles.heroValueRow}>
-        <Text style={styles.heroValue} numberOfLines={1}>
+        <CalmText variant="display" size={36} color={colors.surface} numberOfLines={1}>
           {formatMoney(totalMarketValue)}
-        </Text>
+        </CalmText>
       </View>
 
       {/* Annual Net Inflow Highlight with Dual Yield Badges */}
       <View style={styles.dividendHighlightBox}>
         <View style={styles.dividendHighlightTop}>
           <View style={styles.dividendHeaderLeft}>
-            <Ionicons name="cash-outline" size={15} color="#34D399" />
-            <Text style={styles.dividendHighlightLabel} numberOfLines={1}>
+            <Ionicons name="cash-outline" size={15} color={colors.accent} />
+            <CalmText variant="monoRegular" size={11} color={colors.projected} numberOfLines={1}>
               {inflowFilter === 'ALL'
                 ? 'กระแสเงินสดรับคาดการณ์/ปี'
                 : inflowFilter === 'DIVIDENDS'
                 ? 'เงินปันผลสุทธิคาดการณ์/ปี'
                 : 'ดอกเบี้ยเงินฝากสุทธิคาดการณ์/ปี'}
-            </Text>
+            </CalmText>
           </View>
           <View style={styles.dividendHeaderRight}>
-            <Text style={styles.dividendHighlightValue} numberOfLines={1}>
+            <CalmText variant="display" size={16} color={colors.accent} numberOfLines={1}>
               {formatMoney(projectedAnnualNetDividend)}
-            </Text>
+            </CalmText>
             {onOpenAnnualComparison && (
-              <TouchableOpacity
-                style={[
-                  styles.yoyBadge,
-                  hasPriorYearData
-                    ? isPositiveGrowth
-                      ? styles.yoyBadgePos
-                      : styles.yoyBadgeNeg
-                    : styles.yoyBadgeNew,
-                ]}
+              <Pill
+                kind="outlineDark"
+                size="sm"
                 onPress={onOpenAnnualComparison}
-                activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                {hasPriorYearData ? (
-                  <>
-                    <Ionicons
-                      name={isPositiveGrowth ? 'caret-up' : 'caret-down'}
-                      size={9}
-                      color={isPositiveGrowth ? '#34D399' : '#F87171'}
-                    />
-                    <Text
-                      style={[
-                        styles.yoyBadgeText,
-                        isPositiveGrowth ? styles.yoyTextPos : styles.yoyTextNeg,
-                      ]}
-                    >
-                      {isPositiveGrowth ? '+' : ''}
-                      {yoyPercent.toFixed(1)}% YoY
-                    </Text>
-                  </>
-                ) : (
-                  <Text style={[styles.yoyBadgeText, styles.yoyTextNew]}>✦ ปีแรก</Text>
-                )}
-                <Ionicons name="information-circle-outline" size={10} color="#94A3B8" />
-              </TouchableOpacity>
+                label={hasPriorYearData ? `${isPositiveGrowth ? '▲ +' : '▼ '}${yoyPercent.toFixed(1)}% YoY` : '✦ ปีแรก ⓘ'}
+              />
             )}
           </View>
         </View>
 
-
         {/* Dual Yield & Monthly Avg Subrow */}
         <View style={styles.dualYieldRow}>
           <View style={styles.dualYieldItem}>
-            <Text style={styles.dualYieldSublabel} numberOfLines={1}>เฉลี่ยต่อเดือน</Text>
-            <Text style={styles.dualYieldSubval} numberOfLines={1}>
+            <CalmText variant="monoRegular" size={10} color={colors.projected} numberOfLines={1}>
+              เฉลี่ยต่อเดือน
+            </CalmText>
+            <CalmText variant="mono" size={11} color={colors.surface} numberOfLines={1} style={{ marginTop: 1 }}>
               {isPrivateMode ? '฿••••••' : `~${formatMoney(monthlyAvgInflow, 0)}/ด.`}
-            </Text>
+            </CalmText>
           </View>
           <View style={styles.dualYieldDivider} />
           <View style={styles.dualYieldItem}>
-            <Text style={styles.dualYieldSublabel} numberOfLines={1}>Current Yield</Text>
-            <Text style={styles.dualYieldSubval} numberOfLines={1}>{portfolioCurrentYield.toFixed(2)}%</Text>
+            <CalmText variant="monoRegular" size={10} color={colors.projected} numberOfLines={1}>
+              Current Yield
+            </CalmText>
+            <CalmText variant="mono" size={11} color={colors.accent} numberOfLines={1} style={{ marginTop: 1 }}>
+              {portfolioCurrentYield.toFixed(2)}%
+            </CalmText>
           </View>
           <View style={styles.dualYieldDivider} />
           <View style={styles.dualYieldItem}>
-            <Text style={styles.dualYieldSublabel} numberOfLines={1}>Yield on Cost</Text>
-            <Text style={styles.dualYieldYoCVal} numberOfLines={1}>{portfolioYoC.toFixed(2)}% 🚀</Text>
+            <CalmText variant="monoRegular" size={10} color={colors.projected} numberOfLines={1}>
+              Yield on Cost
+            </CalmText>
+            <CalmText variant="mono" size={11} color={colors.accent} numberOfLines={1} style={{ marginTop: 1 }}>
+              {portfolioYoC.toFixed(2)}% 🚀
+            </CalmText>
           </View>
         </View>
+      </View>
+
+      {/* Horizontal dashed divider */}
+      <View style={{ marginVertical: 12 }}>
+        <DashedDivider color={colors.accent} />
       </View>
 
       {/* Secondary stats row: 3 balanced minimal columns */}
       <View style={styles.heroBottomRow}>
         <View style={styles.heroStatItem}>
-          <Text style={styles.heroStatLabel}>ต้นทุนรวม</Text>
-          <Text style={styles.heroStatValue} numberOfLines={1}>
+          <CalmText variant="monoRegular" size={11} color={colors.projected}>
+            ต้นทุนรวม
+          </CalmText>
+          <CalmText variant="mono" size={13} color={colors.surface} numberOfLines={1} style={{ marginTop: 2 }}>
             {formatMoney(totalCost)}
-          </Text>
+          </CalmText>
         </View>
 
         <View style={styles.heroDivider} />
 
         <View style={styles.heroStatItem}>
-          <Text style={styles.heroStatLabel}>ส่วนต่างราคา (P/L)</Text>
-          <Text
-            style={[styles.heroStatValue, totalUnrealizedPL >= 0 ? styles.profitTextLight : styles.lossTextLight]}
-            numberOfLines={1}
-          >
-            {totalUnrealizedPL >= 0 ? '+' : ''}
-            {formatMoney(totalUnrealizedPL)}
-          </Text>
-          <Text style={[styles.heroStatSubPercent, totalUnrealizedPL >= 0 ? styles.profitSubText : styles.lossSubText]}>
-            {totalUnrealizedPL >= 0 ? '+' : ''}{totalUnrealizedPLPercent.toFixed(1)}%
-          </Text>
+          <CalmText variant="monoRegular" size={11} color={colors.projected}>
+            ส่วนต่างราคา (P/L)
+          </CalmText>
+          <CalmText variant="mono" size={13} color={plStatTrend.color} numberOfLines={1} style={{ marginTop: 2 }}>
+            {totalUnrealizedPL === 0 ? '' : plStatTrend.glyph + ' '}
+            {plStatSign}{formatMoney(totalUnrealizedPL)}
+          </CalmText>
+          <CalmText variant="monoRegular" size={10} color={plStatTrend.color} style={{ marginTop: 1 }}>
+            {plStatSign}{totalUnrealizedPLPercent.toFixed(1)}%
+          </CalmText>
         </View>
 
         <View style={styles.heroDivider} />
 
         <View style={styles.heroStatItem}>
           <View style={styles.statLabelWithIcon}>
-            <Text style={styles.heroStatLabel}>ผลตอบแทนรวม</Text>
-            <Ionicons name="sparkles" size={10} color="#F59E0B" />
+            <CalmText variant="monoRegular" size={11} color={colors.projected}>
+              ผลตอบแทนรวม
+            </CalmText>
+            <Ionicons name="sparkles" size={10} color={colors.accent} />
           </View>
-          <Text
-            style={[styles.heroStatValue, effectiveTotalReturn >= 0 ? styles.totalReturnPositive : styles.lossTextLight]}
-            numberOfLines={1}
-          >
-            {effectiveTotalReturn >= 0 ? '+' : ''}
-            {formatMoney(effectiveTotalReturn)}
-          </Text>
-          <Text style={[styles.heroStatSubPercent, effectiveTotalReturn >= 0 ? styles.totalReturnSubPositive : styles.lossSubText]}>
-            ({effectiveTotalReturn >= 0 ? '+' : ''}{effectiveTotalReturnPercent.toFixed(1)}%)
-          </Text>
+          <CalmText variant="mono" size={13} color={retTrend.color} numberOfLines={1} style={{ marginTop: 2 }}>
+            {effectiveTotalReturn === 0 ? '' : retTrend.glyph + ' '}
+            {retSign}{formatMoney(effectiveTotalReturn)}
+          </CalmText>
+          <CalmText variant="monoRegular" size={10} color={retTrend.color} style={{ marginTop: 1 }}>
+            ({retSign}{effectiveTotalReturnPercent.toFixed(1)}%)
+          </CalmText>
         </View>
       </View>
-    </View>
+    </Card>
   );
 });
 
 const styles = StyleSheet.create({
-  heroCard: {
-    backgroundColor: '#0F172A',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 14,
-    elevation: 3,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
   heroTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -245,12 +228,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  heroLabel: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
   heroEyeBtn: {
     padding: 2,
     justifyContent: 'center',
@@ -261,51 +238,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 8,
   },
-  heroValue: {
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  plBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    gap: 3,
-    height: 22,
-  },
-  plBadgeProfit: {
-    backgroundColor: '#DCFCE7',
-  },
-  plBadgeLoss: {
-    backgroundColor: '#FEE2E2',
-  },
-  plBadgeText: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '700',
-  },
-  profitText: {
-    color: '#059669',
-  },
-  lossText: {
-    color: '#DC2626',
-  },
-  profitTextLight: {
-    color: '#34D399',
-  },
-  lossTextLight: {
-    color: '#F87171',
-  },
   dividendHighlightBox: {
-    backgroundColor: '#1E293B',
+    backgroundColor: 'transparent',
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderWidth: 2,
+    borderColor: colors.shadow,
   },
   dividendHighlightTop: {
     flexDirection: 'row',
@@ -319,69 +258,21 @@ const styles = StyleSheet.create({
     gap: 5,
     flexShrink: 1,
   },
-  dividendHighlightLabel: {
-    fontSize: 11,
-    lineHeight: 15,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
   dividendHeaderRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  dividendHighlightValue: {
-    fontSize: 15,
-    lineHeight: 19,
-    fontWeight: '800',
-    color: '#34D399',
-    textAlign: 'right',
-  },
-  yoyBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  yoyBadgePos: {
-    backgroundColor: 'rgba(5, 150, 105, 0.15)',
-    borderColor: 'rgba(52, 211, 153, 0.3)',
-  },
-  yoyBadgeNeg: {
-    backgroundColor: 'rgba(220, 38, 38, 0.15)',
-    borderColor: 'rgba(248, 113, 113, 0.3)',
-  },
-  yoyBadgeNew: {
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-    borderColor: 'rgba(129, 140, 248, 0.3)',
-  },
-  yoyBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  yoyTextPos: {
-    color: '#34D399',
-  },
-  yoyTextNeg: {
-    color: '#F87171',
-  },
-  yoyTextNew: {
-    color: '#A5B4FC',
-  },
-
   dualYieldRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#0F172A',
+    backgroundColor: 'transparent',
     borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderWidth: 2,
+    borderColor: colors.shadow,
     minHeight: 38,
   },
   dualYieldItem: {
@@ -392,35 +283,12 @@ const styles = StyleSheet.create({
   dualYieldDivider: {
     width: 1,
     height: 18,
-    backgroundColor: '#334155',
-  },
-  dualYieldSublabel: {
-    fontSize: 9,
-    lineHeight: 12,
-    color: '#94A3B8',
-  },
-  dualYieldSubval: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '700',
-    color: '#F8FAFC',
-    marginTop: 1,
-  },
-  dualYieldYoCVal: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '800',
-    color: '#34D399',
-    marginTop: 1,
+    backgroundColor: colors.shadow,
   },
   heroBottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingTop: 10,
-    marginTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#1E293B',
   },
   heroStatItem: {
     flex: 1,
@@ -428,43 +296,13 @@ const styles = StyleSheet.create({
   heroDivider: {
     width: 1,
     height: 24,
-    backgroundColor: '#1E293B',
+    backgroundColor: colors.shadow,
     marginHorizontal: 8,
-    marginTop: 2,
-  },
-  heroStatLabel: {
-    fontSize: 10,
-    lineHeight: 13,
-    color: '#94A3B8',
-  },
-  heroStatValue: {
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: '700',
-    color: '#F8FAFC',
     marginTop: 2,
   },
   statLabelWithIcon: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-  },
-  heroStatSubPercent: {
-    fontSize: 10,
-    lineHeight: 13,
-    marginTop: 1,
-    fontWeight: '600',
-  },
-  profitSubText: {
-    color: '#34D399',
-  },
-  lossSubText: {
-    color: '#F87171',
-  },
-  totalReturnPositive: {
-    color: '#FBBF24',
-  },
-  totalReturnSubPositive: {
-    color: '#FBBF24',
   },
 });
