@@ -27,6 +27,7 @@ import { CalendarPickerModal } from './CalendarPickerModal';
 import { SectorPickerModal } from './SectorPickerModal';
 import { getLocalDateString } from '../utils/dateUtils';
 import { portfolioEvents } from '../services/eventService';
+import { colors } from '../theme/tokens';
 
 interface AddAssetModalProps {
   visible?: boolean;
@@ -919,7 +920,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
           activeOpacity={0.85}
           accessibilityLabel="เพิ่มสินทรัพย์"
         >
-          <Ionicons name="add" size={28} color="#FFFFFF" />
+          <Ionicons name="add" size={28} color={colors.accent} />
         </TouchableOpacity>
       )}
 
@@ -1788,17 +1789,19 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 24,
     right: 24,
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#059669',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.ink,
+    borderWidth: 2,
+    borderColor: colors.ink,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 6,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
     zIndex: 999,
   },
   modalOverlay: {

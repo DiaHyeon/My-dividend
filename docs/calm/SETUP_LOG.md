@@ -533,6 +533,25 @@
   - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
   - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
 
+---
+
+## 22. ปรับสไตล์ปุ่มเพิ่มสินทรัพย์ (Floating Action Button - FAB) เป็น Calm Mint Theme
+
+- **ไฟล์ที่แก้ไข**: `src/components/AddAssetModal.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. นำเข้า `colors` จาก `../theme/tokens`
+  2. ปรับสไตล์ปุ่ม `styles.fab`:
+     - ขนาด: `width: 60, height: 60, borderRadius: 30` (ทรงกลมรัศมี 999)
+     - สีพื้นหลัง: `backgroundColor: colors.ink` (`#123D2A`)
+     - ขอบ: `borderWidth: 2, borderColor: colors.ink`
+     - เงาแข็ง (Hard Shadow): `shadowColor: colors.shadow` (`#A9CDB9`), `shadowOffset: { width: 4, height: 4 }`, `shadowOpacity: 1, shadowRadius: 0`
+     - ตำแหน่ง: `bottom: 24, right: 24` ลอยเหนือแถบแท็บล่างอย่างลงตัว
+  3. ปรับสีไอคอนเครื่องหมายบวก (`Ionicons name="add"`):
+     - เปลี่ยนจากสีขาว `#FFFFFF` เดิม เป็น `colors.accent` (`#6FCDA8`) สีนวลเขียวมิ้นต์ตรงตามแบบ `01-overview.html` line 100
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
 
 
 
