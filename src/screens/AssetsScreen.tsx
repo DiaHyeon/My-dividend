@@ -34,6 +34,12 @@ import { syncDailyPricesIfNeeded } from '../services/priceSyncService';
 import { calculatePortfolioReturns } from '../services/returnService';
 import { getCachedPortfolio, savePortfolioCache, notifyOffline } from '../services/portfolioCacheService';
 import { portfolioEvents } from '../services/eventService';
+import { colors, fonts } from '../theme/tokens';
+import { CalmText } from '../components/ui/CalmText';
+import { Pill } from '../components/ui/Pill';
+import { Card } from '../components/ui/Card';
+import { DashedDivider } from '../components/ui/DashedDivider';
+import { SheetFrame } from '../components/ui/SheetFrame';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -449,43 +455,45 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
       {/* Top Header */}
       <View style={styles.header}>
         <View style={styles.headerTitleBox}>
-          <Text style={styles.headerTitle}>สินทรัพย์ & ธุรกรรม</Text>
-          <Text style={styles.headerSubtitle}>
-            จัดการการถือครองและประวัติการซื้อขายย้อนหลัง
-          </Text>
+          <CalmText variant="display" size={32} color={colors.ink} style={{ lineHeight: 32 }}>
+            สินทรัพย์{'\n'}& ธุรกรรม
+          </CalmText>
         </View>
 
         <View style={styles.headerActionsRow}>
           <TouchableOpacity
-            style={[styles.headerActionBtnSecondary, isPrivateMode && styles.headerActionBtnActive]}
+            style={[styles.headerEyeBtn, isPrivateMode && styles.headerEyeBtnActive]}
             onPress={togglePrivateMode}
             activeOpacity={0.7}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            accessibilityLabel="โหมดความเป็นส่วนตัว"
           >
             <Ionicons
               name={isPrivateMode ? 'eye-off-outline' : 'eye-outline'}
-              size={15}
-              color={isPrivateMode ? '#059669' : '#475569'}
+              size={18}
+              color={isPrivateMode ? colors.accent : colors.ink}
             />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.headerActionBtnSecondary}
+            style={styles.headerExportBtn}
             onPress={handleExportCsv}
             activeOpacity={0.7}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
-            <Ionicons name="download-outline" size={15} color="#475569" />
-            <Text style={styles.headerActionBtnSecondaryText}>ส่งออก</Text>
+            <CalmText variant="mono" size={12} color={colors.ink}>
+              ส่งออก
+            </CalmText>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.headerActionBtnPrimary}
+            style={styles.headerImportBtn}
             onPress={() => setIsImportModalVisible(true)}
             activeOpacity={0.7}
           >
-            <Ionicons name="cloud-upload-outline" size={15} color="#FFFFFF" />
-            <Text style={styles.headerActionBtnPrimaryText}>นำเข้า CSV</Text>
+            <CalmText variant="mono" size={12} color={colors.accent}>
+              นำเข้า CSV
+            </CalmText>
           </TouchableOpacity>
         </View>
       </View>
@@ -498,18 +506,17 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
           activeOpacity={0.7}
         >
           <Ionicons
-            name="wallet"
+            name="wallet-outline"
             size={16}
-            color={viewMode === 'HOLDINGS' ? '#0F172A' : '#64748B'}
+            color={viewMode === 'HOLDINGS' ? colors.accent : colors.ink}
           />
-          <Text
-            style={[
-              styles.viewModeTabText,
-              viewMode === 'HOLDINGS' && styles.viewModeTabTextActive,
-            ]}
+          <CalmText
+            variant="mono"
+            size={12}
+            color={viewMode === 'HOLDINGS' ? colors.accent : colors.ink}
           >
-            สินทรัพย์คงเหลือ ({assets.length})
-          </Text>
+            คงเหลือ ({assets.length})
+          </CalmText>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -518,18 +525,17 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
           activeOpacity={0.7}
         >
           <Ionicons
-            name="receipt"
+            name="receipt-outline"
             size={16}
-            color={viewMode === 'TRANSACTIONS' ? '#0F172A' : '#64748B'}
+            color={viewMode === 'TRANSACTIONS' ? colors.accent : colors.ink}
           />
-          <Text
-            style={[
-              styles.viewModeTabText,
-              viewMode === 'TRANSACTIONS' && styles.viewModeTabTextActive,
-            ]}
+          <CalmText
+            variant="mono"
+            size={12}
+            color={viewMode === 'TRANSACTIONS' ? colors.accent : colors.ink}
           >
-            ประวัติรายการ ({transactions.length})
-          </Text>
+            ประวัติ ({transactions.length})
+          </CalmText>
         </TouchableOpacity>
       </View>
 
@@ -1161,10 +1167,11 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.bg,
   },
   container: {
     flex: 1,
+    backgroundColor: colors.bg,
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -1174,78 +1181,66 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 12,
     paddingBottom: 8,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.bg,
     gap: 8,
   },
   headerTitleBox: {
     flex: 1,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  headerSubtitle: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
+    justifyContent: 'flex-end',
   },
   headerActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  headerActionBtnPrimary: {
-    flexDirection: 'row',
+  headerEyeBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
     alignItems: 'center',
-    backgroundColor: '#4338CA',
-    borderRadius: 9,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    gap: 5,
-    shadowColor: '#4338CA',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
+    justifyContent: 'center',
   },
-  headerActionBtnPrimaryText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  headerEyeBtnActive: {
+    backgroundColor: colors.ink,
   },
-  headerActionBtnSecondary: {
-    flexDirection: 'row',
+  headerExportBtn: {
+    height: 42,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 14,
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 9,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    gap: 4,
+    justifyContent: 'center',
   },
-  headerActionBtnActive: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
-  },
-  headerActionBtnSecondaryText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
+  headerImportBtn: {
+    height: 42,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    backgroundColor: colors.ink,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   viewModeSwitcher: {
     flexDirection: 'row',
-    backgroundColor: '#E2E8F0',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    borderRadius: 999,
     marginHorizontal: 16,
-    marginTop: 6,
+    marginTop: 8,
     marginBottom: 8,
-    padding: 3,
+    padding: 4,
+    gap: 4,
   },
   viewModeTab: {
     flex: 1,
@@ -1253,25 +1248,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 9,
-    borderRadius: 10,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: 'transparent',
   },
   viewModeTabActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  viewModeTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  viewModeTabTextActive: {
-    color: '#0F172A',
-    fontWeight: '700',
+    backgroundColor: colors.ink,
   },
   searchContainer: {
     paddingHorizontal: 16,
