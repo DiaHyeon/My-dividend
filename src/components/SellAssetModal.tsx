@@ -21,6 +21,8 @@ import { getLocalDateString } from '../utils/dateUtils';
 import { cancelRemindersForSymbol } from '../services/notificationService';
 import { portfolioEvents } from '../services/eventService';
 import { saveTransactionCurrencyMeta, resolveIsUSStock } from '../services/currencyService';
+import { colors, borderWidth, radii, fonts } from '../theme/tokens';
+import { DashedDivider } from './ui/DashedDivider';
 
 interface SellAssetModalProps {
   visible: boolean;
@@ -226,6 +228,7 @@ export const SellAssetModal: React.FC<SellAssetModalProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.sheetContainer}>
+          <View style={styles.grabHandle} />
           {/* Header */}
           <View style={styles.sheetHeader}>
             <View>
@@ -246,10 +249,11 @@ export const SellAssetModal: React.FC<SellAssetModalProps> = ({
                 {isCash ? 'ถอนเงินต้นออกจากบัญชี' : `บันทึกการขาย${isFund ? 'กองทุน' : 'หุ้น'}เพื่อลดสัดส่วนพอร์ต`}
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <Ionicons name="close-circle" size={24} color="#94A3B8" />
+            <TouchableOpacity onPress={onClose} style={styles.closeButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Ionicons name="close" size={20} color={colors.ink} />
             </TouchableOpacity>
           </View>
+          <DashedDivider color={colors.shadow} />
 
           <ScrollView style={styles.formContent} keyboardShouldPersistTaps="handled">
             {/* Holdings Info Banner */}
@@ -282,10 +286,10 @@ export const SellAssetModal: React.FC<SellAssetModalProps> = ({
                 )}
               </View>
               <TextInput
-                style={[styles.inputBox, isOverMax && styles.inputBoxError]}
+                style={[styles.inputBox, styles.monoInput, isOverMax && styles.inputBoxError]}
                 keyboardType="numeric"
                 placeholder={`0.0000 ${unitLabel}`}
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={colors.muted}
                 value={sellShares}
                 onChangeText={setSellShares}
               />
@@ -338,10 +342,10 @@ export const SellAssetModal: React.FC<SellAssetModalProps> = ({
                   )}
                 </View>
                 <TextInput
-                  style={styles.inputBox}
+                  style={[styles.inputBox, styles.monoInput]}
                   keyboardType="numeric"
                   placeholder={currencyMode === 'USD' ? '$0.00' : '0.00'}
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.muted}
                   value={sellPrice}
                   onChangeText={setSellPrice}
                 />
@@ -363,7 +367,7 @@ export const SellAssetModal: React.FC<SellAssetModalProps> = ({
                 onPress={() => setIsCalendarVisible(true)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="calendar-outline" size={16} color="#64748B" />
+                <Ionicons name="calendar-outline" size={18} color={colors.ink} />
                 <Text style={styles.datePickerText}>{txDate || 'เลือกวันที่'}</Text>
               </TouchableOpacity>
             </View>
@@ -385,7 +389,7 @@ export const SellAssetModal: React.FC<SellAssetModalProps> = ({
               </View>
               {isFullExit && (
                 <View style={styles.fullExitNotice}>
-                  <Ionicons name="information-circle" size={14} color="#D97706" />
+                  <Ionicons name="information-circle" size={14} color={colors.ink} />
                   <Text style={styles.fullExitNoticeText}>
                     {actionTitle}ทั้งหมด: ระบบจะนำสินทรัพย์ออกจากพอร์ตให้อัตโนมัติ
                   </Text>
@@ -409,10 +413,10 @@ export const SellAssetModal: React.FC<SellAssetModalProps> = ({
                 activeOpacity={0.85}
               >
                 {isSubmitting ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
+                  <ActivityIndicator color={colors.accent} size="small" />
                 ) : (
                   <>
-                    <Ionicons name="checkmark-sharp" size={18} color="#FFFFFF" />
+                    <Ionicons name="checkmark-sharp" size={18} color={colors.accent} />
                     <Text style={styles.confirmBtnText}>ยืนยันการ{actionTitle}</Text>
                   </>
                 )}
@@ -437,25 +441,44 @@ export const SellAssetModal: React.FC<SellAssetModalProps> = ({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: colors.scrim,
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radii.sheet,
+    borderTopRightRadius: radii.sheet,
+    borderTopWidth: borderWidth,
+    borderTopColor: colors.ink,
     maxHeight: '88%',
-    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 20,
+  },
+  grabHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: radii.pill,
+    backgroundColor: colors.shadow,
+    marginTop: 8,
+    marginBottom: 4,
+    alignSelf: 'center',
   },
   sheetHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 18,
+    paddingTop: 8,
     paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+  },
+  closeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.pill,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   titleRow: {
     flexDirection: 'row',
@@ -464,78 +487,86 @@ const styles = StyleSheet.create({
   },
   actionTag: {
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
   },
   sellTag: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#FEE2E2',
   },
   cashTag: {
-    backgroundColor: '#FFFBEB',
+    backgroundColor: '#FEF3C7',
   },
   actionTagText: {
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: fonts.thaiBold,
   },
   sellTagText: {
-    color: '#DC2626',
+    color: colors.lossOnLight,
   },
   cashTagText: {
-    color: '#D97706',
+    color: colors.ink,
   },
   usBadge: {
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: radii.pill,
   },
   usBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#1D4ED8',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   sheetTitle: {
-    fontSize: 19,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 22,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   sheetSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
+    fontSize: 13,
+    color: colors.muted,
+    fontFamily: fonts.thai,
     marginTop: 2,
   },
   formContent: {
     paddingHorizontal: 20,
-    paddingTop: 14,
+    paddingTop: 16,
   },
   infoBanner: {
     flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: '#EAF3EE',
+    borderRadius: 18,
+    padding: 14,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
   },
   infoCol: {
     flex: 1,
   },
   infoColBorder: {
-    borderLeftWidth: 1,
-    borderLeftColor: '#E2E8F0',
-    paddingLeft: 12,
+    borderLeftWidth: 1.5,
+    borderLeftColor: '#A9CDB9',
+    paddingLeft: 14,
   },
   infoLabel: {
-    fontSize: 11,
-    color: '#64748B',
+    fontSize: 12,
+    color: colors.muted,
+    fontFamily: fonts.thai,
     fontWeight: '500',
   },
   infoValue: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: fonts.mono,
+    color: colors.ink,
     marginTop: 2,
   },
   inputGroup: {
@@ -548,64 +579,68 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   currencyToggleBox: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 8,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: radii.pill,
     padding: 2,
+    backgroundColor: colors.surface,
     gap: 2,
   },
   currencyPill: {
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
   },
   currencyPillActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1,
+    backgroundColor: colors.ink,
   },
   currencyPillText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: '700',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   currencyPillTextActive: {
-    color: '#0F172A',
-    fontWeight: '700',
+    color: colors.accent,
   },
   currencyHelperText: {
     fontSize: 11,
-    color: '#0284C7',
-    fontWeight: '600',
+    color: '#1F7A52',
+    fontFamily: fonts.mono,
+    fontWeight: '700',
     marginTop: 4,
     marginLeft: 2,
   },
   errorHint: {
     fontSize: 11,
-    color: '#DC2626',
-    fontWeight: '600',
+    color: colors.lossOnLight,
+    fontFamily: fonts.mono,
+    fontWeight: '700',
   },
   inputBox: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    minHeight: 48,
     fontSize: 15,
-    color: '#0F172A',
-    fontWeight: '600',
+    color: colors.ink,
+    fontFamily: fonts.thai,
+  },
+  monoInput: {
+    fontFamily: fonts.mono,
+    fontWeight: '700',
   },
   inputBoxError: {
-    borderColor: '#EF4444',
+    borderColor: colors.lossOnLight,
     backgroundColor: '#FEF2F2',
   },
   presetRow: {
@@ -615,48 +650,59 @@ const styles = StyleSheet.create({
   },
   presetPill: {
     flex: 1,
-    paddingVertical: 6,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 8,
+    minHeight: 38,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: radii.pill,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   presetPillText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: '700',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   presetPillAll: {
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.ink,
   },
   presetPillAllText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: fonts.thaiBold,
+    color: colors.accent,
   },
   datePickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    minHeight: 48,
   },
   datePickerText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#0F172A',
+    fontWeight: '700',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   summaryCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    padding: 14,
     marginTop: 4,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -665,19 +711,22 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   summaryLabel: {
-    fontSize: 12,
-    color: '#64748B',
+    fontSize: 13,
+    color: colors.muted,
+    fontFamily: fonts.thai,
     fontWeight: '500',
   },
   summaryValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   summaryValueHighlight: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '800',
-    color: '#059669',
+    fontFamily: fonts.mono,
+    color: '#1F7A52',
   },
   fullExitNotice: {
     flexDirection: 'row',
@@ -685,13 +734,14 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 8,
     paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopWidth: 1.5,
+    borderTopColor: '#A9CDB9',
   },
   fullExitNoticeText: {
     fontSize: 11,
-    color: '#D97706',
-    fontWeight: '600',
+    color: colors.ink,
+    fontFamily: fonts.thaiBold,
+    fontWeight: '700',
   },
   actionRow: {
     flexDirection: 'row',
@@ -700,33 +750,49 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
-    paddingVertical: 12,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 10,
+    minHeight: 48,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   cancelBtnText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   confirmBtn: {
     flex: 2,
     flexDirection: 'row',
     gap: 6,
-    paddingVertical: 12,
-    backgroundColor: '#DC2626',
-    borderRadius: 10,
+    minHeight: 48,
+    backgroundColor: colors.ink,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   btnDisabled: {
     opacity: 0.45,
   },
   confirmBtnText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    fontFamily: fonts.thaiBold,
+    color: colors.accent,
   },
 });
