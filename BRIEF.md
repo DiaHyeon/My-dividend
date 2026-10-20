@@ -628,7 +628,8 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 ### 5.4 Google Play Store Configuration & Compliance (`app.json`)
 - **Package Name**: Enforces official unique Android application ID `"package": "app.mydividend.portfolio"` and iOS bundle identifier `"bundleIdentifier": "app.mydividend.portfolio"`.
-- **Version Code**: Managed as integer `versionCode: 8` for Android App Bundle (AAB) store releases.
+- **Version Code**: Managed as integer `versionCode: 9` for Android App Bundle (AAB) store releases.
+- **DEX Code Optimization & R8 Obfuscation**: Enforces `enableMinifyInReleaseBuilds: true`, `enableShrinkResourcesInReleaseBuilds: true`, and React Native/Hermes ProGuard keep rules via `expo-build-properties` to satisfy Google Play Android Vitals DEX optimization requirements (>25% obfuscation threshold).
 - **Deep Linking Scheme**: Configured with `"scheme": "mydividend"` for authentication callbacks.
 - **Visual Branding**: `userInterfaceStyle` set to `"dark"`, with `#0F172A` dark slate adaptive icon background and `#10B981` emerald notification accents to eliminate bright flashes upon app launch.
 - **Permissions**: Declares `POST_NOTIFICATIONS` (Android 13+), `SCHEDULE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, and `VIBRATE`.

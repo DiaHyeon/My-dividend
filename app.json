@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "app.mydividend.portfolio",
-      "versionCode": 8,
+      "versionCode": 9,
       "allowBackup": false,
       "splash": {
         "image": "./assets/splash-icon.png",
@@ -56,7 +56,17 @@
           "color": "#10B981"
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "-keep class com.facebook.react.** { *; }\n-keep class com.facebook.hermes.** { *; }"
+          }
+        }
+      ]
     ],
     "web": {
       "favicon": "./assets/favicon.png"
