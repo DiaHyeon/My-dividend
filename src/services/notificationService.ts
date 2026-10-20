@@ -79,7 +79,7 @@ export async function requestNotificationPermissions(showPromptIfDenied: boolean
       if (!hasShown) {
         await AsyncStorage.setItem(GUIDANCE_KEY, 'true');
         Alert.alert(
-          '🔔 เปิดการแจ้งเตือนวัน XD',
+          '✦ เปิดการแจ้งเตือนวัน XD',
           'เพื่อให้ระบบสามารถแจ้งเตือนล่วงหน้า 1 วันตอน 08:30 น. ก่อนวันขึ้นเครื่องหมายเงินปันผล กรุณาอนุญาตการแจ้งเตือนในการตั้งค่าตัวเครื่อง (และเลือกการใช้แบตเตอรี่เป็น "ไม่จำกัด" เพื่อความแม่นยำ)',
           [
             { text: 'ไว้ทีหลัง', style: 'cancel' },
@@ -131,7 +131,7 @@ export async function scheduleXdReminder(
     reminderDate.setHours(8, 30, 0, 0);
 
     const title = 'แจ้งเตือนวัน XD';
-    const body = `🔔 [${symbol}] ขึ้นเครื่องหมาย XD พรุ่งนี้! ถือหุ้นไว้เพื่อรับสิทธิเงินปันผล`;
+    const body = `✦ [${symbol}] ขึ้นเครื่องหมาย XD พรุ่งนี้! ถือหุ้นไว้เพื่อรับสิทธิเงินปันผล`;
 
     if (Platform.OS === 'web') {
       console.log(`[Notification Service Web] Scheduled XD reminder: ${body} for ${reminderDate.toLocaleString('th-TH')}`);
@@ -374,7 +374,7 @@ export async function sendTestNotificationNow(delaySeconds: number = 3): Promise
     await initNotificationChannel();
     await requestNotificationPermissions();
 
-    const title = '🔔 ทดสอบการแจ้งเตือน XD Reminders';
+    const title = '✦ ทดสอบการแจ้งเตือน XD Reminders';
     const body = 'ระบบแจ้งเตือนวันขึ้นเครื่องหมายเงินปันผลของ My dividend พร้อมทำงานเรียบร้อยแล้ว!';
 
     const notificationId = await Notifications.scheduleNotificationAsync({
