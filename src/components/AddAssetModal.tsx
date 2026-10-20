@@ -1451,7 +1451,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                         <View style={styles.smartDivCard}>
                           <View style={styles.smartDivHeader}>
                             <View style={styles.smartDivHeaderLeft}>
-                              <Ionicons name="calculator" size={14} color="#059669" />
+                              <Ionicons name="calculator" size={15} color={colors.ink} />
                               <Text style={styles.smartDivTitle}>ประมาณการเงินปันผลสุทธิ</Text>
                             </View>
                             <View style={styles.smartDivBadge}>
@@ -1488,7 +1488,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                               </>
                             ) : (
                               <View style={styles.smartDivPassedBox}>
-                                <Ionicons name="time-outline" size={13} color="#64748B" />
+                                <Ionicons name="time-outline" size={14} color={colors.muted} />
                                 <Text style={styles.smartDivPassedText}>
                                   เข้าซื้อหลัง XD ปีนี้ • รอรับรอบถัดไปปีหน้า
                                 </Text>
@@ -1513,7 +1513,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                               <Text style={styles.smartDivStatLabel}>
                                 คาดการณ์เต็มปี ({dividendPreview.freq} รอบ)
                               </Text>
-                              <Text style={[styles.smartDivStatValue, { color: '#059669' }]}>
+                              <Text style={styles.smartDivStatValue}>
                                 {dividendPreview.currSym}
                                 {dividendPreview.netAnnual.toLocaleString('th-TH', {
                                   minimumFractionDigits: 2,
@@ -1527,7 +1527,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                         <View style={styles.smartDivCard}>
                           <View style={styles.smartDivHeader}>
                             <View style={styles.smartDivHeaderLeft}>
-                              <Ionicons name="analytics-outline" size={14} color="#047857" />
+                              <Ionicons name="analytics-outline" size={15} color={colors.ink} />
                               <Text style={styles.smartDivTitle}>วิเคราะห์ปันผลอัตโนมัติ</Text>
                             </View>
                             <View style={styles.smartDivBadge}>
@@ -2737,51 +2737,53 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   smartDivCard: {
-    backgroundColor: '#F0FDF4',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    padding: 10,
-    marginTop: 8,
+    backgroundColor: '#EAF3EE',
+    borderRadius: 18,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    padding: 12,
+    marginTop: 10,
     marginBottom: 6,
   },
   smartDivHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   smartDivHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
   },
   smartDivTitle: {
-    fontSize: 12,
+    fontSize: 13,
+    fontFamily: fonts.thaiBold,
     fontWeight: '700',
-    color: '#065F46',
+    color: colors.ink,
   },
   smartDivBadge: {
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 6,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: colors.ink,
   },
   smartDivBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
+    fontFamily: fonts.mono,
     fontWeight: '700',
-    color: '#059669',
+    color: colors.ink,
   },
   smartDivBanner: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderWidth: 1,
-    borderColor: '#D1FAE5',
-    marginBottom: 6,
+    borderColor: colors.ink,
+    marginBottom: 8,
   },
   smartDivBannerRow: {
     flexDirection: 'row',
@@ -2789,29 +2791,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   smartDivBannerLabel: {
-    fontSize: 11,
+    fontSize: 12,
+    fontFamily: fonts.thai,
     fontWeight: '600',
-    color: '#047857',
+    color: colors.muted,
   },
   smartDivBannerValue: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#047857',
+    fontSize: 16,
+    fontFamily: fonts.mono,
+    fontWeight: '700',
+    color: colors.ink,
   },
   smartDivBannerSub: {
-    fontSize: 10,
-    color: '#64748B',
-    marginTop: 1,
+    fontSize: 11,
+    fontFamily: fonts.mono,
+    color: colors.muted,
+    marginTop: 2,
   },
   smartDivPassedBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingVertical: 2,
+    gap: 6,
+    paddingVertical: 4,
   },
   smartDivPassedText: {
-    fontSize: 10.5,
-    color: '#64748B',
+    fontSize: 12,
+    fontFamily: fonts.thai,
+    color: colors.muted,
   },
   smartDivStatsRow: {
     flexDirection: 'row',
@@ -2822,19 +2828,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   smartDivStatLabel: {
-    fontSize: 9.5,
-    color: '#64748B',
-    marginBottom: 1,
+    fontSize: 11,
+    fontFamily: fonts.thai,
+    color: colors.muted,
+    marginBottom: 2,
   },
   smartDivStatValue: {
-    fontSize: 12,
+    fontSize: 14,
+    fontFamily: fonts.mono,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.ink,
   },
   smartDivDivider: {
     width: 1,
-    height: 20,
-    backgroundColor: '#CBD5E1',
+    height: 24,
+    backgroundColor: colors.shadow,
     marginHorizontal: 8,
   },
   taxSectionCompact: {
