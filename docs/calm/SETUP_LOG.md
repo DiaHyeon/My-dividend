@@ -132,12 +132,42 @@
 
 ---
 
-## 9. ขั้นตอนต่อไป
+## 9. ผลการดำเนินการขั้นตอนที่ 2B (Category Cards & Section Headers)
 
-พร้อมเข้าสู่ **ขั้นตอนที่ 2B** ตาม [PLAN.md](file:///c:/Users/lenovo/Documents/My%20dividend/docs/calm/PLAN.md):
-- ปรับแต่งการ์ดสัดส่วนหมวดหมู่ (Category Cards หุ้น / กองทุน / เงินฝาก)
-- ปรับแถบ Progress Bar ให้หนา 12 ขอบ ink 2
-- ปรับป้าย % เป็น Pill เดี่ยว และคงลูกศร `›`
-- ปรับหัวข้อภาษาไทยด้วย Noto Sans Thai Bold
+- **ไฟล์ที่แก้ไข**: `src/screens/Dashboard.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **Section Headers (หัวข้อหมวดหมู่และปุ่มดูพอร์ตเต็ม)**:
+     - หัวข้อ "สัดส่วนสินทรัพย์ตามหมวดหมู่" ปรับเป็น `<CalmText variant="bodyBold" size={17} color={colors.ink}>`
+     - คำอธิบาย "3 หมวดหมู่หลัก" ปรับเป็น `<CalmText variant="monoRegular" size={12} color={colors.muted}>`
+     - ปุ่ม "ดูพอร์ตเต็ม →" แปลงเป็น `<Pill kind="ink" size="md" label="ดูพอร์ตเต็ม →" onPress={() => onNavigateToPortfolio('ALL')} />`
+     - ใน `StyleSheet`:
+       - `styles.sectionTitle`: กำหนด `fontFamily: fonts.thaiBold`, `color: colors.ink`, ตัด `fontWeight: '700'` ออก 100% ตามกฎ Font Weight Rule เพื่อป้องกันบั๊ก faux-bold ตัวอักษรบวม/เบลอบน Android
+       - `styles.sectionSubtitle`: กำหนด `fontFamily: fonts.thai`, `color: colors.muted`
+  2. **Category Cards (การ์ดหมวดหมู่ 3 การ์ด: หุ้น / กองทุน / เงินฝาก)**:
+     - เปลี่ยนกรอบนอกสุดจากการ์ดขาวเงาเบลอเดิม เป็น `<Card shadow="md" padding={14} onPress={...}>` (เงาแข็ง Hard Shadow สไตล์ Calm 4px)
+     - **Category Icon Circle**: แมปสีพื้นหลังตามประเภทสินทรัพย์อย่างเคร่งครัด (`cat.type === 'STOCKS' ? chartColors.stocks : cat.type === 'FUNDS' ? chartColors.funds : chartColors.cash`) แทนที่เฉพาะใน style block โดยยังคงรักษาฟิลด์ `cat.bgColor` และ `cat.color` ใน data object เดิมไว้ 100% เพื่อไม่ให้กระทบ Modal ย่อย; ไอคอนด้านในใช้สี `colors.ink` พร้อมขอบเส้นหนา 1.5px
+     - **Category Title & Count**: ชื่อหมวดหมู่ใช้ `<CalmText variant="bodyBold" size={13}>` และจำนวนสินทรัพย์ใช้ `<CalmText variant="monoRegular" size={11} color={colors.muted}>`
+     - **P/L %**: คำนวณสีและสัญลักษณ์ผ่านฟังก์ชัน `trend(cat.unrealizedPL)` แสดงผลด้วย `<CalmText variant="mono" size={12} color={plTrend.color}>` (แสดง ▲ / ▼ ตามผลตอบแทนจริง)
+     - **Allocation %**: ครอบด้วย `<Pill kind="outline" size="sm" label={`${cat.allocationPercent.toFixed(1)}%`} />` โดยครอบเฉพาะตัวเลขเปอร์เซ็นต์เดี่ยวๆ ตามข้อกำหนด
+     - **Chevron Indicator**: คงลูกศร `Ionicons name="chevron-forward" size={13} color={colors.ink} />` ไว้เป็น tap indicator ด้านขวาเสมอ
+     - **Market Value (มูลค่าตลาด)**: แสดงผลด้วย `<CalmText variant="display" size={26} color={colors.ink}>` รองรับ Privacy Masking จาก `formatMoney()` ครบถ้วน
+     - **Inflow / Yield**: ข้อความปันผล/ดอกเบี้ยรายปี แสดงด้วย `<CalmText variant="monoRegular" size={11} color={colors.ink}>` พร้อมไอคอน wallet/leaf
+     - **Progress Bar**: ปรับรางหลัง (Rail) ให้หนาขึ้นตามแบบร่าง Calm (`height: 12`, `borderWidth: 2`, `borderColor: colors.ink`, `borderRadius: 999`, `backgroundColor: colors.track`, `overflow: 'hidden'`) และแถบระบายสี (Fill) ใช้สีตาม `chartColors` ของแต่ละหมวดหมู่
+  3. **การคลีน Hex Code**: ลบโค้ดสี raw hex ทั้งหมดใน style block ที่เกี่ยวข้อง (`categoryCardsContainer`, `categoryCard`, `categoryIconCircle`, `categoryAllocationText`, `categoryTitle`, `categoryValue`, `progressBarBackground`, `progressBarFill`)
+  4. **ระยะห่างการ์ด**: ปรับ `categoryCardsContainer` เป็น `gap: 12` เพื่อให้เงา Hard Shadow 4px ด้านล่างมีการเว้นระยะหายใจ ไม่ทับการ์ดใบถัดไป
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+---
+
+## 10. ขั้นตอนต่อไป
+
+พร้อมเข้าสู่ **ขั้นตอนที่ 2C** ตาม [PLAN.md](file:///c:/Users/lenovo/Documents/My%20dividend/docs/calm/PLAN.md):
+- ปรับแต่งการ์ดเรดาร์เงินปันผล/ดอกเบี้ยใกล้ถึง (`src/components/UpcomingPaydayRadar.tsx`)
+- ใส่เงา Hard Shadow ให้การ์ดเรดาร์
+- ปรับ Pill XD / Pay และฟอนต์ JetBrains Mono
+- คงการเลื่อนแนวนอน และเพิ่ม padding ป้องกันเงาตัดขอบ
+
 
 

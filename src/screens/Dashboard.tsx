@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Card } from '../components/ui/Card';
+import { Pill } from '../components/ui/Pill';
 import { CalmText } from '../components/ui/CalmText';
-import { colors } from '../theme/tokens';
+import { colors, fonts, chartColors, trend } from '../theme/tokens';
 import {
   ScrollView,
   View,
@@ -983,91 +985,102 @@ export const Dashboard: React.FC<DashboardProps> = ({
         />
 
         {/* 2. Category Cards: Stocks, Funds, Cash/Savings */}
-        {/* 2. Category Cards: Stocks, Funds, Cash/Savings */}
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>สัดส่วนสินทรัพย์ตามหมวดหมู่</Text>
-            <Text style={styles.sectionSubtitle}>3 หมวดหมู่หลัก</Text>
+            <CalmText variant="bodyBold" size={17} color={colors.ink}>สัดส่วนสินทรัพย์ตามหมวดหมู่</CalmText>
+            <CalmText variant="monoRegular" size={12} color={colors.muted} style={{ marginTop: 2 }}>3 หมวดหมู่หลัก</CalmText>
           </View>
           {onNavigateToPortfolio && (
-            <TouchableOpacity
+            <Pill
+              kind="ink"
+              size="md"
+              label="ดูพอร์ตเต็ม →"
               onPress={() => onNavigateToPortfolio('ALL')}
-              style={styles.seeAllBtn}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.seeAllBtnText}>ดูพอร์ตเต็ม →</Text>
-            </TouchableOpacity>
+            />
           )}
         </View>
 
         <View style={styles.categoryCardsContainer}>
-          {categories.map((cat) => (
-            <TouchableOpacity
-              key={cat.type}
-              style={styles.categoryCard}
-              activeOpacity={0.7}
-              onPress={() => {
-                setSelectedCategoryForBreakdown(cat);
-                setIsCategoryModalVisible(true);
-              }}
-            >
-              {/* Row 1: Left has Icon + Title + Count. Right has P/L badge + Allocation % + Chevron */}
-              <View style={styles.categoryHeader}>
-                <View style={styles.categoryHeaderLeft}>
-                  <View style={[styles.categoryIconCircle, { backgroundColor: cat.bgColor }]}>
-                    <Ionicons name={cat.icon} size={14} color={cat.color} />
-                  </View>
-                  <Text style={styles.categoryTitle} numberOfLines={1}>{cat.label}</Text>
-                  <Text style={styles.categoryAssetCount}>({cat.count})</Text>
-                </View>
-                <View style={styles.categoryHeaderRightRow}>
-                  <Text style={[styles.categoryPL, cat.unrealizedPL >= 0 ? styles.profitText : styles.lossText]}>
-                    {cat.unrealizedPL >= 0 ? '+' : ''}
-                    {cat.unrealizedPLPercent.toFixed(1)}%
-                  </Text>
-                  <View style={styles.categoryHeaderRight}>
-                    <Text style={styles.categoryAllocationText}>{cat.allocationPercent.toFixed(1)}%</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={13} color="#94A3B8" />
-                </View>
-              </View>
+          {categories.map((cat) => {
+            const catChartColor =
+              cat.type === 'STOCKS'
+                ? chartColors.stocks
+                : cat.type === 'FUNDS'
+                ? chartColors.funds
+                : chartColors.cash;
+            const plTrend = trend(cat.unrealizedPL);
+            const plGlyph = plTrend.glyph ? `${plTrend.glyph} ` : '';
 
-              {/* Row 2: Left has Market Value. Right has Inflow / Yield */}
-              <View style={styles.categoryValueRow}>
-                <Text style={styles.categoryValue}>
-                  {formatMoney(cat.marketValue)}
-                </Text>
-                <View style={styles.categoryInflowRow}>
-                  <Ionicons
-                    name={cat.type === 'CASH' ? 'wallet-outline' : 'leaf-outline'}
-                    size={11}
-                    color={cat.color}
+            return (
+              <Card
+                key={cat.type}
+                shadow="md"
+                padding={14}
+                onPress={() => {
+                  setSelectedCategoryForBreakdown(cat);
+                  setIsCategoryModalVisible(true);
+                }}
+              >
+                {/* Row 1: Left has Icon + Title + Count. Right has P/L badge + Allocation % + Chevron */}
+                <View style={styles.categoryHeader}>
+                  <View style={styles.categoryHeaderLeft}>
+                    <View style={[styles.categoryIconCircle, { backgroundColor: catChartColor }]}>
+                      <Ionicons name={cat.icon} size={14} color={colors.ink} />
+                    </View>
+                    <CalmText variant="bodyBold" size={13} color={colors.ink} numberOfLines={1}>{cat.label}</CalmText>
+                    <CalmText variant="monoRegular" size={11} color={colors.muted}>({cat.count})</CalmText>
+                  </View>
+                  <View style={styles.categoryHeaderRightRow}>
+                    <CalmText variant="mono" size={12} color={plTrend.color}>
+                      {plGlyph}{cat.unrealizedPL >= 0 ? '+' : ''}{cat.unrealizedPLPercent.toFixed(1)}%
+                    </CalmText>
+                    <Pill kind="outline" size="sm" label={`${cat.allocationPercent.toFixed(1)}%`} />
+                    <Ionicons name="chevron-forward" size={13} color={colors.ink} />
+                  </View>
+                </View>
+
+                {/* Row 2: Left has Market Value. Right has Inflow / Yield */}
+                <View style={styles.categoryValueRow}>
+                  <CalmText variant="display" size={26} color={colors.ink}>
+                    {formatMoney(cat.marketValue)}
+                  </CalmText>
+                  <View style={styles.categoryInflowRow}>
+                    <Ionicons
+                      name={cat.type === 'CASH' ? 'wallet-outline' : 'leaf-outline'}
+                      size={12}
+                      color={colors.ink}
+                    />
+                    <CalmText
+                      variant="monoRegular"
+                      size={11}
+                      color={colors.ink}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {cat.type === 'CASH'
+                        ? `ดอกเบี้ย ${formatMoney(annualInflowByCategory.CASH, 0)}/ปี`
+                        : cat.type === 'STOCKS'
+                        ? `ปันผล ${formatMoney(annualInflowByCategory.STOCKS, 0)}/ปี (YoC ${cat.totalCost > 0 ? ((annualInflowByCategory.STOCKS / cat.totalCost) * 100).toFixed(1) : '0.0'}%)`
+                        : `ปันผล ${formatMoney(annualInflowByCategory.FUNDS, 0)}/ปี (Yield ${cat.marketValue > 0 ? ((annualInflowByCategory.FUNDS / cat.marketValue) * 100).toFixed(1) : '0.0'}%)`}
+                    </CalmText>
+                  </View>
+                </View>
+
+                {/* Progress bar */}
+                <View style={styles.progressBarBackground}>
+                  <View
+                    style={[
+                      styles.progressBarFill,
+                      {
+                        width: `${Math.min(100, Math.max(0, cat.allocationPercent))}%`,
+                        backgroundColor: catChartColor,
+                      },
+                    ]}
                   />
-                  <Text
-                    style={[styles.categoryInflowText, { color: cat.color }]}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                  >
-                    {cat.type === 'CASH'
-                      ? `ดอกเบี้ย ${formatMoney(annualInflowByCategory.CASH, 0)}/ปี`
-                      : cat.type === 'STOCKS'
-                      ? `ปันผล ${formatMoney(annualInflowByCategory.STOCKS, 0)}/ปี (YoC ${cat.totalCost > 0 ? ((annualInflowByCategory.STOCKS / cat.totalCost) * 100).toFixed(1) : '0.0'}%)`
-                      : `ปันผล ${formatMoney(annualInflowByCategory.FUNDS, 0)}/ปี (Yield ${cat.marketValue > 0 ? ((annualInflowByCategory.FUNDS / cat.marketValue) * 100).toFixed(1) : '0.0'}%)`}
-                  </Text>
                 </View>
-              </View>
-
-              {/* Progress bar */}
-              <View style={styles.progressBarBackground}>
-                <View
-                  style={[
-                    styles.progressBarFill,
-                    { width: `${Math.min(100, Math.max(0, cat.allocationPercent))}%`, backgroundColor: cat.color },
-                  ]}
-                />
-              </View>
-            </TouchableOpacity>
-          ))}
+              </Card>
+            );
+          })}
         </View>
 
         {/* 3. Dividend & Interest Forecast Chart: Monthly Bar Chart (Jan - Dec) */}
@@ -1929,12 +1942,13 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 17,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   sectionSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    fontFamily: fonts.thai,
+    color: colors.muted,
     marginTop: 2,
   },
   badgeXD: {
@@ -1950,21 +1964,11 @@ const styles = StyleSheet.create({
   },
   categoryCardsContainer: {
     flexDirection: 'column',
-    gap: 8,
+    gap: 12,
     marginBottom: 16,
   },
   categoryCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    elevation: 1,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
+    backgroundColor: colors.surface,
   },
   categoryHeader: {
     flexDirection: 'row',
@@ -1982,37 +1986,36 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
     justifyContent: 'center',
     alignItems: 'center',
   },
   categoryHeaderRight: {
-    backgroundColor: '#F8FAFC',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 5,
   },
   categoryAllocationText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   categoryTitle: {
     fontSize: 13,
-    color: '#1E293B',
-    fontWeight: '700',
+    color: colors.ink,
+    fontFamily: fonts.thaiBold,
   },
   categoryValueRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
+    alignItems: 'baseline',
+    marginTop: 4,
+    marginBottom: 8,
   },
   categoryValue: {
-    fontSize: 15,
-    lineHeight: 19,
-    fontWeight: '800',
-    color: '#0F172A',
-    minHeight: 19,
+    fontSize: 26,
+    fontFamily: fonts.display,
+    color: colors.ink,
   },
   categoryFooter: {
     flexDirection: 'row',
@@ -2022,22 +2025,24 @@ const styles = StyleSheet.create({
   },
   categoryAssetCount: {
     fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: '500',
+    color: colors.muted,
+    fontFamily: fonts.mono,
   },
   categoryPL: {
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: fonts.mono,
   },
   progressBarBackground: {
-    height: 3,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 2,
+    height: 12,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    borderRadius: 999,
+    backgroundColor: colors.track,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: 999,
   },
   chartCard: {
     backgroundColor: '#FFFFFF',
