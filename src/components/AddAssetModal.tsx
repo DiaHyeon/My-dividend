@@ -1256,8 +1256,12 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                           onPress={() => handleCurrencyChange('THB')}
                           activeOpacity={0.7}
                         >
-                          <Text style={[styles.currencyBtnText, currency === 'THB' && styles.currencyBtnTextActive]}>
-                            🇹🇭 บาทไทย (THB ฿)
+                          <Text
+                            style={[styles.currencyBtnText, currency === 'THB' && styles.currencyBtnTextActive]}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                          >
+                            🇹🇭 บาทไทย (THB)
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -1265,8 +1269,12 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                           onPress={() => handleCurrencyChange('USD')}
                           activeOpacity={0.7}
                         >
-                          <Text style={[styles.currencyBtnText, currency === 'USD' && styles.currencyBtnTextActive]}>
-                            🇺🇸 ดอลลาร์สหรัฐ (USD $)
+                          <Text
+                            style={[styles.currencyBtnText, currency === 'USD' && styles.currencyBtnTextActive]}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                          >
+                            🇺🇸 ดอลลาร์ (USD)
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -2195,7 +2203,7 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     paddingVertical: 6,
   },
   currencyBtnActive: {
