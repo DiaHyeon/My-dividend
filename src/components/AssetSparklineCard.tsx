@@ -13,6 +13,10 @@ import { AssetSummary } from '../types/database';
 import { resolveIsUSStock, getAssetAverageCostUSD } from '../services/currencyService';
 import { fetch7DayPriceHistory, HistoryResult } from '../services/historyService';
 import { usePrivacyMode } from '../services/privacyService';
+import { colors, fonts, radii } from '../theme/tokens';
+import { CalmText } from './ui/CalmText';
+import { DashedDivider } from './ui/DashedDivider';
+import { HardShadow } from './ui/HardShadow';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -204,474 +208,318 @@ export const AssetSparklineCard: React.FC<AssetSparklineCardProps> = memo(({
   }, [item.id]);
 
   return (
-    <TouchableOpacity
-      style={styles.card}
-      activeOpacity={0.75}
-      onPress={() => onPressEdit(item)}
-      onLayout={onLayoutCard}
-    >
-      {/* 1. Header: Symbol, Badges, Edit Button */}
-      <View style={styles.header}>
-        <View style={styles.symbolRow}>
-          <Text style={styles.symbolText} numberOfLines={1}>
-            {item.symbol}
-          </Text>
+    <HardShadow size="md" radius={radii.card} style={styles.cardWrapper}>
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.75}
+        onPress={() => onPressEdit(item)}
+        onLayout={onLayoutCard}
+      >
+        {/* 1. Header: Symbol, Badges, Edit Button */}
+        <View style={styles.header}>
+          <View style={styles.symbolRow}>
+            <CalmText variant="display" size={24} color={colors.ink} numberOfLines={1}>
+              {item.symbol}
+            </CalmText>
 
-          {isUS && (
-            <View style={styles.usBadge}>
-              <Text style={styles.usBadgeText}>USD $</Text>
+            {isUS && (
+              <View style={styles.usBadge}>
+                <CalmText variant="mono" size={10} color={colors.ink}>
+                  USD $
+                </CalmText>
+              </View>
+            )}
+
+            <View style={styles.typeBadge}>
+              <CalmText variant="mono" size={10} color={colors.muted}>
+                {item.asset_type === 'STOCKS' ? 'หุ้น' : isFund ? 'กองทุน' : 'เงินฝาก'}
+              </CalmText>
             </View>
-          )}
+          </View>
 
-          <View
-            style={[
-              styles.typeBadge,
-              item.asset_type === 'STOCKS'
-                ? styles.stocksBadge
-                : isFund
-                ? styles.fundsBadge
-                : styles.cashBadge,
-            ]}
+          <TouchableOpacity
+            style={styles.editBtn}
+            onPress={() => onPressEdit(item)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={`แก้ไข ${item.symbol}`}
           >
-            <Text
-              style={[
-                styles.typeBadgeText,
-                item.asset_type === 'STOCKS'
-                  ? styles.stocksBadgeText
-                  : isFund
-                  ? styles.fundsBadgeText
-                  : styles.cashBadgeText,
-              ]}
-            >
-              {item.asset_type === 'STOCKS' ? 'หุ้น' : isFund ? 'กองทุน' : 'เงินฝาก'}
-            </Text>
+            <CalmText variant="mono" size={11} color={colors.ink}>
+              แก้ไข
+            </CalmText>
+          </TouchableOpacity>
+        </View>
+
+        {/* 2. Hero Metric Row (ซ้าย: มูลค่ารวม / ขวา: กำไรและ %) */}
+        <View style={styles.heroRow}>
+          <View style={styles.heroValueCol}>
+            <CalmText variant="display" size={28} color={colors.ink}>
+              {isPrivateMode
+                ? '฿••••••'
+                : `฿${marketValue.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            </CalmText>
+          </View>
+
+          <View style={styles.heroChangeCol}>
+            {!isCash ? (
+              <CalmText
+                variant="mono"
+                size={12}
+                color={isPositive ? colors.gainOnLight : colors.lossOnLight}
+              >
+                {isPrivateMode
+                  ? (isPositive ? '+••%' : '-••%')
+                  : `${isPositive ? '+' : ''}฿${Math.abs(unrealizedPL).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${isPositive ? '+' : ''}${plPercent.toFixed(1)}%)`}
+              </CalmText>
+            ) : (
+              <View style={styles.cashInflowRow}>
+                <CalmText variant="mono" size={12} color={colors.gainOnLight}>
+                  {(Number(item.current_price) * 100).toFixed(2)}% p.a.
+                </CalmText>
+                <CalmText variant="mono" size={10} color={colors.muted}>
+                  {' '}(ภาษี {Number(item.tax_rate) > 0 ? `${(Number(item.tax_rate) * 100).toFixed(0)}%` : '0%'})
+                </CalmText>
+              </View>
+            )}
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.editBtn}
-          onPress={() => onPressEdit(item)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="pencil" size={11} color="#059669" />
-          <Text style={styles.editBtnText}>แก้ไข</Text>
-        </TouchableOpacity>
-      </View>
+        {/* Divider */}
+        <DashedDivider color={colors.shadow} marginVertical={12} />
 
-      {/* 2. Hero Metric Row (ตรงตามสไตล์ที่ขอ: ซ้าย มูลค่ารวม / ขวา กำไรและ %) */}
-      <View style={styles.heroRow}>
-        <View style={styles.heroValueCol}>
-          <Text style={styles.marketValueText}>
-            {isPrivateMode
-              ? '฿••••••'
-              : `฿${marketValue.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          </Text>
-        </View>
+        {/* 3. Contextual Details Strip: 3-column grid */}
+        <View style={styles.metaGrid}>
+          <View style={styles.metaCol}>
+            <CalmText variant="monoRegular" size={10} color={colors.muted}>
+              จำนวนที่ถือ
+            </CalmText>
+            <CalmText variant="mono" size={13} color={colors.ink} numberOfLines={1}>
+              {isCash
+                ? (isPrivateMode ? 'เงินต้น ฿••••••' : `เงินต้น ฿${marketValue.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`)
+                : isFund
+                ? (isPrivateMode ? '•••• หน่วย' : `${Number(item.net_shares).toLocaleString('th-TH', { minimumFractionDigits: 4 })} หน่วย`)
+                : (isPrivateMode ? '•••• หุ้น' : `${Number(item.net_shares).toLocaleString('th-TH')} หุ้น`)}
+            </CalmText>
+          </View>
 
-        <View style={styles.heroChangeCol}>
-          {!isCash ? (
-            <View style={styles.plContainer}>
-              <Text style={[styles.plAmountText, isPositive ? styles.textPositive : styles.textNegative]}>
-                {isPrivateMode
-                  ? '฿••••••'
-                  : `${isPositive ? '+' : ''}฿${Math.abs(unrealizedPL).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              </Text>
-              <Text style={[styles.plPercentText, isPositive ? styles.textPositive : styles.textNegative]}>
-                ({isPositive ? '+' : ''}{plPercent.toFixed(1)}%)
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.plContainer}>
-              <Text style={styles.cashInflowRateText}>
-                {(Number(item.current_price) * 100).toFixed(2)}% p.a.
-              </Text>
-              <Text style={styles.cashTaxBadgeText}>
-                (ภาษี {Number(item.tax_rate) > 0 ? `${(Number(item.tax_rate) * 100).toFixed(0)}%` : '0%'})
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
+          <View style={styles.metaCol}>
+            <CalmText variant="monoRegular" size={10} color={colors.muted}>
+              {isFund ? 'NAV ทุน' : isCash ? 'รอบดอกเบี้ย' : 'ต้นทุน'}
+            </CalmText>
+            <CalmText variant="mono" size={13} color={colors.ink} numberOfLines={1}>
+              {isCash
+                ? 'ดิจิทัล/ประจำ'
+                : isUS
+                ? `$${costPriceUSD.toFixed(2)}`
+                : isFund
+                ? `฿${costPriceTHB.toFixed(4)}`
+                : `฿${costPriceTHB.toFixed(2)}`}
+            </CalmText>
+          </View>
 
-      {/* 3. Contextual Details Strip (ข้อมูลเสริม: จำนวนที่ถือ | ต้นทุน | ราคาตลาด ตามสกุลเงินจริง) */}
-      <View style={styles.metaRow}>
-        <View style={styles.metaItem}>
-          <Text style={styles.metaLabel}>จำนวนที่ถือ</Text>
-          <Text style={styles.metaValue} numberOfLines={1}>
-            {isCash
-              ? (isPrivateMode ? 'เงินต้น ฿••••••' : `เงินต้น ฿${marketValue.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`)
-              : isFund
-              ? (isPrivateMode ? '•••• หน่วย' : `${Number(item.net_shares).toLocaleString('th-TH', { minimumFractionDigits: 4 })} หน่วย`)
-              : (isPrivateMode ? '•••• หุ้น' : `${Number(item.net_shares).toLocaleString('th-TH')} หุ้น`)}
-          </Text>
-        </View>
-
-        <View style={styles.metaDivider} />
-
-        {/* ช่องแรก: ต้นทุน (Cost) */}
-        <View style={styles.metaItem}>
-          <Text style={styles.metaLabel}>
-            {isFund ? 'NAV ทุน' : isCash ? 'รอบดอกเบี้ย' : 'ต้นทุน'}
-          </Text>
-          <Text style={styles.metaValue} numberOfLines={1}>
-            {isCash
-              ? 'เงินฝากดิจิทัล/ประจำ'
-              : isUS
-              ? `$${costPriceUSD.toFixed(2)}`
-              : isFund
-              ? `฿${costPriceTHB.toFixed(4)}`
-              : `฿${costPriceTHB.toFixed(2)}`}
-          </Text>
-        </View>
-
-        {/* ช่องต่อไป: ราคาตลาด (Market Price) */}
-        {!isCash && (
-          <>
-            <View style={styles.metaDivider} />
-            <View style={styles.metaItem}>
-              <Text style={styles.metaLabel}>
+          {!isCash && (
+            <View style={styles.metaCol}>
+              <CalmText variant="monoRegular" size={10} color={colors.muted}>
                 {isFund ? 'NAV ตลาด' : 'ราคาตลาด'}
-              </Text>
-              <Text style={styles.metaValue} numberOfLines={1}>
+              </CalmText>
+              <CalmText variant="mono" size={13} color={colors.ink} numberOfLines={1}>
                 {isUS
                   ? `$${currentPriceUSD.toFixed(2)}`
                   : isFund
                   ? `฿${currentPriceTHB.toFixed(4)}`
                   : `฿${currentPriceTHB.toFixed(2)}`}
-              </Text>
+              </CalmText>
             </View>
-          </>
-        )}
-      </View>
-
-      {/* 3.4 Minimal Total Return Strip (เมื่อเคยมีเงินปันผล/ดอกเบี้ยรับสะสม) */}
-      {cumulativeDividends !== undefined && cumulativeDividends > 0 && (
-        <View style={styles.totalReturnStrip}>
-          <View style={styles.totalReturnLeft}>
-            <Ionicons name="sparkles" size={11} color="#D97706" />
-            <Text style={styles.totalReturnLabel}>
-              ปันผลสะสม {isPrivateMode ? '฿••••' : `฿${cumulativeDividends.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`}
-            </Text>
-          </View>
-          <Text
-            style={[
-              styles.totalReturnPercent,
-              (totalReturnPercent ?? 0) >= 0 ? styles.textPositive : styles.textNegative,
-            ]}
-          >
-            Total Return: {(totalReturnPercent ?? 0) >= 0 ? '+' : ''}{(totalReturnPercent ?? 0).toFixed(1)}%
-          </Text>
-        </View>
-      )}
-
-      {/* 3.5 7-Day Trend Header Tag */}
-      <View style={styles.chartTagRow}>
-        <View style={styles.chartTagBadge}>
-          <Ionicons
-            name={isCash ? 'cash-outline' : is7dPositive ? 'trending-up' : 'trending-down'}
-            size={11}
-            color={color}
-          />
-          <Text style={styles.chartTagText}>ราคาย้อนหลัง 7 วัน</Text>
-          {history?.isReal && (
-            <View style={[styles.realIndicatorDot, { backgroundColor: color }]} />
           )}
         </View>
 
-        <Text
-          style={[
-            styles.chartChangeText,
-            isCash ? styles.textCash : change7d === null ? styles.metaLabel : is7dPositive ? styles.textPositive : styles.textNegative,
-          ]}
-        >
-          {isCash ? 'สะสมดอกเบี้ย' : change7d !== null ? `${is7dPositive ? '+' : ''}${change7d.toFixed(2)}%` : '--'}
-        </Text>
-      </View>
-
-      {/* 4. Mini Sparkline Area Chart (แนบชิดขอบล่างของ Card อย่างสวยงาม) */}
-      <View style={styles.chartContainer}>
-        {cardWidth > 0 && linePath ? (
-          <Svg width={cardWidth} height={chartHeight}>
-            <Defs>
-              <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0%" stopColor={color} stopOpacity="0.32" />
-                <Stop offset="80%" stopColor={color} stopOpacity="0.04" />
-                <Stop offset="100%" stopColor={color} stopOpacity="0.0" />
-              </LinearGradient>
-            </Defs>
-
-            {/* เติมสีพื้นหลัง Area Gradient */}
-            <Path d={areaPath} fill={`url(#${gradientId})`} />
-
-            {/* เส้นแนวโน้มหลัก */}
-            <Path
-              d={linePath}
-              fill="none"
-              stroke={color}
-              strokeWidth={1.8}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-
-            {/* จุดปลายสุด Glow Dot */}
-            <Circle
-              cx={lastPoint.x}
-              cy={lastPoint.y}
-              r={3}
-              fill={color}
-            />
-            <Circle
-              cx={lastPoint.x}
-              cy={lastPoint.y}
-              r={5.5}
-              fill={color}
-              fillOpacity={0.25}
-            />
-          </Svg>
-        ) : (
-          <View style={{ height: chartHeight }} />
+        {/* 3.4 Minimal Total Return Strip */}
+        {cumulativeDividends !== undefined && cumulativeDividends > 0 && (
+          <View style={styles.totalReturnStrip}>
+            <View style={styles.totalReturnLeft}>
+              <Ionicons name="sparkles" size={11} color={colors.accent} />
+              <CalmText variant="mono" size={11} color={colors.ink}>
+                ปันผลสะสม {isPrivateMode ? '฿••••' : `฿${cumulativeDividends.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`}
+              </CalmText>
+            </View>
+            <CalmText
+              variant="mono"
+              size={11}
+              color={(totalReturnPercent ?? 0) >= 0 ? colors.gainOnLight : colors.lossOnLight}
+            >
+              Total Return: {(totalReturnPercent ?? 0) >= 0 ? '+' : ''}{(totalReturnPercent ?? 0).toFixed(1)}%
+            </CalmText>
+          </View>
         )}
-      </View>
-    </TouchableOpacity>
+
+        {/* 3.5 7-Day Trend Header */}
+        <DashedDivider color={colors.shadow} marginVertical={10} />
+        <View style={styles.chartTagRow}>
+          <View style={styles.chartTagBadge}>
+            <CalmText variant="mono" size={11} color={colors.muted}>
+              7 DAYS {isCash ? '(ดอกเบี้ย)' : 'ราคาย้อนหลัง'}
+            </CalmText>
+            {history?.isReal && (
+              <View style={[styles.realIndicatorDot, { backgroundColor: colors.accent }]} />
+            )}
+          </View>
+
+          <CalmText
+            variant="mono"
+            size={11}
+            color={isCash ? colors.gainOnLight : change7d === null ? colors.muted : is7dPositive ? colors.gainOnLight : colors.lossOnLight}
+          >
+            {isCash ? 'สะสมดอกเบี้ย' : change7d !== null ? `${is7dPositive ? '+' : ''}${change7d.toFixed(2)}%` : '--'}
+          </CalmText>
+        </View>
+
+        {/* 4. Mini Sparkline Area Chart */}
+        <View style={styles.chartContainer}>
+          {cardWidth > 0 && linePath ? (
+            <Svg width={cardWidth} height={chartHeight}>
+              <Defs>
+                <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0%" stopColor={is7dPositive ? colors.accent : colors.lossOnDark} stopOpacity="0.45" />
+                  <Stop offset="100%" stopColor={is7dPositive ? colors.accent : colors.lossOnDark} stopOpacity="0.05" />
+                </LinearGradient>
+              </Defs>
+
+              <Path d={areaPath} fill={`url(#${gradientId})`} />
+
+              <Path
+                d={linePath}
+                fill="none"
+                stroke={colors.ink}
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+
+              <Circle cx={lastPoint.x} cy={lastPoint.y} r={3.5} fill={colors.ink} />
+            </Svg>
+          ) : (
+            <View style={{ height: chartHeight }} />
+          )}
+        </View>
+      </TouchableOpacity>
+    </HardShadow>
   );
 });
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+  cardWrapper: {
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+  },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    borderWidth: 2,
+    borderColor: colors.ink,
     overflow: 'hidden',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    paddingTop: 16,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 14,
     paddingBottom: 4,
   },
   symbolRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     flexShrink: 1,
   },
-  symbolText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-    letterSpacing: -0.2,
-  },
   usBadge: {
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderRadius: 5,
-  },
-  usBadgeText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: '#1D4ED8',
-  },
-  typeBadge: {
+    borderWidth: 2,
+    borderColor: colors.ink,
+    borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 5,
   },
-  typeBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  stocksBadge: {
-    backgroundColor: '#EFF6FF',
-  },
-  stocksBadgeText: {
-    color: '#2563EB',
-  },
-  fundsBadge: {
-    backgroundColor: '#F5F3FF',
-  },
-  fundsBadgeText: {
-    color: '#7C3AED',
-  },
-  cashBadge: {
-    backgroundColor: '#ECFDF5',
-  },
-  cashBadgeText: {
-    color: '#059669',
+  typeBadge: {
+    borderWidth: 2,
+    borderColor: colors.ink,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
   editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    borderRadius: 999,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
-  },
-  editBtnText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#475569',
+    backgroundColor: colors.surface,
   },
   heroRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'baseline',
     paddingHorizontal: 16,
-    paddingTop: 6,
-    paddingBottom: 6,
-    minHeight: 36,
+    marginTop: 6,
   },
   heroValueCol: {
     flexShrink: 1,
   },
-  marketValueText: {
-    fontSize: 19,
-    lineHeight: 24,
-    fontWeight: '800',
-    color: '#0F172A',
-    letterSpacing: -0.3,
-  },
   heroChangeCol: {
     alignItems: 'flex-end',
   },
-  plContainer: {
+  cashInflowRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     gap: 4,
   },
-  plAmountText: {
-    fontSize: 13.5,
-    lineHeight: 18,
-    fontWeight: '700',
-  },
-  plPercentText: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '700',
-  },
-  textPositive: {
-    color: '#10B981',
-  },
-  textNegative: {
-    color: '#EF4444',
-  },
-  cashInflowRateText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0D9488',
-  },
-  cashTaxBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  metaRow: {
+  metaGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    marginHorizontal: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 10,
-    marginTop: 2,
-    marginBottom: 4,
-  },
-  metaItem: {
-    flex: 1,
-  },
-  metaDivider: {
-    width: 1,
-    height: 18,
-    backgroundColor: '#E2E8F0',
-    marginHorizontal: 8,
-  },
-  metaLabel: {
-    fontSize: 9.5,
-    color: '#64748B',
-    fontWeight: '500',
-    marginBottom: 1,
-  },
-  metaValue: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  chartContainer: {
-    width: '100%',
-    height: 54,
-    marginTop: 0,
-    overflow: 'hidden',
-  },
-  chartTagRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 6,
-    paddingBottom: 2,
+    gap: 12,
   },
-  chartTagBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  chartTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 0.1,
-  },
-  realIndicatorDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    marginLeft: 2,
-  },
-  chartChangeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  textCash: {
-    color: '#0D9488',
+  metaCol: {
+    flex: 1,
+    gap: 2,
   },
   totalReturnStrip: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
+    backgroundColor: '#EAF3EE',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
     paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingVertical: 7,
     marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 2,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    marginTop: 10,
   },
   totalReturnLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
   },
-  totalReturnLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
+  chartTagRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 4,
   },
-  totalReturnPercent: {
-    fontSize: 11,
-    fontWeight: '700',
+  chartTagBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  realIndicatorDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginLeft: 2,
+  },
+  chartContainer: {
+    width: '100%',
+    height: 54,
+    marginTop: 2,
+    overflow: 'hidden',
   },
 });
