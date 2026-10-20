@@ -371,13 +371,46 @@
 
 ---
 
-## 16. ขั้นตอนต่อไป
+## 16. การดำเนินการขั้นตอนที่ 2G-2: ปรับ Sheet เปรียบเทียบผลตอบแทนรายปี (`src/components/AnnualComparisonSheet.tsx`)
 
-พร้อมเข้าสู่ **ขั้นตอนที่ 2G-2**:
-- ปรับ Sheet เปรียบเทียบผลตอบแทนรายปี `src/components/AnnualComparisonSheet.tsx`
-  - ใช้ `<SheetFrame title="เปรียบเทียบผลตอบแทน" onClose={onClose}>`
-  - การ์ดและแถบสถิติ: ใช้ `<Card shadow="md">`, `<Pill>`, และ `<CalmText>` tokens
-  - ตารางประวัติและรายการสินทรัพย์: เส้นคั่น `<DashedDivider />`
+- **ไฟล์ที่แก้ไข**: `src/components/AnnualComparisonSheet.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **โครงสร้าง SheetFrame**:
+     - ปลด backdrop `styles.backdrop`, `styles.sheetContainer`, `styles.handleBar`, และ `styles.headerRow` เดิมออกทั้งหมด
+     - ใช้ `<SheetFrame title="เปรียบเทียบผลตอบแทน" onClose={onClose}>` มอบ Slide-up Sheet พร้อม Grab handle และปุ่มปิดกลม 44px
+     - วางข้อความระบุปีที่เปรียบเทียบ: `<CalmText variant="monoRegular" size={12} color={colors.muted} style={{ marginBottom: 14 }}>ปี {priorYear} เทียบกับ ปี {currentYear}</CalmText>`
+  2. **การ์ดยอดรวมรายปี (Comparison Metric Cards)**:
+     - ใช้ `<Card shadow="md" padding={12} style={{ flex: 1 }}>` สำหรับทั้ง 2 ฝั่ง (ปีก่อน vs ปีปัจจุบัน)
+     - ยอดเงิน: แสดงผลเด่นชัดด้วย `<CalmText variant="display" size={20} color={colors.ink}>`
+     - ป้ายปันผลพิเศษปีก่อน: `<Pill kind="dashed" size="sm" label={`ปันผลพิเศษ ${specialCount} รายการ`} />`
+     - ป้ายอัตราเติบโต YoY: `<Pill kind={isPositiveGrowth ? 'accent' : 'outline'} size="sm" label={`${isPositiveGrowth ? '▲ +' : '▼ '}${Math.abs(yoyPercent).toFixed(1)}% YoY`} />` (หรือป้าย `✦ ปีแรกที่มีข้อมูล`)
+  3. **กล่องคำอธิบายความผันผวน (Insight Note Card)**:
+     - ใช้พื้นหลัง `colors.track` พร้อมเส้นขอบหนา 1.5px `colors.ink` มนโค้ง 12px
+     - ไอคอน `information-circle-outline` สี `colors.ink`
+     - ข้อความวิเคราะห์: `<CalmText variant="monoRegular" size={11} color={colors.ink}>`
+  4. **รายการแจกแจงปันผลปีก่อน (Prior Year Breakdown List)**:
+     - แถบหัวข้อรายการ: `<CalmText variant="bodyBold" size={14} color={colors.ink}>` พร้อม `<Pill kind="outline" size="sm" label={`${sortedItems.length} รายการ`} />`
+     - คั่นระหว่างรายการด้วย `<DashedDivider marginVertical={4} />`
+     - สัญลักษณ์หุ้น: `<CalmText variant="mono" size={13} color={colors.ink}>`
+     - แท็กประเภท: `<Pill size="sm">` (ปันผลพิเศษ = dashed, ดอกเบี้ย = outline, ปันผล = accent)
+     - ข้อมูลย่อยและยอดเงิน: ใช้ `<CalmText>` พร้อมฟอนต์ mono
+     - ความสูงแถวรายการขั้นต่ำ `minHeight: 44`
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+---
+
+## 17. ขั้นตอนต่อไป
+
+พร้อมเข้าสู่ **ขั้นตอนที่ 2G-3**:
+- ปรับ Modal ตั้งค่าเป้าหมาย `src/components/GoalSettingsModal.tsx`
+  - ใช้ `<SheetFrame title="ตั้งเป้าหมายเงินปันผล" onClose={onClose}>`
+  - ห่อด้วย `KeyboardAvoidingView` ชั้นนอกสุดภายใน `<Modal>` เนื่องจากมี Input fields
+  - ช่องกรอก: ใช้ `inputStyle` จาก Calm tokens (คง validation, storage key `@mydividend_monthly_goal`)
+  - รายการ Presets: ใช้ `<Card>` หรือ Pill capsules
+  - ปุ่มหลัก: `<CapsuleButton variant="ink">`, ปุ่มรอง: `<CapsuleButton variant="surface">`
+
 
 
 
