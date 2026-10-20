@@ -639,7 +639,15 @@ export const Portfolio: React.FC<PortfolioProps> = ({
       }
     });
 
-    const PALETTE = ['#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#F97316', '#06B6D4'];
+    const PALETTE = [
+      chartColors.stocks,
+      chartColors.funds,
+      chartColors.cash,
+      '#85E3CB',
+      '#E8B4B8',
+      '#90CAF9',
+      '#B0BEC5',
+    ];
     const pData: PortfolioPieDataItem[] = [];
     const lItems: { id: string; color: string; label: string; val: number; pct: number; isOther?: boolean }[] = [];
 
@@ -648,16 +656,14 @@ export const Portfolio: React.FC<PortfolioProps> = ({
       const pct = (val / catTotal) * 100;
       const rounded = Math.round(pct * 10) / 10;
       const color = PALETTE[idx % PALETTE.length];
-      const short = asset.symbol.length > 8 ? asset.symbol.substring(0, 7) + '..' : asset.symbol;
 
       pData.push({
         value: Math.max(0.1, rounded),
         color,
         label: asset.symbol,
-        shortLabel: short,
         percentText: `${pct.toFixed(1)}%`,
         strokeWidth: 2,
-        strokeColor: '#0F172A',
+        strokeColor: colors.ink,
       });
 
       lItems.push({
@@ -679,10 +685,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         value: Math.max(0.1, roundedOther),
         color: otherColor,
         label: 'อื่นๆ (Others)',
-        shortLabel: 'อื่นๆ',
         percentText: `${otherPct.toFixed(1)}%`,
         strokeWidth: 2,
-        strokeColor: '#0F172A',
+        strokeColor: colors.ink,
         isOther: true,
       });
 
@@ -815,79 +820,32 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                   <PieChart
                     data={pieData}
                     donut={true}
-                    radius={activeCategoryFilter === 'ALL' ? 105 : SCREEN_WIDTH * 0.20}
-                    innerRadius={activeCategoryFilter === 'ALL' ? 68 : SCREEN_WIDTH * 0.12}
+                    radius={105}
+                    innerRadius={68}
                     innerCircleColor={colors.ink}
                     strokeWidth={2}
                     strokeColor={colors.ink}
-                    extraRadius={activeCategoryFilter === 'ALL' ? 0 : 40}
-                    paddingHorizontal={activeCategoryFilter === 'ALL' ? 0 : 28}
                     paddingVertical={8}
-                    showExternalLabels={activeCategoryFilter !== 'ALL'}
-                    labelLineConfig={{
-                      color: colors.shadow,
-                      thickness: 1.5,
-                      length: 16,
-                      tailLength: 10,
-                      avoidOverlappingOfLabels: true,
-                      labelComponentHeight: 26,
-                      labelComponentWidth: 62,
-                      labelComponentMargin: 4,
-                    }}
-                    externalLabelComponent={(item?: any) => {
-                      if (item?.hideLabel) return null;
-                      const shortLabel = item?.shortLabel || item?.label || '';
-                      const percentText = item?.percentText || (item?.value !== undefined ? `${item.value}%` : '');
-                      const strokeColor = item?.color || colors.accent;
+                    showExternalLabels={false}
+                    centerLabelComponent={() => {
+                      const activeVal = activeCategoryFilter === 'ALL'
+                        ? totalMarketValue
+                        : (activeCategoryFilter === 'STOCKS' ? stocksTotal : (activeCategoryFilter === 'FUNDS' ? fundsTotal : cashTotal));
+                      const formattedAmount = activeVal >= 1000000
+                        ? `฿${(activeVal / 1000000).toFixed(1)}M`
+                        : (activeVal >= 1000 ? `฿${(activeVal / 1000).toFixed(0)}k` : `฿${activeVal.toLocaleString('th-TH')}`);
+
                       return (
-                        <SvgG>
-                          <Rect
-                            x={0}
-                            y={-26}
-                            width={62}
-                            height={26}
-                            rx={5}
-                            fill={colors.ink}
-                            stroke={strokeColor}
-                            strokeWidth={1.5}
-                          />
-                          <SvgText
-                            x={31}
-                            y={-15}
-                            fill={colors.projected}
-                            fontSize={8}
-                            fontWeight="600"
-                            textAnchor="middle"
-                          >
-                            {shortLabel}
-                          </SvgText>
-                          <SvgText
-                            x={31}
-                            y={-4}
-                            fill={colors.surface}
-                            fontSize={10}
-                            fontWeight="bold"
-                            textAnchor="middle"
-                          >
-                            {percentText}
-                          </SvgText>
-                        </SvgG>
+                        <View style={styles.centerLabelBox}>
+                          <CalmText variant="monoRegular" size={10} color={colors.shadow}>
+                            {activeCategoryFilter === 'ALL' ? 'ทั้งพอร์ต' : activeCategoryFilter}
+                          </CalmText>
+                          <CalmText variant="display" size={28} color={colors.surface} style={{ marginTop: 2 }}>
+                            {isPrivateMode ? '฿••••••' : formattedAmount}
+                          </CalmText>
+                        </View>
                       );
                     }}
-                    centerLabelComponent={() => (
-                      <View style={styles.centerLabelBox}>
-                        <CalmText variant="monoRegular" size={10} color={colors.shadow}>
-                          {activeCategoryFilter === 'ALL' ? 'ทั้งพอร์ต' : activeCategoryFilter}
-                        </CalmText>
-                        <CalmText variant="display" size={28} color={colors.surface} style={{ marginTop: 2 }}>
-                          {isPrivateMode
-                            ? '฿••••••'
-                            : `฿${((activeCategoryFilter === 'ALL'
-                              ? totalMarketValue
-                              : (activeCategoryFilter === 'STOCKS' ? stocksTotal : (activeCategoryFilter === 'FUNDS' ? fundsTotal : cashTotal))) / 1000).toFixed(0)}k`}
-                        </CalmText>
-                      </View>
-                    )}
                   />
 
                   {/* Dashed Divider between Donut & Legends */}
