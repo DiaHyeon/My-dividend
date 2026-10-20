@@ -691,11 +691,10 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         isOther: true,
       });
 
-      const minorSymbols = minorAssets.map((a) => a.symbol).join(', ');
       lItems.push({
         id: 'others_combined',
         color: otherColor,
-        label: `อื่นๆ (${minorAssets.length} ตัว: ${minorSymbols}) (${otherPct.toFixed(1)}%)`,
+        label: `อื่นๆ (${minorAssets.length} รายการ) (${otherPct.toFixed(1)}%)`,
         val: otherVal,
         pct: otherPct,
         isOther: true,
@@ -945,7 +944,15 @@ export const Portfolio: React.FC<PortfolioProps> = ({
 
                       {/* Row 2: Market value + Unrealized P/L */}
                       <View style={styles.assetValueRow}>
-                        <CalmText variant="display" size={26} color={colors.ink}>
+                        <CalmText
+                          variant="display"
+                          size={26}
+                          color={colors.ink}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit={true}
+                          minimumFontScale={0.75}
+                          style={{ flexShrink: 0, maxWidth: '58%' }}
+                        >
                           {isPrivateMode
                             ? '฿••••••'
                             : `฿${Number(item.market_value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
@@ -954,9 +961,10 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                           variant="mono"
                           size={12}
                           color={plTrend.color}
+                          numberOfLines={1}
                         >
                           {isPrivateMode
-                            ? `(${plGlyph}${Number(item.unrealized_pl_percent).toFixed(2)}%)`
+                            ? `฿•••••• (${plGlyph}${Number(item.unrealized_pl_percent).toFixed(2)}%)`
                             : `${plGlyph}${plSign}${Number(item.unrealized_pl).toLocaleString('th-TH', { minimumFractionDigits: 2 })} (${Number(item.unrealized_pl_percent).toFixed(2)}%)`}
                         </CalmText>
                       </View>
@@ -1888,6 +1896,7 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     justifyContent: 'space-between',
     marginTop: 4,
+    gap: 8,
   },
   viewAllAssetsBtn: {
     flexDirection: 'row',
