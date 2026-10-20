@@ -401,15 +401,47 @@
 
 ---
 
-## 17. ขั้นตอนต่อไป
+## 17. การดำเนินการขั้นตอนที่ 2G-3: ปรับ Modal ตั้งเป้าหมายเงินปันผลรายเดือน (`src/components/GoalSettingsModal.tsx`)
 
-พร้อมเข้าสู่ **ขั้นตอนที่ 2G-3**:
-- ปรับ Modal ตั้งค่าเป้าหมาย `src/components/GoalSettingsModal.tsx`
-  - ใช้ `<SheetFrame title="ตั้งเป้าหมายเงินปันผล" onClose={onClose}>`
-  - ห่อด้วย `KeyboardAvoidingView` ชั้นนอกสุดภายใน `<Modal>` เนื่องจากมี Input fields
-  - ช่องกรอก: ใช้ `inputStyle` จาก Calm tokens (คง validation, storage key `@mydividend_monthly_goal`)
-  - รายการ Presets: ใช้ `<Card>` หรือ Pill capsules
-  - ปุ่มหลัก: `<CapsuleButton variant="ink">`, ปุ่มรอง: `<CapsuleButton variant="surface">`
+- **ไฟล์ที่แก้ไข**: `src/components/GoalSettingsModal.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **โครงสร้าง SheetFrame & Keyboard Integration**:
+     - ห่อ `<SheetFrame title="ตั้งเป้าหมายเงินปันผล" onClose={onClose}>` ภายใน `<KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>`
+     - ปลด backdrop `styles.backdrop`, `styles.sheetContainer`, `styles.dragHandle`, และ `styles.header` เดิมออกทั้งหมด
+     - ข้อความแนะนำใต้หัวข้อ: `<CalmText variant="monoRegular" size={12} color={colors.muted}>กำหนดเป้าหมายปันผล & ดอกเบี้ยเพื่อพิชิตในชีวิตจริง</CalmText>`
+  2. **รายการระดับเป้าหมาย (Milestone Presets)**:
+     - หัวข้อกลุ่ม: `<CalmText variant="bodyBold" size={13} color={colors.ink}>เลือกระดับเป้าหมาย (Milestone Presets)</CalmText>`
+     - การ์ด Preset แต่ละระดับ: ใช้กรอบขอบ 1.5px `colors.ink`, รัศมี 12px, ความสูงขั้นต่ำ 52px
+     - สถานะเลือก (Selected): พื้นหลังเปลี่ยนเป็น `colors.track` (Mint tint)
+     - กล่องไอคอน: ขอบ 1px `colors.ink`, มน 8px, เมื่อเลือกจะเปลี่ยนพื้นหลังเป็น `colors.accent`
+     - สัญลักษณ์วิทยุ (Radio selector): วงกลมขนาด 20px ขอบ 1.5px `colors.ink`, เมื่อเลือกจะกลายเป็นสี `colors.ink` ทึบพร้อมไอคอนเครื่องหมายถูก `checkmark` สีขาว
+     - ข้อความชื่อระดับและคำอธิบาย: ใช้ `<CalmText variant="bodyBold">` และ `<CalmText variant="monoRegular">`
+  3. **ตัวเลือกกำหนดเป้าหมายเอง (Custom Target)**:
+     - การ์ดเลือกแบบ Custom: ได้รับการจัดรูปแบบสอดคล้องกับ Presets
+     - ช่องกรอกตัวเลขแบบกำหนดเอง (`customInputBox`):
+       - พื้นหลัง `colors.surface`, ขอบ 1.5px `colors.ink`, มน 12px, ความสูงขั้นต่ำ 48px
+       - สัญลักษณ์สกุลเงิน `฿`: `<CalmText variant="mono" size={16} color={colors.ink}>`
+       - ช่องป้อนตัวเลข: ฟอนต์ `fonts.mono`, สี `colors.ink`, ตัวยึดสี `colors.muted`
+       - ข้อความกำกับ `/ เดือน`: `<CalmText variant="monoRegular" size={12} color={colors.muted}>`
+  4. **ปุ่มส่วนท้าย (Action Footer)**:
+     - ปุ่มยกเลิก: `<CapsuleButton variant="surface" label="ยกเลิก" onPress={onClose} />`
+     - ปุ่มบันทึก: `<CapsuleButton variant="ink" label="บันทึกเป้าหมาย" icon={<Ionicons name="checkmark" size={16} color={colors.accent} />} onPress={handleConfirm} />`
+  5. **การคง Logic และ Data Storage**:
+     - คง AsyncStorage key `@mydividend_monthly_goal` และ `onSave(finalAmount)` 100%
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+---
+
+## 18. ขั้นตอนต่อไป
+
+พร้อมเข้าสู่ **ขั้นตอนที่ 2G-4**:
+- ปรับ Modal สัดส่วนสินทรัพย์ `src/components/CategoryBreakdownModal.tsx`
+  - ใช้ `<SheetFrame title="..." onClose={onClose}>`
+  - คงสี Donut chart slices ตามหมวดสินทรัพย์/ภาคธุรกิจ (`sliceColor` by sector) ห้ามลดทอนเหลือสีเดียว
+  - ปรับป้ายกำกับ, ตัวเลขสถิติ, ขอบการ์ด และ Legend ตาม Calm tokens
+
 
 
 

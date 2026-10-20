@@ -12,6 +12,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SheetFrame } from './ui/SheetFrame';
+import { Pill } from './ui/Pill';
+import { CalmText } from './ui/CalmText';
+import { CapsuleButton } from './ui/CapsuleButton';
+import { colors, fonts, inputStyle } from '../theme/tokens';
 
 export const GOAL_STORAGE_KEY = '@mydividend_monthly_goal';
 
@@ -129,31 +134,17 @@ export const GoalSettingsModal: React.FC<GoalSettingsModalProps> = ({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.modalOverlay}
+        style={{ flex: 1 }}
       >
-        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
-        <View style={styles.sheetContainer}>
-          {/* Sheet Handle */}
-          <View style={styles.dragHandle} />
+        <SheetFrame title="ตั้งเป้าหมายเงินปันผล" onClose={onClose}>
+          <CalmText variant="monoRegular" size={12} color={colors.muted} style={{ marginBottom: 12 }}>
+            กำหนดเป้าหมายปันผล & ดอกเบี้ยเพื่อพิชิตในชีวิตจริง
+          </CalmText>
 
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerTitleRow}>
-              <View style={styles.headerIconCircle}>
-                <Ionicons name="flag-outline" size={18} color="#059669" />
-              </View>
-              <View>
-                <Text style={styles.title}>เป้าหมายกระแสเงินสดรายเดือน</Text>
-                <Text style={styles.subtitle}>กำหนดเป้าหมายปันผล & ดอกเบี้ยเพื่อพิชิตในชีวิตจริง</Text>
-              </View>
-            </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={20} color="#64748B" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-            <Text style={styles.sectionLabel}>เลือกระดับเป้าหมาย (Milestone Presets)</Text>
+          <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
+            <CalmText variant="bodyBold" size={13} color={colors.ink} style={{ marginBottom: 10 }}>
+              เลือกระดับเป้าหมาย (Milestone Presets)
+            </CalmText>
 
             {GOAL_PRESETS.map((preset) => {
               const isSelected = !isCustom && selectedPresetId === preset.id;
@@ -174,19 +165,21 @@ export const GoalSettingsModal: React.FC<GoalSettingsModalProps> = ({
                       <Ionicons
                         name={preset.icon as any}
                         size={18}
-                        color={isSelected ? '#059669' : '#64748B'}
+                        color={colors.ink}
                       />
                     </View>
                     <View style={styles.presetTextCol}>
-                      <Text style={[styles.presetLabel, isSelected && styles.presetLabelSelected]}>
+                      <CalmText variant="bodyBold" size={13} color={colors.ink}>
                         {preset.label}
-                      </Text>
-                      <Text style={styles.presetDesc}>{preset.description}</Text>
+                      </CalmText>
+                      <CalmText variant="monoRegular" size={11} color={colors.muted} style={{ marginTop: 2 }}>
+                        {preset.description}
+                      </CalmText>
                     </View>
                   </View>
 
                   <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
-                    {isSelected && <View style={styles.radioInnerDot} />}
+                    {isSelected && <Ionicons name="checkmark" size={12} color={colors.surface} />}
                   </View>
                 </TouchableOpacity>
               );
@@ -208,264 +201,148 @@ export const GoalSettingsModal: React.FC<GoalSettingsModalProps> = ({
                   <Ionicons
                     name="create-outline"
                     size={18}
-                    color={isCustom ? '#059669' : '#64748B'}
+                    color={colors.ink}
                   />
                 </View>
                 <View style={styles.presetTextCol}>
-                  <Text style={[styles.presetLabel, isCustom && styles.presetLabelSelected]}>
+                  <CalmText variant="bodyBold" size={13} color={colors.ink}>
                     กำหนดเป้าหมายเอง (Custom Target)
-                  </Text>
-                  <Text style={styles.presetDesc}>ระบุตัวเลขบาทต่อเดือนที่ต้องการ</Text>
+                  </CalmText>
+                  <CalmText variant="monoRegular" size={11} color={colors.muted} style={{ marginTop: 2 }}>
+                    ระบุตัวเลขบาทต่อเดือนที่ต้องการ
+                  </CalmText>
                 </View>
               </View>
 
               <View style={[styles.radioCircle, isCustom && styles.radioCircleSelected]}>
-                {isCustom && <View style={styles.radioInnerDot} />}
+                {isCustom && <Ionicons name="checkmark" size={12} color={colors.surface} />}
               </View>
             </TouchableOpacity>
 
             {isCustom && (
               <View style={styles.customInputBox}>
-                <Text style={styles.inputPrefix}>฿</Text>
+                <CalmText variant="mono" size={16} color={colors.ink} style={{ marginRight: 6 }}>
+                  ฿
+                </CalmText>
                 <TextInput
-                  style={styles.customTextInput}
+                  style={[styles.customTextInput, { fontFamily: fonts.mono }]}
                   keyboardType="numeric"
                   placeholder="เช่น 5,000"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.muted}
                   value={customAmountText}
                   onChangeText={setCustomAmountText}
                   autoFocus
                 />
-                <Text style={styles.inputSuffix}>/ เดือน</Text>
+                <CalmText variant="monoRegular" size={12} color={colors.muted} style={{ marginLeft: 6 }}>
+                  / เดือน
+                </CalmText>
               </View>
             )}
 
-            <View style={{ height: 24 }} />
+            <View style={{ height: 16 }} />
           </ScrollView>
 
           {/* Action Footer */}
           <View style={styles.footer}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onClose} activeOpacity={0.7}>
-              <Text style={styles.cancelBtnText}>ยกเลิก</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.saveBtn} onPress={handleConfirm} activeOpacity={0.8}>
-              <Ionicons name="checkmark" size={18} color="#FFFFFF" />
-              <Text style={styles.saveBtnText}>บันทึกเป้าหมาย</Text>
-            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <CapsuleButton variant="surface" label="ยกเลิก" onPress={onClose} />
+            </View>
+            <View style={{ flex: 1.5 }}>
+              <CapsuleButton
+                variant="ink"
+                label="บันทึกเป้าหมาย"
+                icon={<Ionicons name="checkmark" size={16} color={colors.accent} />}
+                onPress={handleConfirm}
+              />
+            </View>
           </View>
-        </View>
+        </SheetFrame>
       </KeyboardAvoidingView>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-  },
-  backdrop: {
-    flex: 1,
-  },
-  sheetContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '85%',
-    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 20,
-  },
-  dragHandle: {
-    width: 36,
-    height: 4,
-    backgroundColor: '#CBD5E1',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 10,
-    marginBottom: 8,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  headerIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#ECFDF5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  subtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 1,
-  },
-  closeBtn: {
-    padding: 6,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
-    marginBottom: 12,
+  scrollArea: {
+    maxHeight: 440,
   },
   presetCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    minHeight: 52,
   },
   presetCardSelected: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#10B981',
+    backgroundColor: colors.track,
+    borderColor: colors.ink,
   },
   presetLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     flex: 1,
   },
   presetIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   presetIconBoxSelected: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: colors.accent,
   },
   presetIconBoxInactive: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.surface,
   },
   presetTextCol: {
     flex: 1,
-  },
-  presetLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  presetLabelSelected: {
-    color: '#065F46',
-  },
-  presetDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
   },
   radioCircle: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
+    borderWidth: 1.5,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.surface,
   },
   radioCircleSelected: {
-    borderColor: '#10B981',
-  },
-  radioInnerDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#10B981',
+    backgroundColor: colors.ink,
+    borderColor: colors.ink,
   },
   customInputBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1.5,
-    borderColor: '#10B981',
+    borderColor: colors.ink,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
     marginTop: 4,
-    marginBottom: 12,
-  },
-  inputPrefix: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#059669',
-    marginRight: 6,
+    marginBottom: 10,
+    minHeight: 48,
   },
   customTextInput: {
     flex: 1,
     fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
+    color: colors.ink,
     padding: 0,
-  },
-  inputSuffix: {
-    fontSize: 13,
-    color: '#64748B',
-    marginLeft: 6,
   },
   footer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
+    alignItems: 'center',
+    gap: 10,
     paddingTop: 12,
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  saveBtn: {
-    flex: 2,
-    flexDirection: 'row',
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: '#059669',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  saveBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
 });
