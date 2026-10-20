@@ -606,6 +606,37 @@
   - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
   - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
 
+---
+
+## 25. Step 3C — มุมมองผลงานพอร์ตและเปรียบเทียบดัชนี (Performance View) ใน Portfolio Screen (`Portfolio.tsx`)
+
+- **ไฟล์ที่แก้ไข**: `src/screens/Portfolio.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. ปรับปรุงการ์ดสรุปผลงาน (Performance Hero Card):
+     - ห่อหุ้มด้วย `<Card variant="dark" shadow="lg" padding={18}>` สไตล์การ์ดเขียวเข้ม Ink พร้อมเงาแข็ง 6px
+     - แถบหัวข้อ: แสดง "ผลตอบแทนสะสม (หุ้น & กองทุน)" ด้วย `<CalmText variant="mono" size={11} color={colors.projected}>` พร้อมป้ายช่วงเวลา `<Pill kind="outlineDark" size="sm">`
+     - ตัวเลขผลตอบแทน: แสดงตัวเลขใหญ่ 54px Bricolage Grotesque ด้วย `<CalmText variant="display" size={54} color={isProfit ? colors.accent : colors.lossOnDark}>`
+     - แถวล่าง: ป้ายกำไร/ขาดทุนบาทใช้ `<Pill kind={periodPL >= 0 ? 'accent' : 'lossDark'} size="md">` ควบคู่กับยอดเงินต้นลงทุนด้วย `<CalmText variant="monoRegular" size={11} color={colors.surface}>`
+  2. ปรับปรุงการ์ดกราฟเปรียบเทียบผลงาน (Performance Line Chart Card):
+     - ห่อหุ้มด้วย `<Card shadow="md" padding={16}>`
+     - แถบแบนเนอร์ Alpha (ชนะ/ตามหลังตลาด): ทรงแคปซูลมน 999 ขอบหมึก 2px, กรณีชนะตลาดใช้พื้นหลัง `colors.accent` ข้อความสีหมึก, กรณีตามหลังตลาดใช้พื้นหลัง `colors.track` ข้อความสีหมึก
+     - ชิปเปรียบเทียบพอร์ตและดัชนี (Comparison Chips): ทรงแคปซูลมน 999 ขอบหมึก 2px พื้นหลัง `colors.surface`, จุดสีดัชนีขนาด 10px ขอบ 1.5px หมึก, ชิปพอร์ตมีสัญลักษณ์สี่เหลี่ยมสีมิ้นต์ `colors.accent`, ปุ่ม `+ เปรียบเทียบ ▾` ขอบ 2px สอดคล้องตามต้นแบบ `08-portfolio-performance.html`
+     - กราฟเส้น `LineChart`: เส้นพอร์ตใช้สี `colors.accent` หนา 3px พร้อมพื้นที่ Area Fill สีมิ้นต์โปร่งแสง, เส้นดัชนีตลาดใช้สีประจำดัชนี (เช่น S&P 500 ใช้ `#C7B8F5`), เส้นประแนวนอนและแนวตั้งใช้ `colors.shadow` (`#A9CDB9`), ป้ายสเกล Y-Axis และแกนเวลา Timeline ด้านล่างใช้ฟอนต์ Mono 10px สีหมึก
+     - รักษากฎการคำนวณ dynamic tight scale bounds, inception date scaling, และ vertical floor gridlines ไว้สมบูรณ์ 100%
+  3. ปรับปรุงแถบเลือกช่วงเวลา (Timeframe Bar):
+     - คอนเทนเนอร์แคปซูลมน 999 พื้นหลัง `colors.surface`, ขอบหมึก 2px, padding 4, gap 4
+     - ปุ่ม Active: พื้นหลัง `colors.ink`, ตัวหนังสือ `colors.accent` ฟอนต์ Mono 12px
+     - ปุ่ม Inactive: พื้นหลังใส, ตัวหนังสือ `colors.ink` ฟอนต์ Mono 12px
+  4. ปรับปรุงรายการจัดอันดับผลตอบแทนรายสินทรัพย์ (Asset Performance Rankings):
+     - หัวข้อ: `<CalmText variant="display" size={18} color={colors.ink}>`
+     - แต่ละรายการห่อหุ้มด้วย `<Card shadow="md" padding={12}>`
+     - ซ้าย: อันดับ `#X` ใช้ `<Pill kind="ink" size="sm">`, สัญลักษณ์หุ้น `<CalmText variant="display" size={16}>`, ป้ายประเภทสินทรัพย์ `<Pill kind="outline" size="sm">`, และมูลค่าตลาด `<CalmText variant="monoRegular" size={11} color={colors.muted}>`
+     - ขวา: ผลตอบแทน % ใช้ `<Pill kind={isProfit ? 'accent' : 'lossDark'} size="md">` และกำไร/ขาดทุนบาทใช้ `<CalmText variant="mono" size={11} color={trend(plAmount).color}>`
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+
 
 
 

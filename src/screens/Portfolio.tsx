@@ -1051,64 +1051,52 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         {portfolioView === 'PERFORMANCE' && (
           <>
             {/* Performance Hero Card (Focus on Return %, not nominal net worth) */}
-            <View style={styles.perfHeroCard}>
+            <Card variant="dark" shadow="lg" padding={18} style={{ marginBottom: 16 }}>
               <View style={styles.perfHeroTop}>
-                <Text style={styles.perfHeroLabel}>ผลตอบแทนสะสม (หุ้น & กองทุน)</Text>
-                <View style={styles.perfPeriodBadge}>
-                  <Text style={styles.perfPeriodBadgeText}>
-                    {TIMEFRAMES.find((t) => t.id === timeframe)?.label || timeframe}
-                  </Text>
-                </View>
+                <CalmText variant="mono" size={11} color={colors.projected} style={{ letterSpacing: 0.4 }}>
+                  ผลตอบแทนสะสม (หุ้น & กองทุน)
+                </CalmText>
+                <Pill
+                  kind="outlineDark"
+                  size="sm"
+                  label={TIMEFRAMES.find((t) => t.id === timeframe)?.label || timeframe}
+                />
               </View>
 
-              <Text
-                style={[
-                  styles.perfHeroReturn,
-                  comparisonResult.portfolioReturnPct >= 0 ? styles.profitColor : styles.lossColor,
-                ]}
+              <CalmText
+                variant="display"
+                size={54}
+                color={comparisonResult.portfolioReturnPct >= 0 ? colors.accent : colors.lossOnDark}
+                style={{ marginVertical: 6, lineHeight: 60 }}
               >
                 {comparisonResult.portfolioReturnPct >= 0 ? '+' : ''}
                 {comparisonResult.portfolioReturnPct.toFixed(1)}%
-              </Text>
+              </CalmText>
 
               <View style={styles.perfHeroBottom}>
-                <View
-                  style={[
-                    styles.perfHeroBadge,
-                    periodPL >= 0 ? styles.perfHeroBadgeProfit : styles.perfHeroBadgeLoss,
-                  ]}
-                >
-                  <Ionicons
-                    name={periodPL >= 0 ? 'trending-up' : 'trending-down'}
-                    size={12}
-                    color={periodPL >= 0 ? '#059669' : '#DC2626'}
-                  />
-                  <Text
-                    style={[
-                      styles.perfHeroBadgeText,
-                      periodPL >= 0 ? styles.profitColor : styles.lossColor,
-                    ]}
-                  >
-                    {periodPL >= 0 ? 'กำไร ' : 'ขาดทุน '}
-                    {isPrivateMode
+                <Pill
+                  kind={periodPL >= 0 ? 'accent' : 'lossDark'}
+                  size="md"
+                  label={`${periodPL >= 0 ? 'กำไร ' : 'ขาดทุน '}${
+                    isPrivateMode
                       ? '฿••••••'
                       : `${periodPL >= 0 ? '+' : ''}฿${Math.abs(periodPL).toLocaleString('th-TH', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}`}
-                  </Text>
-                </View>
-                <Text style={styles.perfHeroCostText}>
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}`
+                  }`}
+                />
+                <CalmText variant="monoRegular" size={11} color={colors.surface}>
                   เทียบกับเงินต้นลงทุน {isPrivateMode ? '฿••••••' : `฿${investmentCost.toLocaleString('th-TH', {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
                   })}`}
-                </Text>
+                </CalmText>
               </View>
-            </View>
+            </Card>
 
             {/* Performance Comparison Line Chart Card */}
-            <View style={styles.perfChartCard}>
+            <Card shadow="md" padding={16} style={{ marginBottom: 16 }}>
               <View style={styles.perfChartHeader}>
                 {/* Outperformance / Alpha Badge (แสดงเฉพาะเมื่อมีสินทรัพย์ลงทุน) */}
                 {selectedBenchmark !== 'NONE' && investmentCost > 0 ? (
@@ -1122,19 +1110,19 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                   >
                     <Ionicons
                       name={comparisonResult.outperforming ? 'trophy' : 'analytics'}
-                      size={14}
-                      color={comparisonResult.outperforming ? '#059669' : '#D97706'}
+                      size={15}
+                      color={colors.ink}
                     />
-                    <Text
-                      style={[
-                        styles.perfAlphaText,
-                        { color: comparisonResult.outperforming ? '#065F46' : '#B45309' },
-                      ]}
+                    <CalmText
+                      variant="bodyBold"
+                      size={12}
+                      color={colors.ink}
+                      style={{ flexShrink: 1 }}
                     >
                       {comparisonResult.outperforming
                         ? `พอร์ตของคุณชนะ ${selectedBenchmarkObj?.label} อยู่ +${comparisonResult.alphaPct.toFixed(1)}% (Outperforming)`
                         : `พอร์ตของคุณตามหลัง ${selectedBenchmarkObj?.label} อยู่ ${Math.abs(comparisonResult.alphaPct).toFixed(1)}%`}
-                    </Text>
+                    </CalmText>
                   </View>
                 ) : null}
 
@@ -1143,10 +1131,10 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                   {/* Portfolio Legend Chip */}
                   <View style={styles.perfPortfolioChip}>
                     <View style={styles.perfPortfolioChipSquare} />
-                    <Text style={styles.perfPortfolioChipText}>
+                    <CalmText variant="mono" size={11} color={colors.ink}>
                       พอร์ตของคุณ ({comparisonResult.portfolioReturnPct >= 0 ? '+' : ''}
                       {comparisonResult.portfolioReturnPct.toFixed(1)}%)
-                    </Text>
+                    </CalmText>
                   </View>
 
                   {/* Benchmark Dropdown Chip */}
@@ -1160,17 +1148,17 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                         <View
                           style={[
                             styles.perfLegendDot,
-                            { backgroundColor: selectedBenchmarkObj?.color || '#F59E0B' },
+                            { backgroundColor: selectedBenchmarkObj?.color || '#C7B8F5' },
                           ]}
                         />
-                        <Text style={styles.perfBenchmarkChipText} numberOfLines={1}>
+                        <CalmText variant="mono" size={11} color={colors.ink} numberOfLines={1}>
                           {selectedBenchmarkObj?.shortLabel || selectedBenchmarkObj?.label} ({comparisonResult.benchmarkReturnPct >= 0 ? '+' : ''}
                           {comparisonResult.benchmarkReturnPct.toFixed(1)}%)
-                        </Text>
+                        </CalmText>
                         <Ionicons
                           name="chevron-down"
                           size={11}
-                          color="#64748B"
+                          color={colors.ink}
                         />
                       </TouchableOpacity>
 
@@ -1180,7 +1168,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                         activeOpacity={0.6}
                         hitSlop={{ top: 8, bottom: 8, left: 6, right: 8 }}
                       >
-                        <Ionicons name="close" size={13} color="#64748B" />
+                        <Ionicons name="close" size={13} color={colors.ink} />
                       </TouchableOpacity>
                     </View>
                   ) : (
@@ -1189,9 +1177,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                       onPress={() => setIsBenchmarkPickerVisible(true)}
                       activeOpacity={0.7}
                     >
-                      <Ionicons name="add" size={13} color="#475569" />
-                      <Text style={styles.perfAddBenchmarkText}>เปรียบเทียบ</Text>
-                      <Ionicons name="chevron-down" size={11} color="#94A3B8" />
+                      <Ionicons name="add" size={13} color={colors.ink} />
+                      <CalmText variant="mono" size={11} color={colors.ink}>เปรียบเทียบ</CalmText>
+                      <Ionicons name="chevron-down" size={11} color={colors.ink} />
                     </TouchableOpacity>
                   )}
                 </View>
@@ -1200,7 +1188,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
               {/* Line Chart with Dynamic Safe Scale Bounds */}
               {loading ? (
                 <View style={styles.loadingBox}>
-                  <ActivityIndicator size="small" color="#10B981" />
+                  <ActivityIndicator size="small" color={colors.accent} />
                 </View>
               ) : (
                 <View style={styles.chartPlotContainer}>
@@ -1228,14 +1216,14 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                           })),
                         }
                         : {})}
-                      color="#10B981"
-                      color2={selectedBenchmarkObj?.color || '#F59E0B'}
-                      thickness={2.8}
+                      color={colors.accent}
+                      color2={selectedBenchmarkObj?.color || '#C7B8F5'}
+                      thickness={3}
                       thickness2={2.2}
                       curved
                       isAnimated
                       rulesType="dashed"
-                      rulesColor="#E2E8F0"
+                      rulesColor={colors.shadow}
                       xAxisThickness={0}
                       yAxisTextStyle={styles.chartAxisText}
                       yAxisLabelSuffix="%"
@@ -1258,9 +1246,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                       {...(selectedBenchmark === 'NONE'
                         ? {
                           areaChart: true,
-                          startFillColor: '#10B981',
-                          endFillColor: '#10B981',
-                          startOpacity: 0.18,
+                          startFillColor: colors.accent,
+                          endFillColor: colors.accent,
+                          startOpacity: 0.25,
                           endOpacity: 0.02,
                         }
                         : {})}
@@ -1277,13 +1265,15 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                           { left: `${item.percent}%` },
                         ]}
                       >
-                        <Text style={styles.chartFloorText}>{item.label}</Text>
+                        <CalmText variant="mono" size={10} color={colors.ink}>
+                          {item.label}
+                        </CalmText>
                       </View>
                     ))}
                   </View>
                 </View>
               )}
-            </View>
+            </Card>
 
             {/* Timeframe Bar (Located below the chart) */}
             <View style={styles.timeframeBar}>
@@ -1296,11 +1286,13 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                     onPress={() => setTimeframe(tf.id)}
                     activeOpacity={0.7}
                   >
-                    <Text
-                      style={[styles.timeframeChipText, isActive && styles.timeframeChipTextActive]}
+                    <CalmText
+                      variant="mono"
+                      size={12}
+                      color={isActive ? colors.accent : colors.ink}
                     >
                       {tf.id}
-                    </Text>
+                    </CalmText>
                   </TouchableOpacity>
                 );
               })}
@@ -1309,15 +1301,17 @@ export const Portfolio: React.FC<PortfolioProps> = ({
             {/* Asset Performance Ranking List */}
             <View style={styles.rankingSection}>
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.rankingSectionTitle}>
-                  จัดอันดับผลตอบแทนรายสินทรัพย์ลงทุน ({performanceRanking.length} รายการ)
-                </Text>
+                <CalmText variant="display" size={18} color={colors.ink}>
+                  จัดอันดับผลตอบแทนรายสินทรัพย์ ({performanceRanking.length} รายการ)
+                </CalmText>
               </View>
 
               {performanceRanking.length === 0 ? (
-                <View style={styles.emptyCard}>
-                  <Text style={styles.emptySubtitle}>ยังไม่มีรายการสินทรัพย์</Text>
-                </View>
+                <Card shadow="md" padding={24} style={{ alignItems: 'center' }}>
+                  <CalmText variant="mono" size={12} color={colors.muted}>
+                    ยังไม่มีรายการสินทรัพย์ลงทุน
+                  </CalmText>
+                </Card>
               ) : (
                 performanceRanking.map((item, idx) => {
                   const plPct = Number(item.unrealized_pl_percent) || 0;
@@ -1326,67 +1320,54 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                   const mVal = Number(item.market_value) || 0;
 
                   return (
-                    <TouchableOpacity
+                    <Card
                       key={item.id}
-                      style={styles.rankingCard}
-                      activeOpacity={0.7}
+                      shadow="md"
+                      padding={12}
+                      style={{ marginBottom: 8 }}
                       onPress={() => {
                         setSelectedAssetForEdit(item);
                         setIsEditModalVisible(true);
                       }}
                     >
-                      <View style={styles.rankingLeft}>
-                        <View style={styles.rankingRankBadge}>
-                          <Text style={styles.rankingRankText}>#{idx + 1}</Text>
-                        </View>
-                        <View>
-                          <View style={styles.rankingSymbolRow}>
-                            <Text style={styles.rankingSymbol}>{item.symbol}</Text>
-                            <Text style={styles.rankingTypeTag}>{item.asset_type}</Text>
+                      <View style={styles.rankingCardInner}>
+                        <View style={styles.rankingLeft}>
+                          <Pill kind="ink" size="sm" label={`#${idx + 1}`} />
+                          <View style={{ gap: 2 }}>
+                            <View style={styles.rankingSymbolRow}>
+                              <CalmText variant="display" size={16} color={colors.ink}>
+                                {item.symbol}
+                              </CalmText>
+                              <Pill kind="outline" size="sm" label={item.asset_type} />
+                            </View>
+                            <CalmText variant="monoRegular" size={11} color={colors.muted}>
+                              มูลค่า {isPrivateMode ? '฿••••••' : `฿${mVal.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`}
+                            </CalmText>
                           </View>
-                          <Text style={styles.rankingValue}>
-                            มูลค่า {isPrivateMode ? '฿••••••' : `฿${mVal.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`}
-                          </Text>
                         </View>
-                      </View>
 
-                      <View style={styles.rankingRight}>
-                        <View
-                          style={[
-                            styles.rankingBadge,
-                            isProfit ? styles.rankingBadgeProfit : styles.rankingBadgeLoss,
-                          ]}
-                        >
-                          <Ionicons
-                            name={isProfit ? 'arrow-up' : 'arrow-down'}
-                            size={11}
-                            color={isProfit ? '#059669' : '#EF4444'}
+                        <View style={styles.rankingRight}>
+                          <Pill
+                            kind={isProfit ? 'accent' : 'lossDark'}
+                            size="md"
+                            label={`${isProfit ? '+' : ''}${plPct.toFixed(2)}%`}
                           />
-                          <Text
-                            style={[
-                              styles.rankingBadgeText,
-                              isProfit ? styles.profitColor : styles.lossColor,
-                            ]}
+                          <CalmText
+                            variant="mono"
+                            size={11}
+                            color={trend(plAmount).color}
+                            style={{ marginTop: 2 }}
                           >
-                            {isProfit ? '+' : ''}
-                            {plPct.toFixed(2)}%
-                          </Text>
+                            {isPrivateMode
+                              ? '฿••••••'
+                              : `${isProfit ? '+' : ''}฿${plAmount.toLocaleString('th-TH', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}`}
+                          </CalmText>
                         </View>
-                        <Text
-                          style={[
-                            styles.rankingPLAmount,
-                            isProfit ? styles.profitColor : styles.lossColor,
-                          ]}
-                        >
-                          {isPrivateMode
-                            ? '฿••••••'
-                            : `${isProfit ? '+' : ''}฿${plAmount.toLocaleString('th-TH', {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}`}
-                        </Text>
                       </View>
-                    </TouchableOpacity>
+                    </Card>
                   );
                 })
               )}
@@ -1659,97 +1640,94 @@ const styles = StyleSheet.create({
   },
   timeframeBar: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 3,
+    backgroundColor: colors.surface,
+    borderRadius: 999,
+    padding: 4,
+    gap: 4,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: 2,
+    borderColor: colors.ink,
   },
   timeframeChip: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
-    borderRadius: 7,
+    paddingVertical: 8,
+    borderRadius: 999,
   },
   timeframeChipActive: {
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.ink,
   },
   timeframeChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
+    fontSize: 12,
+    color: colors.ink,
+    fontFamily: fonts.mono,
   },
   timeframeChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: colors.accent,
   },
   perfPortfolioChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 11,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.ink,
   },
   perfPortfolioChipSquare: {
-    width: 8,
-    height: 8,
-    borderRadius: 2,
-    backgroundColor: '#10B981',
-  },
-  perfPortfolioChipText: {
-    fontSize: 11.5,
-    color: '#0F172A',
-    fontWeight: '700',
+    width: 10,
+    height: 10,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
   },
   perfBenchmarkChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingLeft: 10,
-    paddingRight: 6,
-    paddingVertical: 4.5,
+    backgroundColor: colors.surface,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    paddingLeft: 12,
+    paddingRight: 8,
+    paddingVertical: 5,
+    gap: 6,
   },
   perfBenchmarkChipMain: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
   },
   perfBenchmarkChipText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontSize: 11,
+    color: colors.ink,
+    fontFamily: fonts.mono,
   },
   perfBenchmarkChipCloseBtn: {
-    marginLeft: 6,
+    marginLeft: 4,
     padding: 2,
-    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   perfAddBenchmarkChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 11,
+    gap: 6,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.ink,
   },
   perfAddBenchmarkText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: '#475569',
+    fontSize: 11,
+    color: colors.ink,
+    fontFamily: fonts.mono,
   },
   modalOverlay: {
     flex: 1,
@@ -1860,38 +1838,39 @@ const styles = StyleSheet.create({
   perfAlphaBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-    marginBottom: 8,
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    marginBottom: 12,
   },
   perfAlphaBannerOutperform: {
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
+    backgroundColor: colors.accent,
   },
   perfAlphaBannerUnderperform: {
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
+    backgroundColor: colors.track,
   },
   perfAlphaText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     flexShrink: 1,
+    color: colors.ink,
   },
   perfChartLegends: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 8,
-    marginTop: 2,
+    marginBottom: 4,
   },
   perfLegendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
   },
   chartPlotContainer: {
     position: 'relative',
@@ -1909,8 +1888,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     bottom: 0,
-    width: 1,
-    backgroundColor: 'rgba(226, 232, 240, 0.75)',
+    width: 1.5,
+    backgroundColor: colors.shadow,
+    opacity: 0.7,
   },
   lineChartBox: {
     alignItems: 'center',
@@ -1919,18 +1899,18 @@ const styles = StyleSheet.create({
     marginLeft: -16,
   },
   chartAxisText: {
-    fontSize: 9.5,
-    color: '#94A3B8',
-    fontWeight: '600',
+    fontSize: 10,
+    color: colors.ink,
+    fontFamily: fonts.mono,
   },
   chartFloorTimelineRow: {
     position: 'relative',
     height: 20,
     marginLeft: 44,
     marginRight: 18,
-    marginTop: 2,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    marginTop: 4,
+    borderTopWidth: 1.5,
+    borderTopColor: colors.shadow,
     paddingTop: 4,
   },
   chartFloorItem: {
@@ -1938,26 +1918,14 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -20 }],
   },
   chartFloorText: {
-    fontSize: 9.5,
-    fontWeight: '600',
-    color: '#94A3B8',
+    fontSize: 10,
+    color: colors.ink,
+    fontFamily: fonts.mono,
   },
   rankingSection: {
     marginBottom: 16,
   },
-  rankingSectionTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 8,
-  },
-  rankingCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+  rankingCardInner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1966,75 +1934,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-  },
-  rankingRankBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rankingRankText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
+    flex: 1,
   },
   rankingSymbolRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  rankingSymbol: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  rankingTypeTag: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#64748B',
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  rankingValue: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
   rankingRight: {
     alignItems: 'flex-end',
   },
-  rankingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginBottom: 2,
-  },
-  rankingBadgeProfit: {
-    backgroundColor: '#ECFDF5',
-  },
-  rankingBadgeLoss: {
-    backgroundColor: '#FEF2F2',
-  },
-  rankingBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  rankingPLAmount: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
   profitColor: {
-    color: '#10B981',
+    color: colors.accent,
   },
   lossColor: {
-    color: '#EF4444',
+    color: colors.lossOnLight,
   },
   filterPillsRow: {
     flexDirection: 'row',
