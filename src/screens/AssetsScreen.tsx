@@ -616,25 +616,30 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
               })}
             </View>
 
-            {/* Stats Summary Banner */}
-            <View style={styles.statsBanner}>
-              <View>
-                <Text style={styles.statsBannerLabel}>มูลค่ารวมที่แสดง ({filteredHoldings.length} รายการ)</Text>
-                <Text style={styles.statsBannerValue}>
+            {/* Holdings Summary Banner */}
+            <Card variant="surface" style={styles.statsBanner}>
+              <View style={styles.statsBannerLeft}>
+                <CalmText variant="mono" size={10} color={colors.muted} style={styles.statsBannerLabel}>
+                  มูลค่ารวม ({filteredHoldings.length} รายการ)
+                </CalmText>
+                <CalmText variant="display" size={28} color={colors.ink}>
                   {isPrivateMode
                     ? '฿••••••'
                     : `฿${holdingsStats.totalVal.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                </Text>
+                </CalmText>
               </View>
-              <View style={styles.statsBannerRight}>
-                <Text style={styles.statsBannerLabel}>กำไร/ขาดทุน</Text>
-                <Text style={[styles.statsBannerPL, holdingsStats.totalPL >= 0 ? styles.profitColor : styles.lossColor]}>
+              <View style={styles.statsBannerPill}>
+                <CalmText
+                  variant="mono"
+                  size={12}
+                  color={holdingsStats.totalPL >= 0 ? colors.gainOnDark : colors.lossOnDark}
+                >
                   {isPrivateMode
                     ? `(${holdingsStats.totalPL >= 0 ? '+' : ''}${holdingsStats.plPercent.toFixed(1)}%)`
                     : `${holdingsStats.totalPL >= 0 ? '+' : ''}฿${holdingsStats.totalPL.toLocaleString('th-TH', { maximumFractionDigits: 0 })} (${holdingsStats.plPercent.toFixed(1)}%)`}
-                </Text>
+                </CalmText>
               </View>
-            </View>
+            </Card>
 
             {/* Holdings Card List */}
             {loading ? (
@@ -1374,38 +1379,23 @@ const styles = StyleSheet.create({
   statsBanner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
+    alignItems: 'flex-end',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+  },
+  statsBannerLeft: {
+    flex: 1,
+    gap: 4,
   },
   statsBannerLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
+    letterSpacing: 0.6,
   },
-  statsBannerValue: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-  statsBannerRight: {
-    alignItems: 'flex-end',
-  },
-  statsBannerPL: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  profitColor: {
-    color: '#10B981',
-  },
-  lossColor: {
-    color: '#EF4444',
+  statsBannerPill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: colors.ink,
   },
   loadingBox: {
     paddingVertical: 40,
