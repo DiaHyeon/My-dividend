@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { signInWithEmail, signUpWithEmail, resetPasswordForEmail } from '../services/authService';
 import { setUserDisplayName } from '../services/userService';
+import { colors, borderWidth, radii, fonts } from '../theme/tokens';
 
 type AuthMode = 'SIGN_IN' | 'SIGN_UP' | 'FORGOT_PASSWORD';
 
@@ -212,183 +213,183 @@ export const AuthScreen: React.FC = () => {
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
           >
-          {/* Logo & App Title */}
-          <View style={styles.brandHeader}>
-            <View style={styles.logoBadge}>
-              <Image
-                source={require('../../assets/icon.png')}
-                style={styles.logoImage}
-                resizeMode="cover"
-              />
-            </View>
-            <Text style={styles.appName}>My Dividend</Text>
-            <Text style={styles.appTagline}>
-              {mode === 'SIGN_IN' && 'เข้าสู่ระบบเพื่อจัดการพอร์ตการลงทุนของคุณ'}
-              {mode === 'SIGN_UP' && 'สร้างพอร์ตส่วนตัวและเริ่มวางแผนรับเงินปันผล'}
-              {mode === 'FORGOT_PASSWORD' && 'กู้คืนรหัสผ่านเข้าใช้งานระบบ'}
-            </Text>
-          </View>
-
-          {/* Mode Switcher Tabs */}
-          {mode !== 'FORGOT_PASSWORD' && (
-            <View style={styles.tabContainer}>
-              <TouchableOpacity
-                style={[styles.tabButton, mode === 'SIGN_IN' && styles.tabButtonActive]}
-                onPress={() => setMode('SIGN_IN')}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.tabText, mode === 'SIGN_IN' && styles.tabTextActive]}>
-                  เข้าสู่ระบบ
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tabButton, mode === 'SIGN_UP' && styles.tabButtonActive]}
-                onPress={() => setMode('SIGN_UP')}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.tabText, mode === 'SIGN_UP' && styles.tabTextActive]}>
-                  สร้างบัญชีใหม่
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Form Card */}
-          <View style={styles.formCard}>
-            {/* Display Name Input (Only on Sign Up) */}
-            {mode === 'SIGN_UP' && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>ชื่อของคุณ (Display Name)</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="person-outline" size={20} color="#64748B" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="เช่น สมชาย หรือ Bank"
-                    placeholderTextColor="#94A3B8"
-                    value={displayName}
-                    onChangeText={setDisplayName}
-                    autoCapitalize="words"
-                  />
-                </View>
-              </View>
-            )}
-
-            {/* Email Input */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>อีเมล (Email)</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="mail-outline" size={20} color="#64748B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="เช่น yourname@gmail.com"
-                  placeholderTextColor="#94A3B8"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
+            {/* Logo & App Title */}
+            <View style={styles.brandHeader}>
+              <View style={styles.logoBadge}>
+                <Image
+                  source={require('../../assets/icon.png')}
+                  style={styles.logoImage}
+                  resizeMode="cover"
                 />
               </View>
+              <Text style={styles.appName}>My Dividend</Text>
+              <Text style={styles.appTagline}>
+                {mode === 'SIGN_IN' && 'เข้าสู่ระบบเพื่อจัดการพอร์ตการลงทุนของคุณ'}
+                {mode === 'SIGN_UP' && 'สร้างพอร์ตส่วนตัวและเริ่มวางแผนรับเงินปันผล'}
+                {mode === 'FORGOT_PASSWORD' && 'กู้คืนรหัสผ่านเข้าใช้งานระบบ'}
+              </Text>
             </View>
 
-            {/* Password Input (Hidden in Forgot Password mode) */}
+            {/* Mode Switcher Tabs */}
             {mode !== 'FORGOT_PASSWORD' && (
-              <View style={styles.inputGroup}>
-                <View style={styles.passwordLabelRow}>
-                  <Text style={styles.inputLabel}>รหัสผ่าน (Password)</Text>
-                  {mode === 'SIGN_IN' && (
-                    <TouchableOpacity onPress={() => setMode('FORGOT_PASSWORD')}>
-                      <Text style={styles.forgotPasswordText}>ลืมรหัสผ่าน?</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="lock-closed-outline" size={20} color="#64748B" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="อย่างน้อย 6 ตัวอักษร"
-                    placeholderTextColor="#94A3B8"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowPassword(!showPassword)}
-                    style={styles.eyeButton}
-                  >
-                    <Ionicons
-                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={20}
-                      color="#64748B"
-                    />
-                  </TouchableOpacity>
-                </View>
+              <View style={styles.tabContainer}>
+                <TouchableOpacity
+                  style={[styles.tabButton, mode === 'SIGN_IN' && styles.tabButtonActive]}
+                  onPress={() => setMode('SIGN_IN')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.tabText, mode === 'SIGN_IN' && styles.tabTextActive]}>
+                    เข้าสู่ระบบ
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.tabButton, mode === 'SIGN_UP' && styles.tabButtonActive]}
+                  onPress={() => setMode('SIGN_UP')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.tabText, mode === 'SIGN_UP' && styles.tabTextActive]}>
+                    สร้างบัญชีใหม่
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
 
-            {/* Submit Action Button */}
-            <TouchableOpacity
-              style={[
-                styles.submitButton,
-                (loading || (mode === 'FORGOT_PASSWORD' && resetCooldown > 0)) &&
-                  styles.submitButtonDisabled,
-              ]}
-              onPress={
-                mode === 'SIGN_IN'
-                  ? handleSignIn
-                  : mode === 'SIGN_UP'
-                  ? handleSignUp
-                  : handleForgotPassword
-              }
-              disabled={loading || (mode === 'FORGOT_PASSWORD' && resetCooldown > 0)}
-              activeOpacity={0.8}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.submitButtonText}>
-                  {mode === 'SIGN_IN' && 'เข้าสู่ระบบ'}
-                  {mode === 'SIGN_UP' && 'สร้างบัญชีและเริ่มใช้งาน'}
-                  {mode === 'FORGOT_PASSWORD' &&
-                    (resetCooldown > 0
-                      ? `ส่งใหม่อีกครั้งได้ใน (${resetCooldown}s)`
-                      : 'ส่งลิงก์รีเซ็ตรหัสผ่าน')}
-                </Text>
+            {/* Form Card */}
+            <View style={styles.formCard}>
+              {/* Display Name Input (Only on Sign Up) */}
+              {mode === 'SIGN_UP' && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>ชื่อของคุณ (Display Name)</Text>
+                  <View style={styles.inputContainer}>
+                    <Ionicons name="person-outline" size={20} color="#1F7A52" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="เช่น สมชาย หรือ Bank"
+                      placeholderTextColor="#8FAEA0"
+                      value={displayName}
+                      onChangeText={setDisplayName}
+                      autoCapitalize="words"
+                    />
+                  </View>
+                </View>
               )}
-            </TouchableOpacity>
 
-            {/* Back to Sign In button (Only on Forgot Password mode) */}
-            {mode === 'FORGOT_PASSWORD' && (
+              {/* Email Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>อีเมล (Email)</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="mail-outline" size={20} color="#1F7A52" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="เช่น yourname@gmail.com"
+                    placeholderTextColor="#8FAEA0"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+
+              {/* Password Input (Hidden in Forgot Password mode) */}
+              {mode !== 'FORGOT_PASSWORD' && (
+                <View style={styles.inputGroup}>
+                  <View style={styles.passwordLabelRow}>
+                    <Text style={styles.inputLabel}>รหัสผ่าน (Password)</Text>
+                    {mode === 'SIGN_IN' && (
+                      <TouchableOpacity onPress={() => setMode('FORGOT_PASSWORD')}>
+                        <Text style={styles.forgotPasswordText}>ลืมรหัสผ่าน?</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <View style={styles.inputContainer}>
+                    <Ionicons name="lock-closed-outline" size={20} color="#1F7A52" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="อย่างน้อย 6 ตัวอักษร"
+                      placeholderTextColor="#8FAEA0"
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowPassword(!showPassword)}
+                      style={styles.eyeButton}
+                    >
+                      <Ionicons
+                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color={colors.ink}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Submit Action Button */}
               <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => setMode('SIGN_IN')}
-                activeOpacity={0.7}
+                style={[
+                  styles.submitButton,
+                  (loading || (mode === 'FORGOT_PASSWORD' && resetCooldown > 0)) &&
+                    styles.submitButtonDisabled,
+                ]}
+                onPress={
+                  mode === 'SIGN_IN'
+                    ? handleSignIn
+                    : mode === 'SIGN_UP'
+                    ? handleSignUp
+                    : handleForgotPassword
+                }
+                disabled={loading || (mode === 'FORGOT_PASSWORD' && resetCooldown > 0)}
+                activeOpacity={0.8}
               >
-                <Ionicons name="arrow-back-outline" size={16} color="#64748B" />
-                <Text style={styles.backButtonText}>กลับไปหน้าเข้าสู่ระบบ</Text>
+                {loading ? (
+                  <ActivityIndicator color={colors.accent} size="small" />
+                ) : (
+                  <Text style={styles.submitButtonText}>
+                    {mode === 'SIGN_IN' && 'เข้าสู่ระบบ'}
+                    {mode === 'SIGN_UP' && 'สร้างบัญชีและเริ่มใช้งาน'}
+                    {mode === 'FORGOT_PASSWORD' &&
+                      (resetCooldown > 0
+                        ? `ส่งใหม่อีกครั้งได้ใน (${resetCooldown}s)`
+                        : 'ส่งลิงก์รีเซ็ตรหัสผ่าน')}
+                  </Text>
+                )}
               </TouchableOpacity>
-            )}
-          </View>
 
-          {/* Data Isolation & Security Guarantee Badge */}
-          <View style={styles.securityBadge}>
-            <Ionicons name="shield-checkmark-outline" size={16} color="#059669" />
-            <Text style={styles.securityBadgeText}>
-              ระบบรักษาความปลอดภัยแยกพอร์ตเด็ดขาดด้วย Row Level Security (RLS)
-            </Text>
-          </View>
-        </ScrollView>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
-  </SafeAreaView>
+              {/* Back to Sign In button (Only on Forgot Password mode) */}
+              {mode === 'FORGOT_PASSWORD' && (
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => setMode('SIGN_IN')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="arrow-back-outline" size={16} color={colors.ink} />
+                  <Text style={styles.backButtonText}>กลับไปหน้าเข้าสู่ระบบ</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Data Isolation & Security Guarantee Badge */}
+            <View style={styles.securityBadge}>
+              <Ionicons name="shield-checkmark" size={16} color="#1F7A52" />
+              <Text style={styles.securityBadgeText}>
+                ระบบรักษาความปลอดภัยแยกพอร์ตเด็ดขาดด้วย Row Level Security (RLS)
+              </Text>
+            </View>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.bg,
   },
   keyboardView: {
     flex: 1,
@@ -405,21 +406,21 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   logoBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: '#0F172A',
+    width: 76,
+    height: 76,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#334155',
-    marginBottom: 12,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    marginBottom: 14,
     overflow: 'hidden',
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 4,
   },
   logoImage: {
     width: 72,
@@ -427,50 +428,57 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   appName: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#F8FAFC',
+    fontSize: 30,
+    fontWeight: '700',
+    fontFamily: fonts.display,
+    color: colors.ink,
     letterSpacing: -0.5,
   },
   appTagline: {
-    fontSize: 13,
-    color: '#94A3B8',
+    fontSize: 14,
+    fontFamily: fonts.thai,
+    color: colors.muted,
     marginTop: 6,
     textAlign: 'center',
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#334155',
+    backgroundColor: colors.surface,
+    borderRadius: radii.pill,
+    padding: 3,
+    marginBottom: 18,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
   },
   tabButton: {
     flex: 1,
     paddingVertical: 10,
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: radii.pill,
   },
   tabButtonActive: {
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.ink,
   },
   tabText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#94A3B8',
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.muted,
   },
   tabTextActive: {
-    color: '#10B981',
-    fontWeight: '700',
+    color: colors.accent,
   },
   formCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#334155',
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    padding: 22,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 4,
   },
   inputGroup: {
     marginBottom: 16,
@@ -482,78 +490,97 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#E2E8F0',
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
     marginBottom: 6,
   },
   forgotPasswordText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#34D399',
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: '#1F7A52',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#334155',
-    paddingHorizontal: 12,
-    height: 48,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    paddingHorizontal: 14,
+    height: 50,
   },
   inputIcon: {
     marginRight: 10,
   },
   textInput: {
     flex: 1,
-    fontSize: 14,
-    color: '#F8FAFC',
+    fontSize: 15,
+    fontFamily: fonts.thai,
+    color: colors.ink,
     height: '100%',
   },
   eyeButton: {
     padding: 6,
   },
   submitButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 12,
-    height: 48,
+    backgroundColor: colors.ink,
+    borderRadius: radii.pill,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 6,
+    marginTop: 10,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 4,
   },
   submitButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   submitButtonText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    fontFamily: fonts.thaiBold,
+    color: colors.accent,
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginTop: 16,
+    marginTop: 18,
     paddingVertical: 6,
   },
   backButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#94A3B8',
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   securityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
     marginTop: 24,
-    paddingHorizontal: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#EAF3EE',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: radii.pill,
   },
   securityBadgeText: {
-    fontSize: 11,
-    color: '#64748B',
+    fontSize: 12,
+    fontFamily: fonts.thai,
+    fontWeight: '600',
+    color: colors.ink,
     textAlign: 'center',
     flexShrink: 1,
   },
