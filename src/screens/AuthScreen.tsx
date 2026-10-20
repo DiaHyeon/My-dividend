@@ -65,8 +65,8 @@ export const AuthScreen: React.FC = () => {
           Alert.alert('โหมดออฟไลน์', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่ายก่อนเข้าสู่ระบบครับ');
         } else if (errorMsg.toLowerCase().includes('email not confirmed')) {
           Alert.alert(
-            'กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ ✉️',
-            `ระบบของ Supabase ได้ส่งลิงก์ยืนยันไปยัง ${email.trim()} เรียบร้อยแล้ว\n\n1. กรุณาเปิดกล่องจดหมายของคุณ (หรือโฟลเดอร์จดหมายขยะ/Spam)\n2. กดลิงก์ยืนยันในอีเมล 1 ครั้ง\n3. กลับมากด "เข้าสู่ระบบ" ได้ทันทีครับ\n\n💡 หมายเหตุ: หากต้องการให้สมัครแล้วเข้าได้ทันทีโดยไม่ต้องรอยืนยันอีเมล สามารถปิดการตั้งค่า "Confirm email" ได้ใน Supabase Dashboard`
+            'กรุณายืนยันอีเมล / Verify Email ✉️',
+            `ส่งลิงก์ยืนยันไปที่ ${email.trim()} แล้ว กรุณากดยืนยันในอีเมล (ตรวจดูใน Spam) ก่อนเข้าสู่ระบบครับ\n\nPlease confirm your email via the link sent to your inbox/spam before signing in.`
           );
         } else {
           Alert.alert('เข้าสู่ระบบไม่สำเร็จ', errorMsg || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง');
@@ -136,9 +136,9 @@ export const AuthScreen: React.FC = () => {
           );
         } else {
           Alert.alert(
-            'สร้างบัญชีเรียบร้อยแล้ว ✉️',
-            `ระบบได้ส่งอีเมลยืนยันไปยัง ${email.trim()} เรียบร้อยแล้ว กรุณาเปิดอีเมล (หรือดูในโฟลเดอร์ Spam/จดหมายขยะ) และกดปุ่มยืนยันก่อนเข้าสู่ระบบครับ`,
-            [{ text: 'ไปหน้าเข้าสู่ระบบ', onPress: () => setMode('SIGN_IN') }]
+            'ยืนยันอีเมลของคุณ / Verify Email ✉️',
+            `ส่งลิงก์ยืนยันไปที่ ${email.trim()} แล้ว กรุณาตรวจสอบ Inbox หรือ Spam ก่อนเข้าสู่ระบบ\n\nA confirmation link has been sent to your email. Please check your inbox or spam folder.`,
+            [{ text: 'เข้าสู่ระบบ / Sign In', onPress: () => setMode('SIGN_IN') }]
           );
         }
       }
