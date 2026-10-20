@@ -161,13 +161,52 @@
 
 ---
 
-## 10. ขั้นตอนต่อไป
+## 10. ผลการดำเนินการขั้นตอนที่ 2C (Payday Radar — UpcomingPaydayRadar.tsx)
 
-พร้อมเข้าสู่ **ขั้นตอนที่ 2C** ตาม [PLAN.md](file:///c:/Users/lenovo/Documents/My%20dividend/docs/calm/PLAN.md):
-- ปรับแต่งการ์ดเรดาร์เงินปันผล/ดอกเบี้ยใกล้ถึง (`src/components/UpcomingPaydayRadar.tsx`)
-- ใส่เงา Hard Shadow ให้การ์ดเรดาร์
-- ปรับ Pill XD / Pay และฟอนต์ JetBrains Mono
-- คงการเลื่อนแนวนอน และเพิ่ม padding ป้องกันเงาตัดขอบ
+- **ไฟล์ที่แก้ไข**: `src/components/UpcomingPaydayRadar.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **โครงสร้างกรอบนอก (Outer Card & Header)**:
+     - ห่อด้วย `<View style={styles.outerContainer}>` กำหนด `marginBottom: 16`
+     - แทนที่ `styles.radarCard` เดิมด้วย `<Card shadow="md" padding={16}>` พร้อมเงาแข็ง Hard Shadow 4px
+     - แถบป้ายหัวข้อเรดาร์ (`radarBadge`): ปรับเป็นสไตล์ Calm ด้วยพื้นหลัง `colors.bg`, ขอบหนา 1.5px `colors.ink`, รัศมี 999, ไอคอนระฆังสี `colors.ink`, และข้อความ `<CalmText variant="bodyBold" size={12}>`
+     - จำนวนรายการ 30 วัน: ปรับเป็น `<CalmText variant="monoRegular" size={11} color={colors.muted}>`
+  2. **การเลื่อนแนวนอนและการป้องกันเงาตัดขอบ (Horizontal Scroll Safety)**:
+     - คงโครงสร้างแนวนอนเดิมไว้ 100% (`ScrollView horizontal={true}`) ตามข้อกำหนดของแอปมือถือ
+     - เพิ่ม `paddingBottom: 8` และ `paddingRight: 8` ใน `styles.radarScroll` เพื่อป้องกันไม่ให้ขอบ ScrollView ตัดเงา Hard Shadow ของการ์ดรายการย่อยด้านใน
+     - ไม่มีการแทรก Divider ที่ไม่จำเป็นระหว่างรายการแนวนอน
+  3. **การ์ดรายการย่อยในเรดาร์ (Upcoming Item Cards)**:
+     - ห่อแต่ละรายการด้วย `<HardShadow key={...} size="sm" radius={14}>` ทำให้การ์ดมีเงาเหลี่ยมคมชัดสไตล์ Calm 3px สวยงามสมบูรณ์แบบ
+     - กรอบการ์ด `radarItemPill`: พื้นหลัง `colors.surface`, ขอบหนา 2px `colors.ink`, รัศมี 14px, ขนาดขั้นต่ำ 165x52
+     - จุดระบุหมวดหมู่ `radarItemDot`: รัศมี 4px ขอบ `colors.ink` หนา 1.5px; สีเงินฝากใช้ `chartColors.cash`, สีหุ้น/กองทุนใช้ `chartColors.stocks`
+     - สัญลักษณ์หุ้น (`radarSymbol`): ปรับเป็น `<CalmText variant="mono" size={16} color={colors.ink}>`
+     - ป้ายประเภทกิจกรรม:
+       - วัน XD: `<Pill kind="outline" size="sm" label="วัน XD" />`
+       - วันเงินเข้า: `<Pill kind="ink" size="sm" label="เงินเข้า" />`
+       - เงินปันผลพิเศษ: `<Pill kind="dashed" size="sm" label="✨ พิเศษ" />`
+     - วันที่และจำนวนวัน: แสดงผลด้วย `<CalmText variant="mono" size={11}>` พร้อมไฮไลต์สี `gainOnLight` เมื่อถึงกำหนดวันนี้
+     - จำนวนเงิน: แสดงผลด้วย `<CalmText variant="mono" size={13} color={colors.ink}>` พร้อมคงเงื่อนไขแปลงหน่วย USD สมบูรณ์ครบถ้วน
+     - ปุ่มยืนยันเงินเข้า (`confirmPayBtn`): แปลงเป็น `<CapsuleButton variant="surface" icon={<Ionicons name="checkmark" size={12} color={colors.ink} />} label="เงินเข้าแล้ว" onPress={...} style={{ minHeight: 26, paddingHorizontal: 8, paddingVertical: 2 }} />`
+  4. **สถานะว่าง (Fallback Empty Bar)**:
+     - ปรับกรอบเป็นพื้น `colors.surface`, ขอบ 2px `colors.ink`, รัศมี 16px
+     - ข้อความแสดงหุ้นถัดไปใช้ `<CalmText variant="monoRegular">` และ `<CalmText variant="mono">`
+  5. **การคลีน Hex Code**: กำจัด raw hex colors ทั้งหมดในไฟล์ (`#059669`, `#64748B`, `#0F172A`, `#E2E8F0`, `#F8FAFC`, `#F1F5F9`, `#FFFFFF`, `#2563EB`, `#DCFCE7`, `#FEF3C7`, `#BBF7D0`, `#FED7AA`, `#FFFBEB`) แทนที่ด้วยโทเค็นชุดสี Calm Mint ครบ 100%
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+---
+
+## 11. ขั้นตอนต่อไป
+
+พร้อมเข้าสู่ **ขั้นตอนที่ 2D** ตาม [PLAN.md](file:///c:/Users/lenovo/Documents/My%20dividend/docs/calm/PLAN.md):
+- Chart Header, Filter Bar & Modals (`src/screens/Dashboard.tsx`)
+- ปรับแถบปุ่มตัวกรอง (Inflow filter) และตัวเลือกปี (Year selector) เป็น `<Pill kind="outline">`
+- ปรับชิป "XD Cutoff" เป็น Pill outline
+- ปรับกรอบชาร์ตเป็น `<Card shadow="md" padding={16}>`
+- ปรับตัวเลขยอดรวมชาร์ตเป็น `<CalmText variant="display" size={40}>` และยอดเฉลี่ยเป็น `<Pill kind="ink">`
+- ปรับจุดสัญลักษณ์ Legend เป็นสี่เหลี่ยม 14px (ได้รับแล้ว = `colors.ink`, คาดการณ์ = `colors.projected` ขอบ ink 2)
+- ห่อ Modal ตัวกรองด้วย `<SheetFrame>` (ลบ backdrop View ซ้ำซ้อนออก และห่อ KeyboardAvoidingView ชั้นนอกสุด)
+
 
 
 

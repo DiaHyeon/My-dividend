@@ -1,8 +1,14 @@
 // A compact radar ticker displaying upcoming ex-dividend dates and payout events within 30 days.
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AssetType } from '../types/database';
+import { Card } from './ui/Card';
+import { Pill } from './ui/Pill';
+import { CalmText } from './ui/CalmText';
+import { CapsuleButton } from './ui/CapsuleButton';
+import { HardShadow } from './ui/HardShadow';
+import { colors, chartColors, radii } from '../theme/tokens';
 
 export interface UpcomingSchedule {
   scheduleId?: string;
@@ -47,102 +53,96 @@ export const UpcomingPaydayRadar: React.FC<UpcomingPaydayRadarProps> = React.mem
 }) => {
   if (upcomingList.length > 0) {
     return (
-      <View style={styles.radarCard}>
-        <View style={styles.radarHeaderRow}>
-          <View style={styles.radarBadge}>
-            <Ionicons name="notifications" size={12} color="#059669" />
-            <Text style={styles.radarBadgeText}>เรดาร์เงินปันผลเร็วๆ นี้</Text>
+      <View style={styles.outerContainer}>
+        <Card shadow="md" padding={16}>
+          <View style={styles.radarHeaderRow}>
+            <View style={styles.radarBadge}>
+              <Ionicons name="notifications" size={12} color={colors.ink} />
+              <CalmText variant="bodyBold" size={12} color={colors.ink}>เรดาร์เงินปันผลเร็วๆ นี้</CalmText>
+            </View>
+            <CalmText variant="monoRegular" size={11} color={colors.muted}>{upcomingList.length} รายการใน 30 วัน</CalmText>
           </View>
-          <Text style={styles.radarCountText}>{upcomingList.length} รายการใน 30 วัน</Text>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.radarScroll}>
-          {upcomingList.map((item, idx) => {
-            const daysText =
-              item.diffDays === 0
-                ? 'วันนี้'
-                : item.diffDays === 1
-                ? 'พรุ่งนี้'
-                : item.diffDays < 0
-                ? `ผ่านมา ${Math.abs(item.diffDays)} วัน`
-                : `อีก ${item.diffDays} วัน`;
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.radarScroll}>
+            {upcomingList.map((item, idx) => {
+              const daysText =
+                item.diffDays === 0
+                  ? 'วันนี้'
+                  : item.diffDays === 1
+                  ? 'พรุ่งนี้'
+                  : item.diffDays < 0
+                  ? `ผ่านมา ${Math.abs(item.diffDays)} วัน`
+                  : `อีก ${item.diffDays} วัน`;
 
-            const isPayEvent = item.typeLabel === 'PAY';
-            const canConfirmPayment =
-              isPayEvent && item.isProjected !== false && item.diffDays <= 0 && !!item.scheduleId;
+              const isPayEvent = item.typeLabel === 'PAY';
+              const canConfirmPayment =
+                isPayEvent && item.isProjected !== false && item.diffDays <= 0 && !!item.scheduleId;
 
-            return (
-              <TouchableOpacity
-                key={item.scheduleId ? `${item.scheduleId}_${item.typeLabel}` : idx}
-                style={[
-                  styles.radarItemPill,
-                  isPayEvent ? styles.radarItemPillPay : styles.radarItemPillXd,
-                ]}
-                activeOpacity={0.7}
-                onPress={() => onSelectSchedule?.(item)}
-              >
-                {/* Top/Left details */}
-                <View style={styles.radarItemLeft}>
-                  <View style={[styles.radarItemDot, item.isInterest ? styles.radarDotCash : styles.radarDotStock]} />
-                  <Text style={styles.radarSymbol}>{item.symbol}</Text>
-                  
-                  {/* Distinct Event Badges */}
-                  {item.isSpecial ? (
-                    <Text style={[styles.radarTypeTag, styles.radarTypeTagSpecial]}>✨ พิเศษ</Text>
-                  ) : isPayEvent ? (
-                    <Text style={[styles.radarTypeTag, styles.radarTypeTagPay]}>เงินเข้า</Text>
-                  ) : (
-                    <Text style={[styles.radarTypeTag, styles.radarTypeTagXd]}>วัน XD</Text>
-                  )}
-                </View>
+              return (
+                <HardShadow key={item.scheduleId ? `${item.scheduleId}_${item.typeLabel}` : idx} size="sm" radius={14}>
+                  <TouchableOpacity
+                    style={styles.radarItemPill}
+                    activeOpacity={0.7}
+                    onPress={() => onSelectSchedule?.(item)}
+                  >
+                    {/* Top/Left details */}
+                    <View style={styles.radarItemLeft}>
+                      <View style={[styles.radarItemDot, item.isInterest ? styles.radarDotCash : styles.radarDotStock]} />
+                      <CalmText variant="mono" size={16} color={colors.ink}>{item.symbol}</CalmText>
+                      
+                      {/* Distinct Event Badges */}
+                      {item.isSpecial ? (
+                        <Pill kind="dashed" size="sm" label="✨ พิเศษ" />
+                      ) : isPayEvent ? (
+                        <Pill kind="ink" size="sm" label="เงินเข้า" />
+                      ) : (
+                        <Pill kind="outline" size="sm" label="วัน XD" />
+                      )}
+                    </View>
 
-                {/* Right details & amount */}
-                <View style={styles.radarItemRight}>
-                  <View style={styles.radarDaysRow}>
-                    {item.isProjected === false && (
-                      <Ionicons name="checkmark-circle" size={10} color="#059669" />
-                    )}
-                    <Text
-                      style={[
-                        styles.radarDaysText,
-                        !isPayEvent && styles.radarDaysTextXd,
-                        item.diffDays <= 0 && styles.radarDaysTextToday,
-                      ]}
-                    >
-                      {item.dateDisplay ? `${item.dateDisplay} (${daysText})` : daysText}
-                    </Text>
-                  </View>
+                    {/* Right details & amount */}
+                    <View style={styles.radarItemRight}>
+                      <View style={styles.radarDaysRow}>
+                        {item.isProjected === false && (
+                          <Ionicons name="checkmark-circle" size={12} color={colors.gainOnLight} />
+                        )}
+                        <CalmText
+                          variant="mono"
+                          size={11}
+                          color={item.diffDays <= 0 ? colors.gainOnLight : !isPayEvent ? colors.muted : colors.ink}
+                        >
+                          {item.dateDisplay ? `${item.dateDisplay} (${daysText})` : daysText}
+                        </CalmText>
+                      </View>
 
-                  <View style={styles.amountAndActionRow}>
-                    {item.currency === 'USD' && item.shares && item.dpu !== undefined ? (
-                      <Text style={styles.radarAmount} numberOfLines={1}>
-                        ${(item.shares * item.dpu * (1 - (item.taxRate || 0))).toFixed(2)} (~{formatMoney(item.amount)})
-                      </Text>
-                    ) : (
-                      <Text style={styles.radarAmount} numberOfLines={1}>
-                        {formatMoney(item.amount)}
-                      </Text>
-                    )}
+                      <View style={styles.amountAndActionRow}>
+                        {item.currency === 'USD' && item.shares && item.dpu !== undefined ? (
+                          <CalmText variant="mono" size={13} color={colors.ink} numberOfLines={1}>
+                            ${(item.shares * item.dpu * (1 - (item.taxRate || 0))).toFixed(2)} (~{formatMoney(item.amount)})
+                          </CalmText>
+                        ) : (
+                          <CalmText variant="mono" size={13} color={colors.ink} numberOfLines={1}>
+                            {formatMoney(item.amount)}
+                          </CalmText>
+                        )}
 
-                    {/* 1-Click Payment Confirmation Button */}
-                    {canConfirmPayment && (
-                      <TouchableOpacity
-                        style={styles.confirmPayBtn}
-                        activeOpacity={0.7}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          onConfirmPayment?.(item);
-                        }}
-                      >
-                        <Ionicons name="checkmark" size={10} color="#FFFFFF" />
-                        <Text style={styles.confirmPayBtnText}>เงินเข้าแล้ว</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+                        {/* 1-Click Payment Confirmation Button */}
+                        {canConfirmPayment && (
+                          <CapsuleButton
+                            variant="surface"
+                            icon={<Ionicons name="checkmark" size={12} color={colors.ink} />}
+                            label="เงินเข้าแล้ว"
+                            onPress={() => onConfirmPayment?.(item)}
+                            style={styles.confirmPayBtn}
+                          />
+                        )}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </HardShadow>
+              );
+            })}
+          </ScrollView>
+        </Card>
       </View>
     );
   }
@@ -150,10 +150,12 @@ export const UpcomingPaydayRadar: React.FC<UpcomingPaydayRadarProps> = React.mem
   if (fallbackClosest) {
     return (
       <View style={styles.radarEmptyBar}>
-        <Ionicons name="time-outline" size={14} color="#64748B" />
-        <Text style={styles.radarEmptyText}>
-          ไม่มีรายการใน 30 วันนี้ • ถัดไป: <Text style={styles.radarEmptySymbol}>{fallbackClosest.symbol}</Text> ({fallbackClosest.daysText} • {formatMoney(fallbackClosest.amount)})
-        </Text>
+        <Ionicons name="time-outline" size={14} color={colors.muted} />
+        <CalmText variant="monoRegular" size={11} color={colors.muted}>
+          ไม่มีรายการใน 30 วันนี้ • ถัดไป:{' '}
+          <CalmText variant="mono" size={11} color={colors.ink}>{fallbackClosest.symbol}</CalmText>
+          {' '}({fallbackClosest.daysText} • {formatMoney(fallbackClosest.amount)})
+        </CalmText>
       </View>
     );
   }
@@ -162,69 +164,46 @@ export const UpcomingPaydayRadar: React.FC<UpcomingPaydayRadarProps> = React.mem
 });
 
 const styles = StyleSheet.create({
-  radarCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 12,
+  outerContainer: {
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
   },
   radarHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   radarBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
+    gap: 6,
+    backgroundColor: colors.bg,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
-  },
-  radarBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  radarCountText: {
-    fontSize: 11,
-    color: '#64748B',
+    borderRadius: radii.pill,
   },
   radarScroll: {
     flexDirection: 'row',
-    gap: 8,
-    paddingVertical: 2,
+    gap: 10,
+    paddingVertical: 4,
+    paddingBottom: 8,
+    paddingRight: 8,
   },
   radarItemPill: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     gap: 12,
-    minWidth: 155,
-    minHeight: 46,
-  },
-  radarItemPillPay: {
-    borderColor: '#BBF7D0',
-    backgroundColor: '#F0FDF4',
-  },
-  radarItemPillXd: {
-    borderColor: '#FED7AA',
-    backgroundColor: '#FFFBEB',
+    minWidth: 165,
+    minHeight: 52,
   },
   radarItemLeft: {
     flexDirection: 'row',
@@ -232,44 +211,17 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   radarItemDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
   },
   radarDotCash: {
-    backgroundColor: '#059669',
+    backgroundColor: chartColors.cash,
   },
   radarDotStock: {
-    backgroundColor: '#2563EB',
-  },
-  radarSymbol: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  radarTypeTag: {
-    fontSize: 10,
-    color: '#64748B',
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  radarTypeTagPay: {
-    color: '#059669',
-    backgroundColor: '#DCFCE7',
-    fontWeight: '700',
-  },
-  radarTypeTagXd: {
-    color: '#B45309',
-    backgroundColor: '#FEF3C7',
-    fontWeight: '700',
-  },
-  radarTypeTagSpecial: {
-    color: '#B45309',
-    backgroundColor: '#FEF3C7',
-    fontWeight: '700',
+    backgroundColor: chartColors.stocks,
   },
   radarItemRight: {
     alignItems: 'flex-end',
@@ -277,20 +229,7 @@ const styles = StyleSheet.create({
   radarDaysRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-  },
-  radarDaysText: {
-    fontSize: 10,
-    lineHeight: 14,
-    fontWeight: '600',
-    color: '#059669',
-  },
-  radarDaysTextXd: {
-    color: '#D97706',
-  },
-  radarDaysTextToday: {
-    fontWeight: '800',
-    color: '#059669',
+    gap: 4,
   },
   amountAndActionRow: {
     flexDirection: 'row',
@@ -299,43 +238,20 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   confirmPayBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: '#059669',
-    paddingHorizontal: 6,
+    minHeight: 26,
+    paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 6,
-  },
-  confirmPayBtnText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  radarAmount: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '700',
-    color: '#0F172A',
   },
   radarEmptyBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     marginBottom: 16,
-  },
-  radarEmptyText: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  radarEmptySymbol: {
-    fontWeight: '700',
-    color: '#334155',
   },
 });
