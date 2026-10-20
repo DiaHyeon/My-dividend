@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0F172A"
+      "backgroundColor": "#131E30"
     },
     "ios": {
       "supportsTablet": true,
@@ -23,11 +23,11 @@
       "splash": {
         "image": "./assets/splash-icon.png",
         "resizeMode": "contain",
-        "backgroundColor": "#0F172A"
+        "backgroundColor": "#131E30"
       },
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#0F172A"
+        "backgroundColor": "#131E30"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -41,11 +41,11 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0F172A",
+          "backgroundColor": "#131E30",
           "image": "./assets/splash-icon.png",
           "dark": {
             "image": "./assets/splash-icon.png",
-            "backgroundColor": "#0F172A"
+            "backgroundColor": "#131E30"
           },
           "imageWidth": 200
         }
