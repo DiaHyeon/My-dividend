@@ -1045,7 +1045,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                       {assetType === 'FUNDS' ? 'ชื่อย่อกองทุน (Fund Symbol) *' : 'ชื่อย่อ / รหัสสินทรัพย์ (Symbol) *'}
                     </Text>
                     <View style={styles.symbolSearchContainer}>
-                      <Ionicons name="search" size={17} color="#94A3B8" style={styles.symbolSearchIcon} />
+                      <Ionicons name="search" size={20} color="#4F6B5C" style={styles.symbolSearchIcon} />
                       <TextInput
                         style={styles.symbolSearchInput}
                         value={symbol}
@@ -1090,7 +1090,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                             ? 'เช่น K-USA, SCBDV, B-INNOTECH, KF-GTECH'
                             : 'เช่น PTT, MCD, AAPL หรือชื่อสินทรัพย์นอกตลาด'
                         }
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor="#4F6B5C"
                         autoCapitalize="characters"
                         autoCorrect={false}
                       />
@@ -1101,7 +1101,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                           activeOpacity={0.7}
                           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         >
-                          <Ionicons name="close-circle" size={19} color="#94A3B8" />
+                          <Ionicons name="close-circle" size={19} color="#4F6B5C" />
                         </TouchableOpacity>
                       )}
                     </View>
@@ -1222,41 +1222,25 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                   {/* Segment / Category Selector for Stocks/Funds (Auto by default + Clickable badge) */}
                   <View style={styles.sectorHeaderRow}>
                     <Text style={styles.labelNoMargin}>
-                      {assetType === 'FUNDS' ? 'ประเภทกองทุน' : 'กลุ่มอุตสาหกรรม (Segment)'}
+                      {assetType === 'FUNDS' ? 'ประเภทกองทุน (Segment)' : 'กลุ่มอุตสาหกรรม (Segment)'}
                     </Text>
                     {selectedSector ? (
                       <TouchableOpacity
-                        style={[
-                          styles.detectedSectorBadgeBtn,
-                          {
-                            backgroundColor:
-                              getSectorDefinition(selectedSector, assetType).color + '14',
-                            borderColor:
-                              getSectorDefinition(selectedSector, assetType).color + '40',
-                          },
-                        ]}
+                        style={styles.detectedSectorBadgeBtn}
                         onPress={() => setIsSectorPickerVisible(true)}
                         activeOpacity={0.7}
                         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                       >
-                        <Ionicons
-                          name={getSectorDefinition(selectedSector, assetType).icon as any}
-                          size={13}
-                          color={getSectorDefinition(selectedSector, assetType).color}
-                        />
                         <Text
-                          style={[
-                            styles.detectedSectorBadgeText,
-                            { color: getSectorDefinition(selectedSector, assetType).color },
-                          ]}
+                          style={styles.detectedSectorBadgeText}
                           numberOfLines={1}
                         >
                           {getSectorDefinition(selectedSector, assetType).label}
                         </Text>
                         <Ionicons
                           name="chevron-down"
-                          size={12}
-                          color={getSectorDefinition(selectedSector, assetType).color}
+                          size={16}
+                          color={colors.ink}
                         />
                       </TouchableOpacity>
                     ) : null}
@@ -1398,7 +1382,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                           activeOpacity={0.7}
                           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
-                          <Ionicons name="calendar-outline" size={17} color="#059669" />
+                          <Ionicons name="calendar-outline" size={18} color={colors.ink} />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -1446,7 +1430,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
                               activeOpacity={0.7}
                               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                             >
-                              <Ionicons name="calendar-outline" size={17} color="#059669" />
+                              <Ionicons name="calendar-outline" size={18} color={colors.ink} />
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -1617,10 +1601,10 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
             activeOpacity={0.8}
           >
             {isSubmitting ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator color={colors.accent} size="small" />
             ) : (
               <>
-                <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" style={styles.submitIcon} />
+                <Ionicons name="checkmark-circle-outline" size={22} color={colors.accent} style={styles.submitIcon} />
                 <Text style={styles.submitButtonText}>บันทึกสินทรัพย์</Text>
               </>
             )}
@@ -1916,14 +1900,15 @@ const styles = StyleSheet.create({
     color: colors.accent,
   },
   input: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 16,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    height: 48,
     fontSize: 15,
-    color: '#0F172A',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   row: {
     flexDirection: 'row',
@@ -1938,10 +1923,10 @@ const styles = StyleSheet.create({
   dpuSection: {
     marginTop: 12,
     padding: 14,
-    backgroundColor: '#F0FDF4',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
   },
   dpuHeader: {
     flexDirection: 'row',
@@ -1950,33 +1935,39 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   dpuSectionTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#166534',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   submitButton: {
-    backgroundColor: '#059669',
-    borderRadius: 14,
-    paddingVertical: 15,
+    backgroundColor: colors.ink,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 999,
+    minHeight: 54,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 22,
-    elevation: 2,
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    marginTop: 18,
+    marginBottom: 8,
+    gap: 10,
+    elevation: 4,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
   submitButtonDisabled: {
-    backgroundColor: '#94A3B8',
+    opacity: 0.6,
   },
   submitIcon: {
-    marginRight: 8,
+    marginRight: 0,
   },
   submitButtonText: {
-    color: '#FFFFFF',
+    color: colors.accent,
     fontSize: 16,
+    fontFamily: fonts.thaiBold,
     fontWeight: '700',
   },
   symbolInputWrapper: {
@@ -1986,13 +1977,13 @@ const styles = StyleSheet.create({
   symbolSearchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 16,
+    paddingHorizontal: 14,
     height: 48,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   symbolSearchIcon: {
     marginRight: 8,
@@ -2000,7 +1991,8 @@ const styles = StyleSheet.create({
   symbolSearchInput: {
     flex: 1,
     fontSize: 15,
-    color: '#0F172A',
+    fontFamily: fonts.thai,
+    color: colors.ink,
     paddingVertical: 0,
     height: '100%',
   },
@@ -2009,42 +2001,43 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   suggestionsContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     marginTop: 6,
     marginBottom: 8,
     paddingVertical: 4,
-    elevation: 6,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
+    elevation: 4,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
     zIndex: 100,
   },
   suggestionsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#EAF3EE',
   },
   suggestionsHeaderText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#94A3B8',
+    fontFamily: fonts.thaiBold,
+    fontWeight: '700',
+    color: colors.muted,
   },
   suggestionItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 9,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
+    borderBottomColor: '#EAF3EE',
   },
   suggestionLeft: {
     flex: 1,
@@ -2052,8 +2045,9 @@ const styles = StyleSheet.create({
   },
   suggestionSymbol: {
     fontSize: 15,
+    fontFamily: fonts.mono,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.ink,
   },
   suggestionName: {
     fontSize: 12,
@@ -2165,45 +2159,56 @@ const styles = StyleSheet.create({
   detectedSectorBadgeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
+    gap: 8,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
     flexShrink: 1,
   },
   detectedSectorBadgeText: {
-    fontSize: 11.5,
+    fontSize: 13,
+    fontFamily: fonts.thaiBold,
     fontWeight: '700',
+    color: colors.ink,
     flexShrink: 1,
   },
   currencyToggleContainer: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 2,
-    marginBottom: 6,
+    marginTop: 6,
+    marginBottom: 14,
   },
   currencyBtn: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    minHeight: 48,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
   },
   currencyBtnActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+    backgroundColor: colors.ink,
   },
   currencyBtnText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
+    fontFamily: fonts.thaiBold,
+    fontWeight: '700',
+    color: colors.ink,
   },
   currencyBtnTextActive: {
-    color: '#FFFFFF',
+    color: colors.accent,
   },
   usdExchangeBox: {
     backgroundColor: '#EFF6FF',
@@ -2673,35 +2678,39 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   labelCompact: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 4,
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
+    marginBottom: 6,
   },
   dateHintMini: {
-    fontSize: 10.5,
-    color: '#059669',
-    fontWeight: '600',
+    fontFamily: fonts.mono,
+    fontWeight: '700',
+    fontSize: 11,
+    color: '#1F7A52',
   },
   datePickerInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    height: 42,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    height: 48,
   },
   datePickerInputField: {
     flex: 1,
-    fontSize: 13,
-    color: '#0F172A',
+    fontSize: 15,
+    fontFamily: fonts.mono,
+    color: colors.ink,
     paddingVertical: 0,
+    height: '100%',
   },
   datePickerIconButton: {
     padding: 4,
-    marginLeft: 4,
+    marginLeft: 6,
   },
   dpuSectionCompact: {
     marginTop: 4,
@@ -2808,77 +2817,83 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   taxSectionCompact: {
-    marginTop: 6,
-    marginBottom: 4,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    marginTop: 14,
+    marginBottom: 6,
+    backgroundColor: '#EAF3EE',
+    borderRadius: 22,
+    padding: 14,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    gap: 12,
   },
   taxHeaderRowCompact: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
   },
   taxHeaderLeftCompact: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
   },
   taxInputInlineWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    paddingHorizontal: 14,
+    height: 44,
+    gap: 6,
   },
   taxInputInline: {
-    fontSize: 13,
+    fontSize: 15,
+    fontFamily: fonts.mono,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.ink,
     width: 32,
     textAlign: 'center',
     paddingVertical: 0,
   },
   taxPercentSign: {
-    fontSize: 11.5,
+    fontSize: 14,
+    fontFamily: fonts.mono,
     fontWeight: '700',
-    color: '#64748B',
+    color: colors.ink,
   },
   taxPillRowCompact: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
   },
   taxPillCompact: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingVertical: 5,
-    borderRadius: 6,
+    minHeight: 44,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 22,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   taxPillCompactActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+    backgroundColor: colors.ink,
   },
   taxPillCompactText: {
-    fontSize: 10.5,
-    fontWeight: '600',
-    color: '#475569',
+    fontSize: 12.5,
+    fontFamily: fonts.thaiBold,
+    fontWeight: '700',
+    color: colors.ink,
+    textAlign: 'center',
   },
   taxPillCompactTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: colors.accent,
   },
   reviewModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: colors.scrim,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -2886,14 +2901,16 @@ const styles = StyleSheet.create({
   reviewCardContainer: {
     width: '100%',
     maxWidth: 380,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     padding: 20,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 8,
   },
   reviewHeader: {
     flexDirection: 'row',
@@ -2902,7 +2919,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#EAF3EE',
   },
   reviewHeaderLeft: {
     flexDirection: 'row',
@@ -2910,69 +2927,76 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   reviewTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 17,
+    fontFamily: fonts.thaiBold,
+    fontWeight: '700',
+    color: colors.ink,
   },
   reviewBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.ink,
   },
   reviewBadgeBuy: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: colors.accent,
   },
   reviewBadgeDca: {
-    backgroundColor: '#F5F3FF',
+    backgroundColor: '#A9CDB9',
   },
   reviewBadgeCash: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#EAF3EE',
   },
   reviewBadgeText: {
     fontSize: 10.5,
+    fontFamily: fonts.mono,
     fontWeight: '700',
   },
   reviewBadgeTextBuy: {
-    color: '#059669',
+    color: colors.ink,
   },
   reviewBadgeTextDca: {
-    color: '#7C3AED',
+    color: colors.ink,
   },
   reviewBadgeTextCash: {
-    color: '#2563EB',
+    color: colors.ink,
   },
   reviewHeroBox: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
+    backgroundColor: '#EAF3EE',
+    borderRadius: 18,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     paddingVertical: 14,
     paddingHorizontal: 16,
     alignItems: 'center',
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   reviewHeroLabel: {
-    fontSize: 11.5,
+    fontSize: 12,
+    fontFamily: fonts.thai,
     fontWeight: '600',
-    color: '#64748B',
+    color: colors.muted,
     marginBottom: 4,
   },
   reviewHeroValue: {
     fontSize: 22,
-    fontWeight: '900',
-    color: '#0F172A',
+    fontFamily: fonts.mono,
+    fontWeight: '700',
+    color: colors.ink,
   },
   reviewHeroSub: {
     fontSize: 12,
+    fontFamily: fonts.mono,
     fontWeight: '600',
-    color: '#2563EB',
+    color: colors.muted,
     marginTop: 2,
   },
   reviewList: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: '#EAF3EE',
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginBottom: 18,
@@ -2983,22 +3007,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
+    borderBottomColor: '#EAF3EE',
   },
   reviewRowLabel: {
-    fontSize: 12.5,
-    color: '#64748B',
+    fontSize: 13,
+    fontFamily: fonts.thai,
+    color: colors.muted,
     fontWeight: '500',
   },
   reviewRowValBold: {
     fontSize: 13,
+    fontFamily: fonts.mono,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.ink,
   },
   reviewRowValSub: {
     fontSize: 11,
+    fontFamily: fonts.thai,
     fontWeight: '500',
-    color: '#64748B',
+    color: colors.muted,
   },
   reviewActionsRow: {
     flexDirection: 'row',
@@ -3006,39 +3033,45 @@ const styles = StyleSheet.create({
   },
   reviewCancelBtn: {
     flex: 1,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 999,
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   reviewCancelText: {
-    fontSize: 13.5,
+    fontSize: 14,
+    fontFamily: fonts.thaiBold,
     fontWeight: '700',
-    color: '#475569',
+    color: colors.ink,
   },
   reviewConfirmBtn: {
     flex: 1.3,
-    backgroundColor: '#059669',
-    borderRadius: 12,
+    backgroundColor: colors.ink,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 999,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   reviewConfirmBtnDisabled: {
     opacity: 0.6,
   },
   reviewConfirmText: {
-    fontSize: 13.5,
+    fontSize: 14,
+    fontFamily: fonts.thaiBold,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.accent,
   },
 });
 
