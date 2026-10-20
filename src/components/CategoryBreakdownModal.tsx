@@ -294,27 +294,62 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
                 <CalmText variant="monoRegular" size={11} color={colors.muted} style={{ marginBottom: 4 }}>
                   มูลค่ารวม
                 </CalmText>
-                <CalmText variant="display" size={20} color={colors.ink}>
+                <CalmText
+                  variant="display"
+                  size={20}
+                  color={colors.ink}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={true}
+                  minimumFontScale={0.75}
+                >
                   {isPrivateMode
                     ? '฿••••••'
                     : `฿${totalMarketValue.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 </CalmText>
+                <CalmText variant="monoRegular" size={10} color={colors.muted} style={{ marginTop: 2 }}>
+                  {categoryAssets.length} รายการ
+                </CalmText>
               </View>
-              <View style={{ width: 1.5, height: 36, backgroundColor: colors.ink }} />
+
+              <View style={{ width: 1.5, alignSelf: 'stretch', backgroundColor: colors.track, marginHorizontal: 8, marginVertical: 2 }} />
+
               <View style={{ flex: 1, alignItems: 'center' }}>
                 <CalmText variant="monoRegular" size={11} color={colors.muted} style={{ marginBottom: 4 }}>
                   {categoryType === 'CASH' ? 'จำนวนบัญชี' : 'กำไร/ขาดทุน (P/L)'}
                 </CalmText>
                 {categoryType === 'CASH' ? (
-                  <CalmText variant="display" size={20} color={colors.ink}>
-                    {categoryAssets.length} บัญชี
-                  </CalmText>
+                  <>
+                    <CalmText variant="display" size={20} color={colors.ink} numberOfLines={1}>
+                      {categoryAssets.length} บัญชี
+                    </CalmText>
+                    <CalmText variant="monoRegular" size={10} color={colors.muted} style={{ marginTop: 2 }}>
+                      เงินฝากดิจิทัล/ประจำ
+                    </CalmText>
+                  </>
                 ) : (
-                  <Pill
-                    kind={unrealizedPL >= 0 ? 'accent' : 'outline'}
-                    size="md"
-                    label={`${unrealizedPL >= 0 ? '▲ +' : '▼ '}${Math.abs(unrealizedPLPercent).toFixed(2)}%`}
-                  />
+                  <>
+                    <CalmText
+                      variant="display"
+                      size={20}
+                      color={unrealizedPL >= 0 ? colors.gainOnLight : colors.lossOnLight}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit={true}
+                      minimumFontScale={0.75}
+                    >
+                      {isPrivateMode
+                        ? '฿••••••'
+                        : `${unrealizedPL >= 0 ? '+' : '-'}฿${Math.abs(unrealizedPL).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    </CalmText>
+                    <CalmText
+                      variant="monoRegular"
+                      size={10}
+                      color={unrealizedPL >= 0 ? colors.gainOnLight : colors.lossOnLight}
+                      numberOfLines={1}
+                      style={{ marginTop: 2 }}
+                    >
+                      {unrealizedPL === 0 ? '' : unrealizedPL > 0 ? '▲ +' : '▼ -'}{Math.abs(unrealizedPLPercent).toFixed(2)}%
+                    </CalmText>
+                  </>
                 )}
               </View>
             </View>
