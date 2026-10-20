@@ -12,6 +12,9 @@ import { AssetsScreen } from './src/screens/AssetsScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { AssetType } from './src/types/database';
 import { OfflineNoticeToast } from './src/components/OfflineNoticeToast';
+import { DashedDivider } from './src/components/ui/DashedDivider';
+import { CalmText } from './src/components/ui/CalmText';
+import { colors } from './src/theme/tokens';
 
 // ปิดหน้าต่างแจ้งเตือน LogBox ทั้งหมดบนหน้าจอมือถือ
 LogBox.ignoreAllLogs(true);
@@ -155,59 +158,74 @@ function MainNavigator() {
 
       {/* Modern Docked Bottom Navigation Bar */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-        <TouchableOpacity
-          style={styles.tabButton}
-          onPress={handleNavigateToDashboard}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.iconWrapper, currentTab === 'DASHBOARD' && styles.iconWrapperActive]}>
-            <Ionicons
-              name={currentTab === 'DASHBOARD' ? 'bar-chart' : 'bar-chart-outline'}
-              size={22}
-              color={currentTab === 'DASHBOARD' ? '#059669' : '#64748B'}
-            />
-          </View>
-          <Text style={[styles.tabLabel, currentTab === 'DASHBOARD' && styles.tabLabelActive]}>
-            Overview
-          </Text>
-        </TouchableOpacity>
+        <DashedDivider color={colors.ink} marginVertical={0} />
+        <View style={styles.bottomBarRow}>
+          <TouchableOpacity
+            style={styles.tabButton}
+            onPress={handleNavigateToDashboard}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.tabContent, currentTab === 'DASHBOARD' ? styles.tabActive : styles.tabInactive]}>
+              <Ionicons
+                name={currentTab === 'DASHBOARD' ? 'bar-chart' : 'bar-chart-outline'}
+                size={20}
+                color={currentTab === 'DASHBOARD' ? colors.accent : colors.ink}
+              />
+              <CalmText
+                variant="mono"
+                size={11}
+                color={currentTab === 'DASHBOARD' ? colors.accent : colors.ink}
+              >
+                Overview
+              </CalmText>
+            </View>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.tabButton}
-          onPress={() => {
-            setPortfolioCategory('ALL');
-            setCurrentTab('PORTFOLIO');
-          }}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.iconWrapper, currentTab === 'PORTFOLIO' && styles.iconWrapperActive]}>
-            <Ionicons
-              name={currentTab === 'PORTFOLIO' ? 'pie-chart' : 'pie-chart-outline'}
-              size={22}
-              color={currentTab === 'PORTFOLIO' ? '#059669' : '#64748B'}
-            />
-          </View>
-          <Text style={[styles.tabLabel, currentTab === 'PORTFOLIO' && styles.tabLabelActive]}>
-            Portfolio
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.tabButton}
+            onPress={() => {
+              setPortfolioCategory('ALL');
+              setCurrentTab('PORTFOLIO');
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.tabContent, currentTab === 'PORTFOLIO' ? styles.tabActive : styles.tabInactive]}>
+              <Ionicons
+                name={currentTab === 'PORTFOLIO' ? 'pie-chart' : 'pie-chart-outline'}
+                size={20}
+                color={currentTab === 'PORTFOLIO' ? colors.accent : colors.ink}
+              />
+              <CalmText
+                variant="mono"
+                size={11}
+                color={currentTab === 'PORTFOLIO' ? colors.accent : colors.ink}
+              >
+                Portfolio
+              </CalmText>
+            </View>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.tabButton}
-          onPress={() => handleNavigateToAssets('HOLDINGS', 'ALL')}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.iconWrapper, currentTab === 'ASSETS' && styles.iconWrapperActive]}>
-            <Ionicons
-              name={currentTab === 'ASSETS' ? 'wallet' : 'wallet-outline'}
-              size={22}
-              color={currentTab === 'ASSETS' ? '#059669' : '#64748B'}
-            />
-          </View>
-          <Text style={[styles.tabLabel, currentTab === 'ASSETS' && styles.tabLabelActive]}>
-            Holdings
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.tabButton}
+            onPress={() => handleNavigateToAssets('HOLDINGS', 'ALL')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.tabContent, currentTab === 'ASSETS' ? styles.tabActive : styles.tabInactive]}>
+              <Ionicons
+                name={currentTab === 'ASSETS' ? 'wallet' : 'wallet-outline'}
+                size={20}
+                color={currentTab === 'ASSETS' ? colors.accent : colors.ink}
+              />
+              <CalmText
+                variant="mono"
+                size={11}
+                color={currentTab === 'ASSETS' ? colors.accent : colors.ink}
+              >
+                Holdings
+              </CalmText>
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -267,11 +285,11 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.bg,
   },
   authLoadingContainer: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -336,41 +354,41 @@ const styles = StyleSheet.create({
     display: 'none',
   },
   bottomBar: {
+    backgroundColor: colors.surface,
+  },
+  bottomBarRow: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    justifyContent: 'space-around',
+    alignItems: 'center',
     paddingTop: 8,
-    paddingHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 8,
+    paddingHorizontal: 8,
   },
   tabButton: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
   },
-  iconWrapper: {
-    paddingHorizontal: 18,
-    paddingVertical: 4,
-    borderRadius: 16,
-    marginBottom: 2,
+  tabContent: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 3,
+    paddingVertical: 5,
+    paddingHorizontal: 16,
+    borderRadius: 999,
   },
-  iconWrapperActive: {
-    backgroundColor: '#ECFDF5',
+  tabActive: {
+    backgroundColor: colors.ink,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    shadowColor: colors.accent,
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
-  tabLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  tabLabelActive: {
-    color: '#059669',
-    fontWeight: '700',
+  tabInactive: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
 });
 

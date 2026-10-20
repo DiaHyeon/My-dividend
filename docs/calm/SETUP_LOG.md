@@ -467,14 +467,53 @@
 
 ---
 
-## 19. ขั้นตอนต่อไป
+## 19. การดำเนินการขั้นตอนที่ 2H: ปรับ Bottom Tab Bar และตรวจสอบ StatusBar / FAB (`App.tsx`)
 
-พร้อมเข้าสู่ **ขั้นตอนที่ 2H (Bottom Tab Bar & FAB - `App.tsx`)**:
-- อัปเดตแถบนำทางด้านล่าง (Bottom Tab Bar) และปุ่มลอยเพิ่มสินทรัพย์ `+` (FAB) ใน `App.tsx`
-  - ขอบบนของ Tab Bar: ใช้ `<DashedDivider>` คั่นด้านบน
-  - แท็บที่เลือกอยู่ (Active tab): แคปซูล `colors.ink` ตัวอักษรและไอคอนสี `colors.accent`
-  - แท็บที่ไม่ได้เลือก: ไอคอนและตัวอักษรสี `colors.ink` หรือ `colors.muted`
-  - ปุ่มลอย `+` ตรงกลาง: ใช้ `<CapsuleButton variant="ink" hardShadow round height={60} ... />` หรือสไตล์ปุ่มวงกลมสีดำหมึก ขอบ 2px เงาคม 4px
+- **ไฟล์ที่แก้ไข**: `App.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **ขอบบนของแถบแท็บ (Tab Bar Top Divider)**:
+     - ใช้คอมโพเนนต์ `<DashedDivider color={colors.ink} marginVertical={0} />` วางแนบขอบบนสุดของ Docked Bottom Bar (ปฏิบัติตามกฎห้ามใช้ `borderStyle: 'dashed'` บนเส้นขอบเดียว)
+  2. **พื้นหลังและคอนเทนเนอร์ (Tab Bar Container)**:
+     - ใช้พื้นหลัง `backgroundColor: colors.surface` สะอาดตา สอดรับกับโทน Calm Mint
+     - คอนเทนเนอร์รวมของแอป (`styles.container`) ใช้ `backgroundColor: colors.bg`
+     - หน้าโหลดการยืนยันตัวตน (`styles.authLoadingContainer`) ใช้ `backgroundColor: colors.ink`
+  3. **แท็บที่กำลังเปิดใช้งาน (Active Tab Capsule)**:
+     - ห่อไอคอนและข้อความแท็บด้วยแคปซูลมน `styles.tabActive`
+     - พื้นหลัง `colors.ink`, ขอบ 2px `colors.ink`, รัศมี 999 (แคปซูลทรงรี)
+     - ไอคอนและป้ายชื่อใช้สี `colors.accent` (Mint `#6FCDA8`)
+     - เงาคม Hard shadow ขนาด 2px สี `colors.accent`: `shadowColor: colors.accent, shadowOffset: { width: 2, height: 2 }, shadowOpacity: 1, shadowRadius: 0, elevation: 3`
+  4. **แท็บที่ไม่ได้เลือก (Inactive Tab)**:
+     - พื้นหลังโปร่งใส ขอบโปร่งใส
+     - ไอคอนและป้ายชื่อใช้สี `colors.ink`
+  5. **รูปแบบตัวอักษรของแท็บ (Typography)**:
+     - ใช้ `<CalmText variant="mono" size={11}>` สำหรับทั้ง 3 แท็บ: "Overview", "Portfolio", "Holdings" คงชื่อและลำดับเดิม 100%
+  6. **การตรวจสอบ StatusBar**:
+     - คง `<StatusBar style="dark" />` บนพื้นสว่างตามข้อกำหนด ไม่มีการแตะต้อง `app.json` เด็ดขาด
+  7. **การตรวจสอบปุ่มลอย `+` (FAB Check)**:
+     - ตรวจสอบโครงสร้างใน `App.tsx` พบว่า FAB ไม่ได้ถูกเรนเดอร์ใน `App.tsx` แต่ถูกเรนเดอร์แยกผ่าน `<AddAssetModal onSuccess={loadData} />` ภายในแต่ละหน้าจอ (`Dashboard`, `Portfolio`, `AssetsScreen`) เพื่อให้สามารถผูก state `loadData()` ของแต่ละหน้าได้อย่างถูกต้อง ไม่มีการย้ายปุ่มมาขัดแย้งกับสถาปัตยกรรมเดิม
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+---
+
+## 20. สรุปความสำเร็จเฟส 2 (Calm Mint Theme: Overview Screen & Modals)
+
+🎉 **เสร็จสิ้นการปรับโฉมธีม Calm Mint บนหน้า Overview และ Modal ที่เกี่ยวข้องครบถ้วน 100%**:
+1. **Step 0**: Google Fonts (`Bricolage Grotesque`, `JetBrains Mono`), Design Tokens, Thai Regex Font Resolver, `useCalmFonts` Hook
+2. **Step 2A**: `HeroNetWorthCard.tsx` (บัตรสินทรัพย์สุทธิ, ทักทาย dynamic, ป้าย YoY, ปุ่มลูกตา Privacy Mask, แถบสัดส่วนพอร์ต)
+3. **Step 2B**: Category Cards & Section Headers บน `Dashboard.tsx` (การ์ดหมวดหมู่ หุ้น/กองทุน/เงินฝาก ขอบ 2px ink, progress bars หนา 12px, ปุ่ม "ดูพอร์ตเต็ม →")
+4. **Step 2C**: `UpcomingPaydayRadar.tsx` (การ์ด Radar แนวนอน, เงา HardShadow ไม่โดนตัด, ป้ายวัน XD/เงินเข้า, ปุ่มยืนยันเงินเข้าแล้ว)
+5. **Step 2D**: Chart Header, Unified Filter Bar & Bottom Sheet Picker Modals บน `Dashboard.tsx`
+6. **Step 2E**: Bar Chart Colours, 2px ink Bar Borders & Monospace Tooltips บน `Dashboard.tsx`
+7. **Step 2F**: Selected Month Detail Pop-out Panel บน `Dashboard.tsx` (ป้ายกำกับ, สถิติปันผล, รายการหุ้น, ปุ่มปรับยอด)
+8. **Step 2G-0**: Passive Income Goal Card บน `Dashboard.tsx` (แถบความคืบหน้าหนา 12px ขอบ 2px ink, ปุ่มตั้งเป้าหมาย)
+9. **Step 2G-1**: `AdjustDividendModal.tsx` (SheetFrame, KeyboardAvoidingView, Calm inputs, Pill badges)
+10. **Step 2G-2**: `AnnualComparisonSheet.tsx` (SheetFrame, YoY Cards, กล่องวิเคราะห์ความผันผวน, รายการปีก่อน)
+11. **Step 2G-3**: `GoalSettingsModal.tsx` (SheetFrame, Milestone Presets, Custom target input, CapsuleButtons)
+12. **Step 2G-4**: `CategoryBreakdownModal.tsx` (SheetFrame, Donut Chart คงสีตาม Sector เดิม 100%, Quota ภาษีเงินฝาก 20,000 บาท, รายการสินทรัพย์)
+13. **Step 2H**: Bottom Tab Bar & Docked Navigation ใน `App.tsx` (DashedDivider ขอบบน, แท็บ Active เป็น Ink Capsule เงา Mint, แท็บ Inactive สี Ink)
+
 
 
 
