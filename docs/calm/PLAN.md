@@ -337,3 +337,157 @@
 | สีชิ้นกราฟโดนัทใน CategoryBreakdownModal | **คงสีชิ้นโดนัทตามหมวด sector เดิม** |
 | ขนาดตัวเลข Net worth | เริ่มต้นที่ **size 36** ทดสอบกับ `฿12,345,678.90` และ privacy mode |
 | ลำดับขั้นตอนการทำงาน | เรียงลำดับ 2A → 2H ตามหมายเลขข้อ โดยพื้นหลังหน้าและข้อความทักทายทำใน 2A |
+
+---
+
+# Phase 3 — Calm Mint Theme: Portfolio Screen (`Portfolio.tsx`)
+
+> **Role of this document**: Execution plan for Portfolio Screen.
+> Based on `PLAYBOOK-unseen-pages.md` and design templates `07-portfolio-allocation.html` and `08-portfolio-performance.html`.
+
+---
+
+## Global Constraints for Phase 3
+
+### Files that MUST NEVER be modified
+- All files under `src/services/` (`benchmarkService.ts`, `currencyService.ts`, `priceSyncService.ts`, etc.)
+- All files under `src/utils/`
+- All files under `src/lib/`
+- All files under `src/types/`
+- `package-lock.json`, `app.json`, `eas.json`, `tsconfig.json`
+- `supabase/` directory
+
+### Universal Rules for Phase 3
+1. **No Line Numbers**: อ้างอิงโค้ดและสไตล์ด้วยชื่อ element และ style identifier เท่านั้น
+2. **Hex Color Clean-up**: ทำเฉพาะใน style block ที่แก้ไข ห้ามแตะ data colors (สี sector, สี pie data, สีดัชนี benchmark)
+3. **Strict Scope**: ห้ามแตะ calculation math, inception date logic, snapshot recorder, timeframe slice math
+4. **Preserve Gifted Charts scale bounds**: คงค่า `chartScale` (`maxValue`, `stepValue`, `noOfSections`, `mostNegativeValue`, `floorTimelineLabels`) ไว้ 100%
+
+### Execution Order (3A → 3D)
+1. **3A**: Header Bar, Privacy Eye & View Switcher (สลับ Allocation / Performance)
+2. **3B**: Allocation View (Donut Chart Dark Card, Category Filter Pills, Center Label & Legends, Holdings Preview)
+3. **3C**: Performance View (Performance Hero Dark Card, Alpha Banner, Comparison Chips, Timeframe Selector Pills, Ranking List)
+4. **3D**: Benchmark Picker Modal (SheetFrame, Benchmark List, Scrim Clean-up)
+
+---
+
+## 3A — Header Bar, Privacy Eye & View Switcher (`Portfolio.tsx`)
+
+### Files to edit
+- `src/screens/Portfolio.tsx` (ส่วน Safe Area, Header Bar, ปุ่ม Privacy Mode, และ View Switcher)
+
+### Element mapping
+
+| Current element | New Calm component / token |
+|---|---|
+| `styles.container` / `styles.safeArea` | `backgroundColor: colors.bg` (`#EAF3EE`) |
+| `styles.headerTitle` ("พอร์ตการลงทุน (Portfolio)") | `<CalmText variant="display" size={32} color={colors.ink}>พอร์ตการลงทุน</CalmText>` |
+| `styles.headerSubtitle` | `<CalmText variant="monoRegular" size={11} color={colors.muted}>` (แสดงมุมมองปัจจุบัน `ALLOCATION` / `PERFORMANCE` และจำนวนรายการ) |
+| ปุ่มตา Privacy (`styles.headerActionBtn`) | ขนาด 46x46, รัศมี 999, ขอบ `borderWidth: 2, borderColor: colors.ink`, พื้น `colors.surface`, เงา `colors.shadow` 3px 3px, ไอคอน `Ionicons` ขนาด 20: เปิดโหมด = `colors.accent`, ปิดโหมด = `colors.ink` |
+| แถบสลับมุมมอง (`styles.portfolioViewSwitcher`) | กรอบนอก: รัศมี 999, ขอบ `borderWidth: 2, borderColor: colors.ink`, พื้น `colors.surface`, padding 4, gap 4 |
+| แท็บที่เลือก (Active Tab) | พื้นหลัง `colors.ink`, ตัวหนังสือและไอคอน `colors.accent`, รัศมี 999, paddingVertical 10, ฟอนต์ mono |
+| แท็บที่ไม่ได้เลือก (Inactive Tab) | พื้นหลังใส, ตัวหนังสือและไอคอน `colors.ink`, รัศมี 999, paddingVertical 10, ฟอนต์ mono |
+
+### Must preserve
+- Props `onNavigateToDashboard`, `onNavigateToAssets`, `initialCategoryFilter`
+- State `portfolioView`, `isPrivateMode`, `assets.length`
+- Handlers `togglePrivateMode()`, `setPortfolioView()`
+- `RefreshControl`
+
+### Acceptance criteria
+- เปิดแท็บ Portfolio แล้วพื้นหลังเป็นสีนวล `#EAF3EE`
+- ส่วนหัวแสดงฟอนต์ Bricolage Grotesque ขนาด 32px คมชัด
+- ปุ่มตามีขอบหมึก 2px พร้อมเงา 3px 3px และแสดงสีถูกต้องตามสถานะ Privacy
+- แถบสลับมุมมองเป็นแคปซูลคู่ สลับระหว่าง "สัดส่วนพอร์ต (Allocation)" และ "ผลงานพอร์ต (Performance)" ได้อย่างแม่นยำ
+
+---
+
+## 3B — Allocation View: Donut Chart & Holdings Preview (`Portfolio.tsx`)
+
+### Files to edit
+- `src/screens/Portfolio.tsx` (ส่วน Donut Chart, Filter Pills, Legends, และ Top 3 Preview)
+
+### Element mapping
+
+| Current element | New Calm component / token |
+|---|---|
+| แถบฟิลเตอร์หมวดหมู่ (`styles.filterPillsRow`) | แท็บที่เลือก: `<Pill kind="ink" size="md">` <br> แท็บที่ไม่ได้เลือก: `<Pill kind="outline" size="md">` |
+| การ์ดกราฟโดนัท (`styles.chartCard`) | `<Card variant="dark" shadow="lg" padding={18}>` |
+| หัวข้อในการ์ด | `<CalmText variant="mono" size={11} color={colors.projected}>ASSET ALLOCATION</CalmText>` |
+| กราฟโดนัท `PieChart` | คง data เดิม, `innerCircleColor={colors.ink}`, `strokeColor={colors.ink}` (ห้ามแตะต้องสีชิ้นเค้ก) |
+| ตรงกลางโดนัท (`centerLabelComponent`) | ข้อความ: `<CalmText variant="mono" size={10} color={colors.shadow}>ทั้งพอร์ต</CalmText>` <br> ยอดเงิน: `<CalmText variant="display" size={28} color={colors.surface}>` |
+| เส้นคั่นประ | `<DashedDivider color={colors.shadow} marginVertical={10} />` |
+| รายการสัดส่วนด้านล่าง (`styles.legendContainer`) | จุดสีประจำหมวด, ชื่อหมวดหมู่ `<CalmText variant="bodyBold">`, ยอดเงิน `<CalmText variant="mono">` |
+| หัวข้อ Section "สินทรัพย์หลัก" | `<CalmText variant="display" size={22} color={colors.ink}>` |
+| ปุ่ม "ดูทั้งหมด →" | `<Pill kind="ink" size="md" onPress={...}>` |
+| การ์ดสินทรัพย์ Top 3 (`styles.assetCard`) | `<Card shadow="md" padding={14}>` |
+| สัญลักษณ์หุ้น, ป้าย USD, ป้ายหมวด | ชื่อหุ้น: `<CalmText variant="display" size={22}>`, USD: `<Pill kind="outline" size="sm">`, หมวด: `<Pill kind="ink" size="sm">` |
+| ตัวเลขมูลค่าและ P/L | มูลค่า: `<CalmText variant="display" size={24}>`, P/L: แสดง glyph ▲/▼ สีตาม `trend(v)` |
+
+### Must preserve
+- Single Minor Callout Suppression logic
+- Pie data mapping & Sector colors
+- Navigation handler to AssetsScreen
+- Privacy mode masking expressions
+
+### Acceptance criteria
+- กราฟโดนัทอยู่ภายในการ์ดเขียวเข้ม Dark Card พร้อมเงา HardShadow 6px
+- ชิ้นกราฟโดนัทยังคงสีเดิมทุกชิ้น
+- การ์ดสินทรัพย์หลัก 3 รายการใช้ดีไซน์ Card สีขาวขอบหมึก
+
+---
+
+## 3C — Performance View: Benchmark Chart & Rankings (`Portfolio.tsx`)
+
+### Files to edit
+- `src/screens/Portfolio.tsx` (Performance Hero Card, Benchmark Chart Card, Timeframe bar, Ranking list)
+
+### Element mapping
+
+| Current element | New Calm component / token |
+|---|---|
+| การ์ดสรุปผลงาน (`styles.perfHeroCard`) | `<Card variant="dark" shadow="lg" padding={18}>` |
+| ป้ายหัวข้อและช่วงเวลา | หัวข้อ: `<CalmText variant="mono" size={11} color={colors.projected}>`, ป้ายช่วงเวลา: `<Pill kind="outlineDark" size="sm">` |
+| ตัวเลข % ผลตอบแทนใหญ่ (`styles.perfHeroReturn`) | `<CalmText variant="display" size={54} color={isProfit ? colors.accent : colors.lossDark}>` |
+| ยอดกำไรบาท (`periodPL`) | `<Pill kind={isProfit ? 'accent' : 'lossDark'} size="md" label={...}>` |
+| การ์ดกราฟเปรียบเทียบ (`styles.perfChartCard`) | `<Card shadow="md" padding={16}>` |
+| แบนเนอร์ Alpha (`styles.perfAlphaBanner`) | ชนะตลาด: พื้น `colors.accent`, ขอบ 2px ink, ตัวหนังสือสี ink <br> ตามหลังตลาด: พื้น `colors.track`, ขอบ 2px ink, ตัวหนังสือสี ink |
+| ป้าย Legend เหนือกราฟ (`perfChartLegends`) | พอร์ต: `<Pill kind="outline" label="พอร์ตของคุณ (+X.X%)">` <br> ดัชนี: `<Pill kind="outline" label="ดัชนี ▾ ✕">` หรือปุ่ม `เปรียบเทียบ ▾` |
+| กราฟเส้น `LineChart` | เส้นพอร์ต: `colors.accent`, เส้นดัชนี: สีประจำดัชนี, เส้นกริด: `colors.shadow` |
+| แถบเลือกช่วงเวลา (`styles.timeframeBar`) | กรอบแคปซูลมน 999 พื้น surface ขอบ ink 2px, ปุ่ม Active พื้น ink ตัวหนังสือ accent, Inactive พื้นใส ตัวหนังสือ ink |
+| รายการจัดอันดับสินทรัพย์ (`styles.rankingCard`) | `<Card shadow="md" padding={12}>`, อันดับ `#X` เป็น Pill, % ผลตอบแทนใช้ Pill accent/lossDark |
+
+### Must preserve
+- `getBenchmarkComparison` data flow & inception date scaling
+- Dynamic scale calculations (`chartScale`)
+- Floor timeline vertical gridlines & labels
+- Benchmark selection state & toggle
+
+### Acceptance criteria
+- Performance Hero Card แสดงตัวเลขใหญ่ 54px สีมิ้นต์ชัดเจน
+- เส้นกราฟผลตอบแทนแสดงผลราบรื่นโดยที่สเกลและแกนเวลาด้านล่างยังทำงานถูกต้องสมบูรณ์
+- แถบ Timeframe `1M`, `3M`, `6M`, `1Y`, `ALL` กดสลับช่วงเวลาได้แม่นยำ
+
+---
+
+## 3D — Benchmark Picker Modal (`Portfolio.tsx`)
+
+### Files to edit
+- `src/screens/Portfolio.tsx` (Modal เลือกดัชนีตลาด)
+
+### Element mapping
+
+| Current element | New Calm component / token |
+|---|---|
+| กรอบ Modal เดิม | ห่อด้วย `<SheetFrame title="เลือกดัชนีตลาดเปรียบเทียบ" onClose={...}>` |
+| Backdrop เก่า | ตัด backdrop View เก่าออก เพื่อไม่ให้ซ้อนทับกับ scrim ของ SheetFrame |
+| รายการตัวเลือกดัชนี | กรอบมน 14px, ตัวเลือกที่ถูกเลือกมีขอบ `colors.ink` 2px และไอคอนเครื่องหมายถูก |
+
+### Must preserve
+- List of benchmarks (`BENCHMARKS`)
+- Selection handler `setSelectedBenchmark`
+- Dismiss handler
+
+### Acceptance criteria
+- Modal เปิดผ่าน SheetFrame พร้อมหัวข้อและปุ่มปิดสไตล์ Calm
+- ไม่มีปัญหา scrim ซ้อนทับกัน
