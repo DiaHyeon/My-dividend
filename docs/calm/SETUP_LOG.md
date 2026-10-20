@@ -944,3 +944,64 @@
 - **การทดสอบความถูกต้อง**:
   - `npx tsc --noEmit`: 0 error
   - `npm test`: 83/83 ผ่านทั้งหมด 100% (39 unit + 27 security + 17 performance scenarios)
+
+---
+
+## 23. Phase 8 — Authentication, Bulk CSV Import & Offline Notification (AuthScreen, ImportCsvModal, OfflineNoticeToast)
+
+- **วันที่**: 20 ตุลาคม 2026
+- **เป้าหมาย**: ปรับโฉมหน้าจอและคอมโพเนนต์ส่วนที่เหลือทั้งหมดของระบบ ได้แก่ หน้าเข้าสู่ระบบ/สมัครสมาชิก/กู้รหัสผ่าน (`AuthScreen.tsx`), หน้าต่างนำเข้าไฟล์ CSV พอร์ตการลงทุน (`ImportCsvModal.tsx`), และการ์ดแจ้งเตือนสถานะออฟไลน์ (`OfflineNoticeToast.tsx`) สู่ธีม **Calm Mint** ให้ครบถ้วนสมบูรณ์ 100% ทั่วทั้งแอปพลิเคชัน
+- **ไฟล์ที่แก้ไข**: `src/screens/AuthScreen.tsx`, `src/components/ImportCsvModal.tsx`, `src/components/OfflineNoticeToast.tsx`, `docs/calm/SETUP_LOG.md`
+- **Commits**: `cc652de`, `79841fc`, `73f05ea`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **Step 8A — Authentication Screen (`AuthScreen.tsx`) [Commit `cc652de`]**:
+     - พื้นหลังแอป `#F4F9F5` (Calm Bg สว่างนวลสบายตา)
+     - โลโก้แอปพลิเคชันเด่นสง่างาม: กรอบสี่เหลี่ยมมน 20px ขอบหนา 2px สี `#123D2A` พื้นหลัง `#FBFFFD` พร้อมเงาคมหนา 4px `#A9CDB9` ไอคอนพายชาร์ตสีมิ้นต์ `#6FCDA8`
+     - หัวเรื่องหลัก `My Dividend` (36px Bricolage Grotesque) พร้อมคำขวัญภาษาไทย "ระบบบันทึกเงินปันผล & สัดส่วนการลงทุน"
+     - สลับแท็บ เข้าสู่ระบบ / สมัครสมาชิก: แคปซูลมน 999px พื้นขาวขอบ 2px `#123D2A`, แท็บ Active ไฮไลต์พื้นเข้ม `#123D2A` ตัวอักษรสีมิ้นต์ `#6FCDA8` พร้อมเงา 2px
+     - ช่องกรอกข้อมูล (Email, Password, Display Name): สูง 50px มน 16px ขอบ 2px `#123D2A` พื้นหลัง `#FBFFFD` ฟอนต์ Noto Sans Thai และ JetBrains Mono
+     - ปุ่มส่งแบบฟอร์มหลัก: ทรงมน 999px ขอบ 2px `#123D2A` พื้นหลังเข้ม `#123D2A` ตัวอักษรสีมิ้นต์ `#6FCDA8` เงาคม 4px `#A9CDB9`
+     - แถบความปลอดภัยและ Row-Level Security: ป้ายมน 16px ขอบ 2px พื้น `#EAF3EE`
+     - รักษากฎคูลดาวน์กันสแปม 60 วินาที, การจัดการคีย์บอร์ด, และการตรวจสอบความถูกต้องของระบบครบถ้วน 100%
+  2. **Step 8B — Bulk CSV Import Modal (`ImportCsvModal.tsx`) [Commit `79841fc`]**:
+     - โครงสร้าง Bottom Sheet สไตล์ Calm Mint: ขอบบนมน 30px ขอบหนา 2px `#123D2A` พื้นหลัง `#FBFFFD` พร้อม Scrim `rgba(18, 61, 42, 0.45)`
+     - แถบจับด้านบน (Grab handle) 44×5px สี `#A9CDB9` มน 999px
+     - ปุ่มปิดกลมมน 34px ขอบ 2px และเส้นประคั่น `<DashedDivider>`
+     - ตัวสลับโหมดนำเข้า 2 ตัวเลือก (`เลือกไฟล์ CSV` vs `วางข้อความ CSV`): รางแคปซูลมน 999px ขอบ 2px `#123D2A`
+     - ชิปคำแนะนำและเทมเพลต: แคปซูลมน 999px ขอบ 2px พื้นหลัง `#EAF3EE` สำหรับดูเทมเพลตและทำความเข้าใจรูปแบบ
+     - พื้นที่ดรอปโซนเลือกไฟล์: กรอบเส้นประสีเขียวขอบมน 20px ขอบ 2px `#123D2A` พื้นหลัง `#F4F9F5` พร้อมไอคอนวงกลม 48px
+     - กล่องข้อความสำหรับ Paste CSV: มน 16px ขอบ 2px `#123D2A` พื้นหลัง `#FBFFFD` ฟอนต์ JetBrains Mono
+     - ส่วนแสดงตัวอย่างข้อมูล (Preview Table): รายการตรวจสอบความถูกต้องก่อนนำเข้า แสดงสัญลักษณ์หุ้น, ประเภท, จำนวนหุ้น, ราคา และสถานะความถูกต้อง ขอบ 2px พร้อมแถบสรุป
+     - ปุ่มดำเนินการหลัก: ปุ่มบันทึกนำเข้า (พื้นเข้ม `#123D2A`, ตัวอักษร `#6FCDA8`, เงา 3px) และปุ่มยกเลิก (พื้นขาว, ขอบ 2px, เงา 3px)
+     - รักษากฎ OWASP CSV Formula Injection sanitization, การตรวจสอบขีดจำกัดความเร็ว 500 รายการ, และการผสานสินทรัพย์อัจฉริยะครบถ้วน 100%
+  3. **Step 8C — Offline Notification Toast (`OfflineNoticeToast.tsx`) [Commit `73f05ea`]**:
+     - แคปซูลลอยทรงมน 999px ขอบหนา 2px สี `colors.gainOnLight` (`#1F7A52`)
+     - พื้นหลังสี Deep Ink เข้มขรึม `colors.ink` (`#123D2A`)
+     - ไอคอนข้อมูลสีมิ้นต์สดใส `colors.accent` (`#6FCDA8`)
+     - ข้อความสถานะ "เชื่อมต่อไม่ได้ · แสดงข้อมูลล่าสุดในเครื่อง" ฟอนต์ Noto Sans Thai สี `#EAF3EE` ชัดเจน สบายตา
+     - เงาสไตล์ Calm Mint ไม่ฟุ้งกระจัดกระจาย ลอยเหนือ Docked Tab Bar อย่างพอดี
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 ผ่านทั้งหมด 100% (39 unit + 27 security + 17 performance scenarios)
+
+---
+
+## 24. สรุปภาพรวมความสำเร็จการปรับโฉมสู่ธีม Calm Mint (100% Full Rollout Complete)
+
+🎉 **ระบบแอปพลิเคชัน My Dividend ได้รับการปรับโฉมสู่ดีไซน์ซิสเต็ม Calm Mint ครบถ้วน 100% ทั่วทุกหน้าจอและทุกคอมโพเนนต์**:
+1. **Design Tokens & Typography**: `src/theme/tokens.ts`, ฟอนต์ Bricolage Grotesque, JetBrains Mono, Noto Sans Thai
+2. **Phase 1-2 (Overview Screen & Dashboard Modals)**: `Dashboard.tsx`, `HeroNetWorthCard.tsx`, `UpcomingPaydayRadar.tsx`, `AdjustDividendModal.tsx`, `AnnualComparisonSheet.tsx`, `GoalSettingsModal.tsx`, `CategoryBreakdownModal.tsx`, Bottom Tab Bar ใน `App.tsx`
+3. **Phase 3 (Portfolio Screen & Views)**: `Portfolio.tsx`, Asset Allocation View (Donut Chart & Top 3 Cards), Performance View (Alpha Banner, Line Chart & Scaled Inception Benchmarks), Benchmark Selector Modal
+4. **Phase 4 (Holdings & Transactions)**: `AssetsScreen.tsx`, `AssetSparklineCard.tsx`, Filter Modals, Sort Modal, Search Bar
+5. **Phase 5 (Add Asset Flow)**: `AddAssetModal.tsx`, `CashAssetForm.tsx`, Stock Autocomplete, Fund Catalog Search, Confirmation Step
+6. **Phase 6 (Asset Management Modals)**: `EditAssetModal.tsx` (DCA Multi-buy Protection & Navigation), `SellAssetModal.tsx` (Exit Confirmation & Partial Trim)
+7. **Phase 7 (Utility & History Modals)**: `CalendarPickerModal.tsx`, `SectorPickerModal.tsx`, `EditTransactionModal.tsx`
+8. **Phase 8 (Final Screens & Components)**: `AuthScreen.tsx`, `ImportCsvModal.tsx`, `OfflineNoticeToast.tsx`
+
+**ความปลอดภัยและคุณภาพโค้ด (Safety & Quality Guarantee)**:
+- `NUMERIC(15, 4)` precision ถูกรักษาไว้อย่างเข้มงวดในทุกสูตรคำนวณ
+- DCA purchase lot preservation และ zero destructive collapse ปลอดภัย 100%
+- OWASP CSV formula injection protection สมบูรณ์ 100%
+- Anti-spam auth cooldown และ velocity limits ปลอดภัย 100%
+- TypeScript typecheck: 0 error
+- ชุดทดสอบอัตโนมัติ: 83/83 ผ่านทั้งหมด 100%
