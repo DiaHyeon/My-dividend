@@ -691,19 +691,21 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
               >
                 <Ionicons
                   name="calendar-outline"
-                  size={13}
-                  color={selectedYear !== 'ALL' ? '#0F172A' : '#64748B'}
+                  size={14}
+                  color={selectedYear !== 'ALL' ? colors.accent : colors.ink}
                 />
-                <Text
-                  style={[styles.dropdownChipText, selectedYear !== 'ALL' && styles.dropdownChipTextActive]}
+                <CalmText
+                  variant="bodyBold"
+                  size={12}
+                  color={selectedYear !== 'ALL' ? colors.accent : colors.ink}
                   numberOfLines={1}
                 >
                   {selectedYear === 'ALL' ? 'ทุกปี' : `${selectedYear}`}
-                </Text>
+                </CalmText>
                 <Ionicons
                   name="chevron-down"
                   size={12}
-                  color={selectedYear !== 'ALL' ? '#0F172A' : '#64748B'}
+                  color={selectedYear !== 'ALL' ? colors.accent : colors.ink}
                 />
               </TouchableOpacity>
 
@@ -715,21 +717,23 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
               >
                 <Ionicons
                   name="time-outline"
-                  size={13}
-                  color={selectedMonth !== 'ALL' ? '#0F172A' : '#64748B'}
+                  size={14}
+                  color={selectedMonth !== 'ALL' ? colors.accent : colors.ink}
                 />
-                <Text
-                  style={[styles.dropdownChipText, selectedMonth !== 'ALL' && styles.dropdownChipTextActive]}
+                <CalmText
+                  variant="bodyBold"
+                  size={12}
+                  color={selectedMonth !== 'ALL' ? colors.accent : colors.ink}
                   numberOfLines={1}
                 >
                   {selectedMonth === 'ALL'
                     ? 'ทุกเดือน'
                     : MONTH_NAMES.find((m) => m.key === selectedMonth)?.label || selectedMonth}
-                </Text>
+                </CalmText>
                 <Ionicons
                   name="chevron-down"
                   size={12}
-                  color={selectedMonth !== 'ALL' ? '#0F172A' : '#64748B'}
+                  color={selectedMonth !== 'ALL' ? colors.accent : colors.ink}
                 />
               </TouchableOpacity>
 
@@ -741,25 +745,27 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
               >
                 <Ionicons
                   name="funnel-outline"
-                  size={12}
-                  color={actionFilter !== 'ALL' ? '#0F172A' : '#64748B'}
+                  size={13}
+                  color={actionFilter !== 'ALL' ? colors.accent : colors.ink}
                 />
-                <Text
-                  style={[styles.dropdownChipText, actionFilter !== 'ALL' && styles.dropdownChipTextActive]}
+                <CalmText
+                  variant="bodyBold"
+                  size={12}
+                  color={actionFilter !== 'ALL' ? colors.accent : colors.ink}
                   numberOfLines={1}
                 >
                   {actionFilter === 'ALL'
                     ? 'ทุกประเภท'
                     : actionFilter === 'BUY'
-                    ? 'ซื้อหุ้น/กองทุน'
+                    ? 'ซื้อ'
                     : actionFilter === 'SELL'
-                    ? 'ขาย/ถอน'
+                    ? 'ขาย'
                     : 'เงินฝาก'}
-                </Text>
+                </CalmText>
                 <Ionicons
                   name="chevron-down"
                   size={12}
-                  color={actionFilter !== 'ALL' ? '#0F172A' : '#64748B'}
+                  color={actionFilter !== 'ALL' ? colors.accent : colors.ink}
                 />
               </TouchableOpacity>
 
@@ -775,42 +781,49 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                   activeOpacity={0.7}
                   accessibilityLabel="ล้างตัวกรอง"
                 >
-                  <Ionicons name="refresh-outline" size={13} color="#EF4444" />
-                  <Text style={styles.resetFilterText}>ล้าง</Text>
+                  <Ionicons name="refresh-outline" size={13} color={colors.lossOnLight} />
+                  <CalmText variant="mono" size={11} color={colors.lossOnLight}>
+                    ล้าง
+                  </CalmText>
                 </TouchableOpacity>
               )}
             </View>
 
             {/* Transaction Stats Banner */}
-            <View style={styles.txStatsBanner}>
-              <View>
-                <Text style={styles.txStatsLabel}>
+            <Card variant="surface" style={styles.txStatsBanner}>
+              <View style={styles.txStatsLeft}>
+                <CalmText variant="mono" size={10} color={colors.muted}>
                   ยอดเงินธุรกรรมรวม ({selectedYear === 'ALL' ? 'ทุกปี' : selectedYear} / {selectedMonth === 'ALL' ? 'ทุกเดือน' : MONTH_NAMES.find(m => m.key === selectedMonth)?.label})
-                </Text>
-                <Text style={styles.txStatsVal}>
+                </CalmText>
+                <CalmText variant="display" size={28} color={colors.ink}>
                   {isPrivateMode
                     ? '฿••••••'
                     : `฿${transactionStats.totalVolume.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                </Text>
+                </CalmText>
               </View>
               <View style={styles.txCountBadge}>
-                <Ionicons name="documents-outline" size={14} color="#059669" />
-                <Text style={styles.txCountText}>{transactionStats.count} รายการ</Text>
+                <CalmText variant="mono" size={12} color={colors.accent}>
+                  {transactionStats.count} รายการ
+                </CalmText>
               </View>
-            </View>
+            </Card>
 
             {/* Transaction Timeline List */}
             {loading ? (
               <View style={styles.loadingBox}>
-                <ActivityIndicator size="small" color="#059669" />
-                <Text style={styles.loadingText}>กำลังโหลดประวัติรายการ...</Text>
+                <ActivityIndicator size="small" color={colors.accent} />
+                <CalmText variant="body" size={13} color={colors.muted}>กำลังโหลดประวัติรายการ...</CalmText>
               </View>
             ) : filteredTransactions.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Ionicons name="receipt-outline" size={44} color="#94A3B8" />
-                <Text style={styles.emptyTitle}>ไม่พบรายการธุรกรรมตามเงื่อนไขที่เลือก</Text>
-                <Text style={styles.emptySubtitle}>ลองเลือกปีหรือเดือนอื่น หรือกดปุ่ม "ทุกปี / ทุกเดือน" เพื่อดูทั้งหมด</Text>
-              </View>
+              <Card variant="surface" style={styles.emptyCard}>
+                <Ionicons name="receipt-outline" size={44} color={colors.muted} />
+                <CalmText variant="display" size={18} color={colors.ink} style={{ marginTop: 8 }}>
+                  ไม่พบรายการธุรกรรมตามเงื่อนไขที่เลือก
+                </CalmText>
+                <CalmText variant="body" size={12} color={colors.muted} style={{ marginTop: 4, textAlign: 'center' }}>
+                  ลองเลือกปีหรือเดือนอื่น หรือกดปุ่ม "ทุกปี / ทุกเดือน" เพื่อดูทั้งหมด
+                </CalmText>
+              </Card>
             ) : (
               filteredTransactions.map((tx) => {
                 const isUS = isUSStock(tx.symbol, tx.asset_type, tx.currency);
@@ -819,95 +832,100 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                 const priceUSD = isUS ? Number(tx.price_per_share) / rate : 0;
                 const totalUSD = isUS ? totalTHB / rate : 0;
                 const isDeposit = tx.asset_type === 'CASH';
+                const isSell = tx.type === 'SELL';
 
                 return (
-                  <TouchableOpacity
-                    key={tx.id}
-                    style={styles.txCard}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      setSelectedTransactionForEdit(tx);
-                      setIsEditTxModalVisible(true);
-                    }}
-                  >
-                    <View style={styles.txHeader}>
-                      <View style={styles.txDateRow}>
-                        <Ionicons name="calendar-outline" size={14} color="#64748B" />
-                        <Text style={styles.txDateText}>{formatThaiDate(tx.transaction_date)}</Text>
-                      </View>
+                  <Card key={tx.id} variant="surface" shadow="md" style={styles.txCard}>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setSelectedTransactionForEdit(tx);
+                        setIsEditTxModalVisible(true);
+                      }}
+                    >
+                      {/* Card Top: Date & Action Badge + Edit Circle */}
+                      <View style={styles.txHeader}>
+                        <View style={styles.txDateRow}>
+                          <Ionicons name="calendar-outline" size={14} color={colors.ink} />
+                          <CalmText variant="mono" size={13} color={colors.ink}>
+                            {formatThaiDate(tx.transaction_date)}
+                          </CalmText>
+                        </View>
 
-                      <View style={styles.txHeaderRight}>
-                        <View
-                          style={[
-                            styles.actionBadge,
-                            tx.type === 'SELL'
-                              ? styles.sellBadge
-                              : isDeposit
-                              ? styles.depositBadge
-                              : styles.buyBadge,
-                          ]}
-                        >
-                          <Text
+                        <View style={styles.txHeaderRight}>
+                          <View
                             style={[
-                              styles.actionBadgeText,
-                              tx.type === 'SELL'
-                                ? styles.sellBadgeText
-                                : isDeposit
-                                ? styles.depositBadgeText
-                                : styles.buyBadgeText,
+                              styles.actionBadge,
+                              { backgroundColor: isSell ? colors.lossOnDark : colors.accent },
                             ]}
                           >
-                            {tx.type === 'SELL'
-                              ? isDeposit
-                                ? 'ถอนเงิน (WITHDRAW)'
-                                : 'ขาย (SELL)'
-                              : isDeposit
-                              ? 'ฝากเงิน (DEPOSIT)'
-                              : 'ซื้อ (BUY)'}
-                          </Text>
-                        </View>
-                        <View style={styles.editTxIconBox}>
-                          <Ionicons name="pencil" size={11} color="#64748B" />
+                            <CalmText variant="mono" size={11} color={colors.ink}>
+                              {isSell
+                                ? isDeposit
+                                  ? 'ถอน (WITHDRAW)'
+                                  : 'ขาย (SELL)'
+                                : isDeposit
+                                ? 'ฝาก (DEPOSIT)'
+                                : 'ซื้อ (BUY)'}
+                            </CalmText>
+                          </View>
+                          <View style={styles.editTxIconBox}>
+                            <Ionicons name="pencil" size={13} color={colors.ink} />
+                          </View>
                         </View>
                       </View>
-                    </View>
 
-                    <View style={styles.txBody}>
-                      <View>
-                        <View style={styles.txSymbolRow}>
-                          <Text style={styles.txSymbol}>{tx.symbol}</Text>
+                      {/* Dashed Divider */}
+                      <DashedDivider color={colors.shadow} marginVertical={10} />
+
+                      {/* Card Bottom: Symbol, Type, Detail & Value */}
+                      <View style={styles.txBody}>
+                        <View style={styles.txBodyLeft}>
+                          <View style={styles.txSymbolRow}>
+                            <CalmText variant="display" size={22} color={colors.ink}>
+                              {tx.symbol}
+                            </CalmText>
+                            {isUS && (
+                              <View style={styles.usBadge}>
+                                <CalmText variant="mono" size={9} color={colors.ink}>
+                                  USD $
+                                </CalmText>
+                              </View>
+                            )}
+                            <CalmText variant="mono" size={11} color={colors.muted}>
+                              {tx.asset_type === 'STOCKS' ? 'หุ้น' : tx.asset_type === 'FUNDS' ? 'กองทุน' : 'เงินฝาก'}
+                            </CalmText>
+                          </View>
+                          <CalmText variant="mono" size={12} color={colors.ink} style={{ marginTop: 2 }}>
+                            {isDeposit
+                              ? (isPrivateMode ? 'เงินต้น ฿••••••' : `เงินต้น ฿${Number(tx.shares).toLocaleString()}`)
+                              : isPrivateMode
+                              ? (tx.asset_type === 'FUNDS' ? '•••• หน่วย' : '•••• หุ้น')
+                              : (tx.asset_type === 'FUNDS'
+                                ? `${Number(tx.shares).toLocaleString()} หน่วย @ ฿${Number(tx.price_per_share).toFixed(4)}`
+                                : `${Number(tx.shares).toLocaleString()} หุ้น @ ฿${Number(tx.price_per_share).toFixed(2)}`)}
+                            {!isPrivateMode && isUS && ` ($${priceUSD.toFixed(2)})`}
+                          </CalmText>
+                        </View>
+
+                        <View style={styles.txAmountContainer}>
+                          <CalmText variant="mono" size={10} color={colors.muted}>
+                            มูลค่ารายการ
+                          </CalmText>
+                          <CalmText variant="display" size={22} color={colors.ink}>
+                            {isPrivateMode
+                              ? '฿••••••'
+                              : `฿${totalTHB.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                          </CalmText>
                           {isUS && (
-                            <View style={styles.usBadge}>
-                              <Text style={styles.usBadgeText}>USD $</Text>
-                            </View>
+                            <CalmText variant="mono" size={11} color={colors.muted}>
+                              {isPrivateMode ? '$••••••' : `$${totalUSD.toFixed(2)}`}
+                            </CalmText>
                           )}
-                          <Text style={styles.txCategoryTag}>
-                            {tx.asset_type === 'STOCKS' ? 'หุ้น' : tx.asset_type === 'FUNDS' ? 'กองทุน' : 'เงินฝาก'}
-                          </Text>
                         </View>
-                        <Text style={styles.txDetailSub}>
-                          {isDeposit
-                            ? (isPrivateMode ? 'เงินต้นที่บันทึก ฿••••••' : `เงินต้นที่บันทึก ฿${Number(tx.shares).toLocaleString()}`)
-                            : isPrivateMode
-                            ? (tx.asset_type === 'FUNDS' ? '•••• หน่วย' : '•••• หุ้น')
-                            : (tx.asset_type === 'FUNDS'
-                              ? `${Number(tx.shares).toLocaleString()} หน่วย @ ฿${Number(tx.price_per_share).toFixed(4)}`
-                              : `${Number(tx.shares).toLocaleString()} หุ้น @ ฿${Number(tx.price_per_share).toFixed(2)}`)}
-                          {!isPrivateMode && isUS && ` ($${priceUSD.toFixed(2)})`}
-                        </Text>
                       </View>
-
-                      <View style={styles.txAmountContainer}>
-                        <Text style={styles.txAmountLabel}>มูลค่ารายการ</Text>
-                        <Text style={styles.txAmountVal}>
-                          {isPrivateMode
-                            ? '฿••••••'
-                            : `฿${totalTHB.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                        </Text>
-                        {isUS && <Text style={styles.txAmountSub}>{isPrivateMode ? '$••••••' : `$${totalUSD.toFixed(2)}`}</Text>}
-                      </View>
-                    </View>
-                  </TouchableOpacity>
+                    </TouchableOpacity>
+                  </Card>
                 );
               })
             )}
@@ -921,50 +939,20 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
       <Modal
         visible={activePicker !== null}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setActivePicker(null)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setActivePicker(null)}
+        <SheetFrame
+          title={
+            activePicker === 'YEAR'
+              ? 'เลือกปีที่ทำรายการ'
+              : activePicker === 'MONTH'
+              ? 'เลือกเดือนที่ทำรายการ'
+              : 'เลือกประเภทธุรกรรม'
+          }
+          onClose={() => setActivePicker(null)}
         >
-          <TouchableOpacity
-            style={styles.pickerModalContainer}
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <View style={styles.pickerHeader}>
-              <View style={styles.pickerHeaderLeft}>
-                <Ionicons
-                  name={
-                    activePicker === 'YEAR'
-                      ? 'calendar'
-                      : activePicker === 'MONTH'
-                      ? 'time'
-                      : 'funnel'
-                  }
-                  size={18}
-                  color="#0F172A"
-                />
-                <Text style={styles.pickerTitle}>
-                  {activePicker === 'YEAR'
-                    ? 'เลือกปีที่ทำรายการ'
-                    : activePicker === 'MONTH'
-                    ? 'เลือกเดือนที่ทำรายการ'
-                    : 'เลือกประเภทธุรกรรม'}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setActivePicker(null)}
-                style={styles.pickerCloseBtn}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="close" size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
+          <View style={styles.pickerModalContent}>
             {/* Picker Content: YEAR */}
             {activePicker === 'YEAR' && (
               <ScrollView style={styles.pickerScrollView} showsVerticalScrollIndicator={false}>
@@ -980,13 +968,17 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                       }}
                       activeOpacity={0.7}
                     >
-                      <Text
-                        style={[styles.pickerItemText, isSelected && styles.pickerItemTextSelected]}
+                      <CalmText
+                        variant={isSelected ? 'bodyBold' : 'body'}
+                        size={15}
+                        color={colors.ink}
                       >
                         {yr === 'ALL' ? 'ทุกปี (ทั้งหมด)' : `${yr} (${Number(yr) + 543})`}
-                      </Text>
+                      </CalmText>
                       {isSelected && (
-                        <Ionicons name="checkmark-circle" size={18} color="#059669" />
+                        <View style={styles.sortSheetCheckCircle}>
+                          <Ionicons name="checkmark" size={14} color={colors.accent} />
+                        </View>
                       )}
                     </TouchableOpacity>
                   );
@@ -1008,16 +1000,17 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                   }}
                   activeOpacity={0.7}
                 >
-                  <Text
-                    style={[
-                      styles.monthAllBtnText,
-                      selectedMonth === 'ALL' && styles.monthAllBtnTextSelected,
-                    ]}
+                  <CalmText
+                    variant={selectedMonth === 'ALL' ? 'bodyBold' : 'body'}
+                    size={14}
+                    color={colors.ink}
                   >
                     ทุกเดือน (ตลอดทั้งปี)
-                  </Text>
+                  </CalmText>
                   {selectedMonth === 'ALL' && (
-                    <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                    <View style={styles.sortSheetCheckCircle}>
+                      <Ionicons name="checkmark" size={14} color={colors.accent} />
+                    </View>
                   )}
                 </TouchableOpacity>
 
@@ -1037,14 +1030,13 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                         }}
                         activeOpacity={0.7}
                       >
-                        <Text
-                          style={[
-                            styles.monthGridItemText,
-                            isSelected && styles.monthGridItemTextSelected,
-                          ]}
+                        <CalmText
+                          variant="mono"
+                          size={12}
+                          color={isSelected ? colors.accent : colors.ink}
                         >
                           {m.label}
-                        </Text>
+                        </CalmText>
                       </TouchableOpacity>
                     );
                   })}
@@ -1097,29 +1089,32 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
                           <Ionicons
                             name={item.icon as any}
                             size={16}
-                            color={isSelected ? '#059669' : '#64748B'}
+                            color={colors.ink}
                           />
-                          <Text
-                            style={[
-                              styles.pickerTypeLabel,
-                              isSelected && styles.pickerTypeLabelSelected,
-                            ]}
+                          <CalmText
+                            variant="bodyBold"
+                            size={14}
+                            color={colors.ink}
                           >
                             {item.label}
-                          </Text>
+                          </CalmText>
                         </View>
-                        <Text style={styles.pickerTypeSub}>{item.sub}</Text>
+                        <CalmText variant="body" size={11} color={colors.muted} style={{ marginLeft: 24, marginTop: 2 }}>
+                          {item.sub}
+                        </CalmText>
                       </View>
                       {isSelected && (
-                        <Ionicons name="checkmark-circle" size={20} color="#059669" />
+                        <View style={styles.sortSheetCheckCircle}>
+                          <Ionicons name="checkmark" size={14} color={colors.accent} />
+                        </View>
                       )}
                     </TouchableOpacity>
                   );
                 })}
               </View>
             )}
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </View>
+        </SheetFrame>
       </Modal>
 
       {/* Sort Options Bottom Sheet Modal */}
@@ -1559,118 +1554,128 @@ const styles = StyleSheet.create({
   dropdownBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
+    gap: 8,
+    marginBottom: 12,
   },
   dropdownChip: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    justifyContent: 'center',
+    height: 44,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
     gap: 4,
   },
   dropdownChipActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#93C5FD',
-  },
-  dropdownChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-    flexShrink: 1,
-  },
-  dropdownChipTextActive: {
-    color: '#1D4ED8',
-    fontWeight: '700',
+    backgroundColor: colors.ink,
   },
   resetFilterChip: {
+    height: 44,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.lossOnLight,
+    backgroundColor: colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#FEF2F2',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: '#FECACA',
+    gap: 4,
   },
-  resetFilterText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#EF4444',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  pickerModalContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 36,
-    maxHeight: SCREEN_WIDTH * 1.35,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 12,
-  },
-  pickerHeader: {
+  txStatsBanner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 12,
   },
-  pickerHeaderLeft: {
+  txStatsLeft: {
+    flex: 1,
+    gap: 2,
+  },
+  txCountBadge: {
+    backgroundColor: colors.ink,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  txCard: {
+    marginBottom: 10,
+    padding: 14,
+  },
+  txHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  txDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  txHeaderRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  pickerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+  actionBadge: {
+    borderWidth: 2,
+    borderColor: colors.ink,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
   },
-  pickerCloseBtn: {
-    padding: 4,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
+  editTxIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  txBody: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  txBodyLeft: {
+    flex: 1,
+    gap: 2,
+  },
+  txSymbolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  txAmountContainer: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  pickerModalContent: {
+    paddingBottom: 16,
   },
   pickerScrollView: {
-    maxHeight: 280,
+    maxHeight: 300,
   },
   pickerItemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    marginBottom: 4,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    marginBottom: 6,
   },
   pickerItemRowSelected: {
-    backgroundColor: '#ECFDF5',
-  },
-  pickerItemText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#334155',
-  },
-  pickerItemTextSelected: {
-    fontWeight: '700',
-    color: '#065F46',
+    borderColor: colors.ink,
+    backgroundColor: '#EAF3EE',
   },
   monthPickerContainer: {
     paddingBottom: 8,
@@ -1679,26 +1684,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    marginBottom: 10,
   },
   monthAllBtnSelected: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
-  },
-  monthAllBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  monthAllBtnTextSelected: {
-    color: '#065F46',
-    fontWeight: '700',
+    borderColor: colors.ink,
+    backgroundColor: '#EAF3EE',
   },
   monthGrid: {
     flexDirection: 'row',
@@ -1709,25 +1704,15 @@ const styles = StyleSheet.create({
   monthGridItem: {
     width: '23%',
     paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   monthGridItemSelected: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
-  },
-  monthGridItemText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  monthGridItemTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    backgroundColor: colors.ink,
   },
   pickerTypeList: {
     gap: 8,
@@ -1738,15 +1723,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    marginBottom: 6,
   },
   pickerTypeRowSelected: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
+    borderColor: colors.ink,
+    backgroundColor: '#EAF3EE',
   },
   pickerTypeInfo: {
     flex: 1,
@@ -1755,171 +1740,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  pickerTypeLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  pickerTypeLabelSelected: {
-    color: '#065F46',
-  },
-  pickerTypeSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-    marginLeft: 24,
-  },
-  txStatsBanner: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  txStatsLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  txStatsVal: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-  txCountBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  txCountText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  txCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  txHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    paddingBottom: 6,
-  },
-  txHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  editTxIconBox: {
-    backgroundColor: '#F1F5F9',
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  txDateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  txDateText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  actionBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  actionBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  buyBadge: {
-    backgroundColor: '#ECFDF5',
-  },
-  buyBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  sellBadge: {
-    backgroundColor: '#FEF2F2',
-  },
-  sellBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#EF4444',
-  },
-  depositBadge: {
-    backgroundColor: '#EFF6FF',
-  },
-  depositBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  txBody: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  txSymbolRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  txSymbol: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  txCategoryTag: {
-    fontSize: 10,
-    color: '#94A3B8',
-  },
-  txDetailSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  txAmountContainer: {
-    alignItems: 'flex-end',
-  },
-  txAmountLabel: {
-    fontSize: 10,
-    color: '#94A3B8',
-  },
-  txAmountVal: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  txAmountSub: {
-    fontSize: 10,
-    color: '#64748B',
   },
   bottomSpacer: {
     height: 30,
