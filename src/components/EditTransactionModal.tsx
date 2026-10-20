@@ -21,6 +21,8 @@ import { isKnownUSSymbol, getTransactionCurrencyMeta, saveTransactionCurrencyMet
 import { cancelRemindersForSymbol } from '../services/notificationService';
 import { getLocalDateString } from '../utils/dateUtils';
 import { portfolioEvents } from '../services/eventService';
+import { colors, borderWidth, radii, fonts } from '../theme/tokens';
+import { DashedDivider } from './ui/DashedDivider';
 
 export interface EnrichedTransaction extends Transaction {
   symbol: string;
@@ -268,9 +270,12 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
         style={styles.modalOverlay}
       >
         <View style={styles.sheetContainer}>
+          {/* Grab Handle */}
+          <View style={styles.grabHandle} />
+
           {/* Header */}
           <View style={styles.sheetHeader}>
-            <View>
+            <View style={{ flex: 1 }}>
               <View style={styles.headerTitleRow}>
                 <Text style={styles.sheetTitle}>แก้ไขรายการธุรกรรม</Text>
                 <View
@@ -308,9 +313,11 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
               </Text>
             </View>
             <TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.7}>
-              <Ionicons name="close" size={20} color="#64748B" />
+              <Ionicons name="close" size={18} color={colors.ink} />
             </TouchableOpacity>
           </View>
+
+          <DashedDivider color="#A9CDB9" marginVertical={0} />
 
           <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {/* 1. Transaction Date Picker */}
@@ -320,9 +327,9 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
               onPress={() => setIsCalendarVisible(true)}
               activeOpacity={0.7}
             >
-              <Ionicons name="calendar-outline" size={18} color="#059669" />
+              <Ionicons name="calendar-outline" size={18} color="#1F7A52" />
               <Text style={styles.datePickerText}>{txDate || 'เลือกวันที่ทำรายการ'}</Text>
-              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+              <Ionicons name="chevron-forward" size={16} color={colors.muted} />
             </TouchableOpacity>
 
             {/* 2. Shares / Deposit Amount */}
@@ -410,10 +417,10 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 activeOpacity={0.8}
               >
                 {isSubmitting ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={colors.accent} />
                 ) : (
                   <>
-                    <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
+                    <Ionicons name="checkmark-circle-outline" size={20} color={colors.accent} />
                     <Text style={styles.saveButtonText}>บันทึกการแก้ไข</Text>
                   </>
                 )}
@@ -426,10 +433,10 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 activeOpacity={0.8}
               >
                 {isDeleting ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={colors.lossOnLight} />
                 ) : (
                   <>
-                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                    <Ionicons name="trash-outline" size={18} color={colors.lossOnLight} />
                     <Text style={styles.deleteButtonText}>ลบรายการนี้</Text>
                   </>
                 )}
@@ -457,25 +464,36 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: colors.scrim,
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radii.sheet,
+    borderTopRightRadius: radii.sheet,
+    borderTopWidth: borderWidth,
+    borderLeftWidth: borderWidth,
+    borderRightWidth: borderWidth,
+    borderColor: colors.ink,
     maxHeight: '90%',
-    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 20,
+  },
+  grabHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: radii.pill,
+    backgroundColor: '#A9CDB9',
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 4,
   },
   sheetHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   headerTitleRow: {
     flexDirection: 'row',
@@ -483,62 +501,74 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sheetTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   sheetSubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.muted,
+    fontFamily: fonts.thai,
     marginTop: 2,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   typeBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: radii.pill,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
   },
   typeBadgeBuy: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#EAF3EE',
   },
   typeBadgeSell: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#FEE2E2',
   },
   typeBadgeCash: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#FEF3C7',
   },
   typeBadgeText: {
     fontSize: 11,
     fontWeight: '700',
+    fontFamily: fonts.mono,
   },
   typeBadgeTextBuy: {
-    color: '#2563EB',
+    color: '#1F7A52',
   },
   typeBadgeTextSell: {
-    color: '#DC2626',
+    color: colors.lossOnLight,
   },
   typeBadgeTextCash: {
-    color: '#059669',
+    color: colors.ink,
   },
   closeButton: {
-    padding: 6,
-    borderRadius: 20,
-    backgroundColor: '#F8FAFC',
+    width: 34,
+    height: 34,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 16,
   },
   fieldLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
     marginBottom: 6,
   },
   fieldLabelNoMargin: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   labelRow: {
     flexDirection: 'row',
@@ -548,70 +578,81 @@ const styles = StyleSheet.create({
   },
   currencyPillGroup: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 8,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: radii.pill,
     padding: 2,
     gap: 2,
   },
   currencyPill: {
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
   },
   currencyPillActive: {
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.ink,
   },
   currencyPillText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: '700',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   currencyPillTextActive: {
-    color: '#FFFFFF',
+    color: colors.accent,
   },
   input: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 16,
     paddingHorizontal: 14,
-    paddingVertical: 11,
+    minHeight: 48,
     fontSize: 15,
-    color: '#0F172A',
+    fontFamily: fonts.mono,
+    fontWeight: '700',
+    color: colors.ink,
     marginBottom: 14,
-    fontWeight: '600',
   },
   datePickerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 16,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    minHeight: 48,
     marginBottom: 14,
     gap: 10,
   },
   datePickerText: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '600',
-    color: '#0F172A',
+    fontWeight: '700',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   convertedHint: {
     fontSize: 11.5,
-    color: '#2563EB',
+    color: '#1F7A52',
+    fontFamily: fonts.mono,
+    fontWeight: '700',
     marginTop: -8,
     marginBottom: 14,
-    fontWeight: '500',
   },
   summaryCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 18,
     padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
     marginBottom: 18,
     gap: 4,
   },
@@ -622,13 +663,15 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: '500',
+    fontFamily: fonts.thai,
+    color: colors.muted,
   },
   summaryValue: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
-    color: '#0F172A',
+    fontFamily: fonts.mono,
+    color: '#1F7A52',
   },
   summaryRowSub: {
     flexDirection: 'row',
@@ -637,12 +680,14 @@ const styles = StyleSheet.create({
   },
   summarySubLabel: {
     fontSize: 11.5,
-    color: '#94A3B8',
+    color: colors.muted,
+    fontFamily: fonts.thai,
   },
   summarySubValue: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#2563EB',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   actionButtonsContainer: {
     gap: 10,
@@ -652,39 +697,48 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#059669',
-    paddingVertical: 14,
-    borderRadius: 14,
+    backgroundColor: colors.ink,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    minHeight: 50,
+    borderRadius: radii.pill,
     gap: 8,
-    elevation: 2,
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 4,
   },
   saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    color: colors.accent,
+    fontSize: 15,
     fontWeight: '700',
+    fontFamily: fonts.thaiBold,
   },
   deleteButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    paddingVertical: 13,
-    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    minHeight: 48,
+    borderRadius: radii.pill,
     gap: 6,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   deleteButtonText: {
-    color: '#DC2626',
-    fontSize: 14.5,
+    color: colors.lossOnLight,
+    fontSize: 14,
     fontWeight: '700',
+    fontFamily: fonts.thaiBold,
   },
   buttonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
 });
 
