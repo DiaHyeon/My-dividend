@@ -828,6 +828,46 @@
   - `npx tsc --noEmit`: 0 error
   - `npm test`: 83/83 ผ่านทั้งหมด 100%
 
+---
+
+## 20. ผลการดำเนินการปรับโฉม Add Asset & Cash Deposit Modals (Phase 5)
+
+- **ไฟล์ที่แก้ไข**: `src/components/AddAssetModal.tsx`, `src/components/CashAssetForm.tsx`, `docs/calm/PLAN-ADD-ASSET.md`, `docs/calm/SETUP_LOG.md`
+- **ต้นแบบ HTML**:
+  - `calm-bundle/add,holding/Calm – เพิ่มสินทรัพย์ (หุ้น)-html/CalmAddStock.dc.html`
+  - `calm-bundle/add,holding/Calm – เพิ่มสินทรัพย์ (เงินฝาก)-html/CalmAddCash.dc.html`
+- **Commits**: `e23fce5`, `eeee0be`, `2354977`, `932548d`, `00b6d69`, `47a4f8d`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **Step 5A — FAB Button & Sheet Frame Container (`AddAssetModal.tsx`) [Commit `e23fce5`]**:
+     - ปุ่ม FAB กลม 60×60px พื้นเข้ม `#123D2A` ไอคอนเครื่องหมายบวก `#6FCDA8` เงา 4px `#A9CDB9`
+     - Scrim สี `rgba(18, 61, 42, 0.45)`
+     - Sheet Frame มนบน 30px พื้น `#FBFFFD` ขอบบน 2px `#123D2A` พร้อม Grab handle 44×5px `#A9CDB9`
+     - ส่วนหัว: ชื่อหัวเรื่อง `เพิ่มสินทรัพย์ใหม่` (24px) คำบรรยาย 13px สี `#4F6B5C` พร้อมปุ่มปิดกลม 44px ขอบ 2px `#123D2A`
+     - เส้นประคั่น `<DashedDivider>`
+     - รางแคปซูลเลือกประเภทสินทรัพย์ 3 ตัวเลือก (`หุ้น`, `กองทุน`, `เงินฝาก`)
+  2. **Step 5B — Stocks & Mutual Funds Input Form (`AddAssetModal.tsx`) [Commits `eeee0be`, `2354977`, `932548d`, `00b6d69`]**:
+     - ช่องค้นหาและพิมพ์ Symbol สไตล์ Calm Mint สูง 48px ขอบ 2px `#123D2A` มน 16px พร้อมปุ่มล้างและผลลัพธ์ Autocomplete
+     - ปุ่มเลือก Sector/หมวดหมู่ สไตล์ Calm Mint เงา 3px `#A9CDB9`
+     - ปุ่มสลับสกุลเงินย่อข้อความเป็น `🇹🇭 บาทไทย (THB)` และ `🇺🇸 ดอลลาร์ (USD)` ป้องกันข้อความล้น
+     - กล่องอัตราแลกเปลี่ยน USD แบบเรียลไทม์ (พื้นหลัง `#EAF3EE`, ขอบ 2px `#123D2A`)
+     - ตารางอินพุต 2 คอลัมน์ (จำนวนหุ้น, ราคาต้นทุน, ราคาปัจจุบัน, วันที่ซื้อ, เงินปันผลต่อหุ้น DPU, วันขึ้นเครื่องหมาย XD) ด้วยฟอนต์ JetBrains Mono
+     - ป้าย XD Badge สีเข้ม `#1F7A52`
+     - การ์ดภาษีหัก ณ ที่จ่าย (Withholding Tax) สไตล์ Calm Mint พร้อมพิลล์ลัด 10% / 15% / 0%
+     - ปุ่มบันทึกสินทรัพย์แบบเต็มกว้าง (สูง 54px, พื้นเข้ม `#123D2A`, ตัวอักษร `#6FCDA8`, ขอบ 2px, เงา 4px `#A9CDB9`)
+     - Review Confirmation Modal สไตล์ Calm Mint
+  3. **Step 5C — Cash Deposit Asset Form (`CashAssetForm.tsx`) [Commit `47a4f8d`]**:
+     - ช่องชื่อบัญชี/สถาบันการเงิน สูง 48px ขอบ 2px `#123D2A` มน 16px พื้นหลัง `#FBFFFD`
+     - ชิปประเภทเงินฝาก (Segment) 4 ตัวเลือก มนแคปซูล 999px ขอบ 2px ไฮไลต์เข้ม `#123D2A` และอักษรสีมิ้นต์ `#6FCDA8`
+     - ช่องจำนวนเงินฝาก และอัตราดอกเบี้ยต่อปี (% p.a.) เป็นตัวเลข JetBrains Mono 15px
+     - ช่องวันที่เริ่มฝาก พร้อมป้ายกำกับ `คำนวณดอกเบี้ยตามวันจริง` สี `#1F7A52` และไอคอนปฏิทิน
+     - ปุ่มรอบการจ่ายดอกเบี้ย 3 ตัวเลือก (ทุกเดือน, ทุก 6 เดือน, ปีละครั้ง) สูง 56px มน 22px ขอบ 2px
+     - การ์ดภาษีดอกเบี้ยหัก ณ ที่จ่าย 20,000 บาท (พื้นหลัง `#EAF3EE`, ขอบ 2px `#123D2A`, มน 22px, ป้ายคำนวณอัตโนมัติ `#6FCDA8`) พร้อมพิลล์สลับ `0% ยกเว้น` / `15% หัก ณ ที่จ่าย`
+     - การ์ดพรีวิวดอกเบี้ยสุทธิ (พื้นหลัง `#FBFFFD`, ขอบ 2px `#123D2A`, เงา 3px `#A9CDB9`, ตัวเลข Net Inflow เด่น 18px JetBrains Mono สี `#1F7A52`)
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error
+  - `npm test`: 83/83 ผ่านทั้งหมด 100% (39 unit + 27 security + 17 performance scenarios)
+
+
 
 
 
