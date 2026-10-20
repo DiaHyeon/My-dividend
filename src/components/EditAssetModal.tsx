@@ -28,6 +28,8 @@ import { SectorPickerModal } from './SectorPickerModal';
 import { SellAssetModal } from './SellAssetModal';
 import { getLocalDateString } from '../utils/dateUtils';
 import { portfolioEvents } from '../services/eventService';
+import { colors, borderWidth, radii, fonts } from '../theme/tokens';
+import { DashedDivider } from './ui/DashedDivider';
 
 interface EditAssetModalProps {
   visible: boolean;
@@ -585,6 +587,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
         style={styles.modalOverlay}
       >
         <View style={styles.sheetContainer}>
+          <View style={styles.grabHandle} />
           {/* Header */}
           <View style={styles.sheetHeader}>
             <View>
@@ -592,9 +595,10 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
               <Text style={styles.sheetSubtitle}>{asset.symbol} • รายละเอียดการลงทุน</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close" size={24} color="#64748B" />
+              <Ionicons name="close" size={20} color={colors.ink} />
             </TouchableOpacity>
           </View>
+          <DashedDivider color={colors.shadow} />
 
           <ScrollView
             contentContainerStyle={styles.scrollContent}
@@ -603,7 +607,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
           >
             {isLoadingDetails ? (
               <View style={styles.loadingBox}>
-                <ActivityIndicator size="small" color="#059669" />
+                <ActivityIndicator size="small" color={colors.ink} />
                 <Text style={styles.loadingText}>กำลังโหลดข้อมูลสินทรัพย์...</Text>
               </View>
             ) : null}
@@ -617,12 +621,12 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                     key={type.value}
                     style={[styles.assetTypeSegmentTab, isSelected && styles.assetTypeSegmentTabActive]}
                     onPress={() => setAssetType(type.value)}
-                    activeOpacity={0.7}
+                    activeOpacity={0.8}
                   >
                     <Ionicons
                       name={type.icon}
-                      size={15}
-                      color={isSelected ? '#0F172A' : '#64748B'}
+                      size={18}
+                      color={isSelected ? colors.accent : colors.ink}
                     />
                     <Text style={[styles.assetTypeSegmentText, isSelected && styles.assetTypeSegmentTextActive]}>
                       {type.shortLabel}
@@ -673,7 +677,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                   <View style={styles.splitBanner}>
                     <View style={styles.splitBannerHeader}>
                       <View style={styles.splitIconBox}>
-                        <Ionicons name="git-branch" size={18} color="#D97706" />
+                        <Ionicons name="git-branch" size={18} color="#B45309" />
                       </View>
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -694,10 +698,10 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                       activeOpacity={0.8}
                     >
                       {isApplyingSplit ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
+                        <ActivityIndicator size="small" color={colors.accent} />
                       ) : (
                         <>
-                          <Ionicons name="flash" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                          <Ionicons name="flash" size={14} color={colors.accent} style={{ marginRight: 6 }} />
                           <Text style={styles.applySplitButtonText}>ปรับจำนวนหุ้น & ต้นทุนให้อัตโนมัติ (1-Click)</Text>
                         </>
                       )}
@@ -708,11 +712,11 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                 {/* 2. Symbol Field */}
                 <Text style={styles.fieldLabel}>ชื่อย่อสินทรัพย์ (Symbol)</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, styles.monoInput]}
                   value={symbol}
                   onChangeText={setSymbol}
                   placeholder="เช่น PTT, AAPL, SCBDV"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.muted}
                 />
 
                 {/* Segment / Category Selector */}
@@ -722,26 +726,17 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                   </Text>
                   {selectedSector ? (
                     <TouchableOpacity
-                      style={[
-                        styles.detectedSectorBadge,
-                        {
-                          backgroundColor:
-                            getSectorDefinition(selectedSector, assetType).color + '1A',
-                        },
-                      ]}
+                      style={styles.detectedSectorBadge}
                       onPress={() => setIsSectorPickerVisible(true)}
                       activeOpacity={0.7}
                     >
                       <Ionicons
                         name={getSectorDefinition(selectedSector, assetType).icon as any}
                         size={13}
-                        color={getSectorDefinition(selectedSector, assetType).color}
+                        color={colors.ink}
                       />
                       <Text
-                        style={[
-                          styles.detectedSectorBadgeText,
-                          { color: getSectorDefinition(selectedSector, assetType).color },
-                        ]}
+                        style={styles.detectedSectorBadgeText}
                         numberOfLines={1}
                       >
                         {getSectorDefinition(selectedSector, assetType).label}
@@ -749,7 +744,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                       <Ionicons
                         name="chevron-down"
                         size={12}
-                        color={getSectorDefinition(selectedSector, assetType).color}
+                        color={colors.ink}
                       />
                     </TouchableOpacity>
                   ) : null}
@@ -760,7 +755,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                       key={sec.id}
                       style={[
                         styles.sectorChip,
-                        selectedSector === sec.id && { backgroundColor: sec.color, borderColor: sec.color },
+                        selectedSector === sec.id && styles.sectorChipActive,
                       ]}
                       onPress={() => setSelectedSector(sec.id)}
                     >
@@ -775,6 +770,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
+
                 {/* Currency Selector (THB vs USD) */}
                 {assetType === 'STOCKS' && (
                   <>
@@ -783,19 +779,29 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                       <TouchableOpacity
                         style={[styles.currencyBtn, currency === 'THB' && styles.currencyBtnActive]}
                         onPress={() => handleCurrencyToggle('THB')}
-                        activeOpacity={0.7}
+                        activeOpacity={0.8}
                       >
-                        <Text style={[styles.currencyBtnText, currency === 'THB' && styles.currencyBtnTextActive]}>
-                          🇹🇭 บาทไทย (THB ฿)
+                        <Text
+                          style={[styles.currencyBtnText, currency === 'THB' && styles.currencyBtnTextActive]}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.85}
+                        >
+                          🇹🇭 บาทไทย (THB)
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.currencyBtn, currency === 'USD' && styles.currencyBtnActive]}
                         onPress={() => handleCurrencyToggle('USD')}
-                        activeOpacity={0.7}
+                        activeOpacity={0.8}
                       >
-                        <Text style={[styles.currencyBtnText, currency === 'USD' && styles.currencyBtnTextActive]}>
-                          🇺🇸 ดอลลาร์สหรัฐ (USD $)
+                        <Text
+                          style={[styles.currencyBtnText, currency === 'USD' && styles.currencyBtnTextActive]}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.85}
+                        >
+                          🇺🇸 ดอลลาร์ (USD)
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -804,9 +810,9 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                     {currency === 'USD' && (
                       <View style={styles.usdExchangeBox}>
                         <View style={styles.usdExchangeHeader}>
-                          <Ionicons name="swap-horizontal" size={16} color="#2563EB" />
+                          <Ionicons name="swap-horizontal" size={16} color={colors.ink} />
                           <Text style={styles.usdExchangeTitle}>อัตราแลกเปลี่ยน (1 USD = กี่บาท)</Text>
-                          {isFetchingRate && <ActivityIndicator size="small" color="#2563EB" />}
+                          {isFetchingRate && <ActivityIndicator size="small" color={colors.ink} />}
                         </View>
                         <View style={styles.usdExchangeInputRow}>
                           <TextInput
@@ -818,14 +824,15 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                             }}
                             keyboardType="decimal-pad"
                             placeholder="34.00"
-                            placeholderTextColor="#94A3B8"
+                            placeholderTextColor={colors.muted}
                           />
                           <TouchableOpacity
                             style={styles.fetchRateBtn}
                             onPress={refreshExchangeRate}
                             disabled={isFetchingRate}
+                            activeOpacity={0.8}
                           >
-                            <Ionicons name="refresh" size={14} color="#2563EB" />
+                            <Ionicons name="refresh" size={14} color={colors.accent} />
                             <Text style={styles.fetchRateBtnText}>ดึงเรทสด</Text>
                           </TouchableOpacity>
                         </View>
@@ -851,12 +858,13 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                     style={styles.refreshPriceBtn}
                     onPress={handleRefreshLatestPrice}
                     disabled={isRefreshingPrice}
+                    activeOpacity={0.8}
                   >
                     {isRefreshingPrice ? (
-                      <ActivityIndicator size="small" color="#059669" />
+                      <ActivityIndicator size="small" color={colors.ink} />
                     ) : (
                       <>
-                        <Ionicons name="sync-outline" size={14} color="#059669" />
+                        <Ionicons name="sync-outline" size={14} color={colors.ink} />
                         <Text style={styles.refreshPriceBtnText}>
                           {assetType === 'FUNDS' ? 'ดึง NAV ล่าสุด' : 'ดึงราคาล่าสุด'}
                         </Text>
@@ -865,12 +873,12 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                   </TouchableOpacity>
                 </View>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, styles.monoInput]}
                   value={currentPrice}
                   onChangeText={setCurrentPrice}
                   keyboardType="decimal-pad"
                   placeholder="0.00"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.muted}
                 />
                 {priceFeedback ? <Text style={styles.feedbackNote}>{priceFeedback}</Text> : null}
 
@@ -883,19 +891,19 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                       </Text>
                       {txCount > 1 && (
                         <View style={styles.minimalLockBadge}>
-                          <Ionicons name="lock-closed" size={10} color="#64748B" />
+                          <Ionicons name="lock-closed" size={10} color={colors.ink} />
                           <Text style={styles.minimalLockBadgeText}>DCA</Text>
                         </View>
                       )}
                     </View>
                     <TextInput
-                      style={[styles.input, txCount > 1 && styles.inputDisabled]}
+                      style={[styles.input, styles.monoInput, txCount > 1 && styles.inputDisabled]}
                       value={shares}
                       onChangeText={setShares}
                       editable={txCount <= 1}
                       keyboardType="decimal-pad"
                       placeholder="0"
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor={colors.muted}
                     />
                   </View>
                   <View style={styles.columnItem}>
@@ -905,19 +913,19 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                       </Text>
                       {txCount > 1 && (
                         <View style={styles.minimalLockBadge}>
-                          <Ionicons name="lock-closed" size={10} color="#64748B" />
+                          <Ionicons name="lock-closed" size={10} color={colors.ink} />
                           <Text style={styles.minimalLockBadgeText}>ถัวเฉลี่ย</Text>
                         </View>
                       )}
                     </View>
                     <TextInput
-                      style={[styles.input, txCount > 1 && styles.inputDisabled]}
+                      style={[styles.input, styles.monoInput, txCount > 1 && styles.inputDisabled]}
                       value={costPrice}
                       onChangeText={setCostPrice}
                       editable={txCount <= 1}
                       keyboardType="decimal-pad"
                       placeholder="0.00"
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor={colors.muted}
                     />
                   </View>
                 </View>
@@ -929,15 +937,15 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                       onClose();
                       onNavigateToTransactions?.(symbol);
                     }}
-                    activeOpacity={0.7}
+                    activeOpacity={0.8}
                   >
                     <View style={styles.minimalDcaLeft}>
-                      <Ionicons name="receipt-outline" size={14} color="#059669" />
+                      <Ionicons name="receipt-outline" size={15} color="#1F7A52" />
                       <Text style={styles.minimalDcaText}>
                         มีประวัติซื้อสะสม {txCount} รายการ • ดูประวัติแต่ละไม้
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={13} color="#94A3B8" />
+                    <Ionicons name="chevron-forward" size={14} color={colors.ink} />
                   </TouchableOpacity>
                 )}
 
@@ -975,6 +983,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                         taxRatePercent === preset.value && styles.taxPresetBtnActive,
                       ]}
                       onPress={() => setTaxRatePercent(preset.value)}
+                      activeOpacity={0.8}
                     >
                       <Text
                         style={[
@@ -988,12 +997,12 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                   ))}
                 </View>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, styles.monoInput]}
                   value={taxRatePercent}
                   onChangeText={setTaxRatePercent}
                   keyboardType="decimal-pad"
                   placeholder="ระบุเปอร์เซ็นต์ภาษี เช่น 0 หรือ 10"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.muted}
                 />
               </View>
             )}
@@ -1010,12 +1019,12 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                       {assetType === 'FUNDS' ? 'ปันผลต่อหน่วย (฿ DPU)' : `ปันผลต่อหุ้น (${currency === 'USD' ? '$ DPU' : '฿ DPU'})`}
                     </Text>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, styles.monoInput]}
                       value={expectedDpu}
                       onChangeText={setExpectedDpu}
                       keyboardType="decimal-pad"
                       placeholder="0.00"
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor={colors.muted}
                     />
                   </View>
                   <View style={styles.columnItem}>
@@ -1026,7 +1035,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                         value={xdDate}
                         onChangeText={setXdDate}
                         placeholder="เช่น 2026-05-15"
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={colors.muted}
                       />
                       <TouchableOpacity
                         style={styles.calendarIconBtn}
@@ -1034,7 +1043,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                         activeOpacity={0.7}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       >
-                        <Ionicons name="calendar-outline" size={18} color="#059669" />
+                        <Ionicons name="calendar-outline" size={18} color={colors.ink} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1055,10 +1064,10 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                 activeOpacity={0.85}
               >
                 {isSubmitting ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <ActivityIndicator color={colors.accent} />
                 ) : (
                   <>
-                    <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
+                    <Ionicons name="checkmark-circle-outline" size={20} color={colors.accent} />
                     <Text style={styles.saveButtonText}>บันทึกการแก้ไข</Text>
                   </>
                 )}
@@ -1075,10 +1084,10 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                   <Ionicons
                     name={assetType === 'CASH' ? 'cash-outline' : 'trending-down-outline'}
                     size={17}
-                    color="#D97706"
+                    color={colors.ink}
                   />
                   <Text style={styles.sellButtonText}>
-                    {assetType === 'CASH' ? 'ถอน' : 'ขาย'}
+                    {assetType === 'CASH' ? 'ถอนเงินฝาก' : 'ขายสินทรัพย์'}
                   </Text>
                 </TouchableOpacity>
 
@@ -1089,10 +1098,10 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                   activeOpacity={0.85}
                 >
                   {isDeleting ? (
-                    <ActivityIndicator color="#DC2626" size="small" />
+                    <ActivityIndicator color={colors.lossOnLight} size="small" />
                   ) : (
                     <>
-                      <Ionicons name="trash-outline" size={17} color="#DC2626" />
+                      <Ionicons name="trash-outline" size={17} color={colors.lossOnLight} />
                       <Text style={styles.deleteButtonRedSmallText}>ลบสินทรัพย์</Text>
                     </>
                   )}
@@ -1141,40 +1150,56 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: colors.scrim,
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radii.sheet,
+    borderTopRightRadius: radii.sheet,
+    borderTopWidth: borderWidth,
+    borderTopColor: colors.ink,
     maxHeight: '92%',
-    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 20,
+  },
+  grabHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: radii.pill,
+    backgroundColor: colors.shadow,
+    marginTop: 8,
+    marginBottom: 4,
+    alignSelf: 'center',
   },
   sheetHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 8,
     paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
   },
   sheetTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 22,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   sheetSubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.muted,
+    fontFamily: fonts.thai,
     marginTop: 2,
   },
   closeButton: {
-    padding: 6,
-    borderRadius: 20,
-    backgroundColor: '#F8FAFC',
+    width: 44,
+    height: 44,
+    borderRadius: radii.pill,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -1186,19 +1211,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 10,
     gap: 8,
-    backgroundColor: '#ECFDF5',
-    borderRadius: 10,
+    backgroundColor: '#EAF3EE',
+    borderRadius: 12,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     marginBottom: 12,
   },
   loadingText: {
     fontSize: 13,
-    color: '#059669',
-    fontWeight: '500',
+    color: colors.ink,
+    fontFamily: fonts.thai,
+    fontWeight: '600',
   },
   fieldLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
     marginBottom: 6,
   },
   labelRow: {
@@ -1211,42 +1240,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: '#ECFDF5',
+    borderRadius: radii.pill,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    backgroundColor: colors.accent,
   },
   refreshPriceBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#059669',
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   input: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 16,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    minHeight: 48,
     fontSize: 15,
-    color: '#0F172A',
+    fontFamily: fonts.thai,
+    color: colors.ink,
     marginBottom: 14,
+  },
+  monoInput: {
+    fontFamily: fonts.mono,
+    fontWeight: '700',
   },
   dateInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    minHeight: 48,
+    marginBottom: 14,
   },
   dateTextInput: {
     flex: 1,
-    height: 42,
-    fontSize: 14,
-    color: '#0F172A',
-    fontWeight: '600',
+    fontSize: 15,
+    color: colors.ink,
+    fontFamily: fonts.mono,
+    fontWeight: '700',
     paddingVertical: 0,
   },
   calendarIconBtn: {
@@ -1254,45 +1293,43 @@ const styles = StyleSheet.create({
   },
   feedbackNote: {
     fontSize: 12,
-    color: '#059669',
+    color: '#1F7A52',
+    fontFamily: fonts.thai,
+    fontWeight: '600',
     marginTop: -8,
     marginBottom: 12,
-    fontWeight: '500',
   },
   assetTypeSegmentContainer: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 3,
+    gap: 4,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
+    padding: 4,
     marginTop: 4,
     marginBottom: 16,
-    gap: 4,
   },
   assetTypeSegmentTab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 9,
-    borderRadius: 9,
-    gap: 6,
+    minHeight: 44,
+    borderRadius: radii.pill,
+    gap: 8,
   },
   assetTypeSegmentTabActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: colors.ink,
   },
   assetTypeSegmentText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   assetTypeSegmentTextActive: {
-    color: '#0F172A',
-    fontWeight: '700',
+    color: colors.accent,
   },
   twoColumnRow: {
     flexDirection: 'row',
@@ -1302,13 +1339,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   previewCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
     marginBottom: 16,
-    gap: 4,
+    gap: 6,
   },
   previewRow: {
     flexDirection: 'row',
@@ -1317,13 +1359,15 @@ const styles = StyleSheet.create({
   },
   previewLabel: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.muted,
+    fontFamily: fonts.thai,
     fontWeight: '500',
   },
   previewValue: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   sectorHeaderRow: {
     flexDirection: 'row',
@@ -1334,71 +1378,88 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   fieldLabelNoMargin: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#334155',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   detectedSectorBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
     flexShrink: 1,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
   detectedSectorBadgeText: {
     fontSize: 11,
     fontWeight: '700',
+    fontFamily: fonts.mono,
+    color: colors.ink,
     flexShrink: 1,
   },
   profitColor: {
-    color: '#059669',
+    color: '#1F7A52',
   },
   lossColor: {
-    color: '#DC2626',
+    color: colors.lossOnLight,
   },
   taxPresetsRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
     marginBottom: 8,
   },
   taxPresetBtn: {
     flex: 1,
-    paddingVertical: 7,
-    paddingHorizontal: 6,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+    minHeight: 44,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 22,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   taxPresetBtnActive: {
-    backgroundColor: '#059669',
+    backgroundColor: colors.ink,
   },
   taxPresetBtnText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   taxPresetBtnTextActive: {
-    color: '#FFFFFF',
+    color: colors.accent,
   },
   dividendSection: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
+    backgroundColor: '#EAF3EE',
+    borderRadius: 20,
     padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     marginBottom: 16,
   },
   sectionHeaderTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
     marginBottom: 10,
   },
   dividendHelpText: {
     fontSize: 11,
-    color: '#64748B',
+    color: colors.muted,
+    fontFamily: fonts.thai,
     marginTop: -4,
   },
   actionButtonsContainer: {
@@ -1409,40 +1470,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#059669',
-    paddingVertical: 14,
-    borderRadius: 14,
+    backgroundColor: colors.ink,
+    minHeight: 54,
+    borderRadius: radii.pill,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     gap: 8,
-    elevation: 2,
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
+    elevation: 4,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
   saveButtonText: {
-    color: '#FFFFFF',
+    color: colors.accent,
     fontSize: 16,
     fontWeight: '700',
-  },
-  // Prominent Red Delete Button
-  deleteButtonRed: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#DC2626',
-    paddingVertical: 14,
-    borderRadius: 14,
-    gap: 8,
-    elevation: 2,
-    shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-  },
-  deleteButtonRedText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -1451,269 +1495,67 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   sectorChip: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginRight: 6,
-  },
-  sectorChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  sectorChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  frequencyRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 14,
-  },
-  frequencyBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  frequencyBtnActive: {
-    backgroundColor: '#059669',
-    borderColor: '#059669',
-  },
-  frequencyBtnText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
-    textAlign: 'center',
-  },
-  frequencyBtnTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  cashPreviewCard: {
-    backgroundColor: '#ECFDF5',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    marginTop: 4,
-    marginBottom: 14,
-    gap: 6,
-  },
-  cashPreviewHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#D1FAE5',
-  },
-  cashPreviewHeaderTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#065F46',
-  },
-  taxStatusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  taxStatusBadgeFree: {
-    backgroundColor: '#DCFCE7',
-  },
-  taxStatusBadgeTaxed: {
-    backgroundColor: '#FEF3C7',
-  },
-  taxStatusBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  taxStatusBadgeFreeText: {
-    color: '#15803D',
-  },
-  taxStatusBadgeTaxedText: {
-    color: '#B45309',
-  },
-  cashPreviewRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cashPreviewLabel: {
-    fontSize: 12,
-    color: '#065F46',
-    fontWeight: '500',
-  },
-  cashPreviewTotalRow: {
-    paddingTop: 6,
-    marginTop: 2,
-    borderTopWidth: 1,
-    borderTopColor: '#D1FAE5',
-  },
-  cashPreviewHighlightLabel: {
-    fontSize: 13,
-    color: '#065F46',
-    fontWeight: '700',
-  },
-  cashPreviewMuted: {
-    fontSize: 12,
-    color: '#475569',
-    fontWeight: '600',
-  },
-  cashPreviewTax: {
-    fontSize: 12,
-    color: '#DC2626',
-    fontWeight: '600',
-  },
-  cashPreviewHighlight: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#059669',
-  },
-  cashPreviewSub: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#047857',
-  },
-  taxHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  autoTaxToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: '#F1F5F9',
-    gap: 4,
-  },
-  autoTaxToggleBtnActive: {
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  autoTaxToggleText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  autoTaxToggleTextActive: {
-    color: '#059669',
-    fontWeight: '700',
-  },
-  taxAlertBox: {
-    flexDirection: 'row',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 10,
-    borderWidth: 1,
-  },
-  taxAlertBoxNormal: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
-  },
-  taxAlertBoxExceeded: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
-  },
-  taxAlertTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  taxAlertTitleNormal: {
-    color: '#15803D',
-  },
-  taxAlertTitleExceeded: {
-    color: '#B45309',
-  },
-  taxAlertDetail: {
-    fontSize: 11,
-    color: '#475569',
-    lineHeight: 15,
-  },
-  taxAlertQuota: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#059669',
-    marginTop: 4,
-  },
-  taxPillRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 14,
-  },
-  taxPill: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  taxPillActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
-  },
-  taxPillText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
-    textAlign: 'center',
-  },
-  taxPillTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  currencyToggleContainer: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 2,
-    marginBottom: 10,
-  },
-  currencyBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: colors.surface,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    marginRight: 8,
+    minHeight: 38,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sectorChipActive: {
+    backgroundColor: colors.ink,
+  },
+  sectorChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
+  },
+  sectorChipTextActive: {
+    color: colors.accent,
+  },
+  currencyToggleContainer: {
+    flexDirection: 'row',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
+    padding: 4,
+    gap: 4,
+    marginTop: 2,
+    marginBottom: 14,
+  },
+  currencyBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
   currencyBtnActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+    backgroundColor: colors.ink,
   },
   currencyBtnText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   currencyBtnTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: colors.accent,
   },
   usdExchangeBox: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 12,
+    backgroundColor: '#EAF3EE',
+    borderRadius: 18,
     padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
+    marginBottom: 14,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
   },
   usdExchangeHeader: {
     flexDirection: 'row',
@@ -1722,9 +1564,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   usdExchangeTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#1E40AF',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
     flex: 1,
   },
   usdExchangeInputRow: {
@@ -1735,42 +1578,47 @@ const styles = StyleSheet.create({
   },
   usdExchangeInput: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#93C5FD',
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    fontSize: 14,
+    height: 44,
+    fontSize: 15,
+    fontFamily: fonts.mono,
     fontWeight: '700',
-    color: '#1E3A8A',
+    color: colors.ink,
   },
   fetchRateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    gap: 6,
+    backgroundColor: colors.ink,
+    paddingHorizontal: 14,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
   },
   fetchRateBtnText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#2563EB',
+    fontFamily: fonts.mono,
+    color: colors.accent,
   },
   usdConvertedHint: {
     fontSize: 11,
+    fontFamily: fonts.mono,
     fontWeight: '600',
-    color: '#1E40AF',
+    color: '#1F7A52',
     marginTop: 2,
     lineHeight: 16,
   },
   splitBanner: {
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: 14,
+    backgroundColor: '#FEF3C7',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 18,
     padding: 14,
     marginBottom: 16,
   },
@@ -1784,29 +1632,34 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   splitTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#92400E',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   splitBadge: {
-    backgroundColor: '#F59E0B',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 6,
+    backgroundColor: colors.ink,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
   },
   splitBadgeText: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    fontWeight: '700',
+    fontFamily: fonts.mono,
+    color: colors.accent,
   },
   splitSubtitle: {
     fontSize: 12,
-    color: '#B45309',
+    fontFamily: fonts.thai,
+    color: colors.ink,
     marginTop: 2,
     lineHeight: 16,
   },
@@ -1814,47 +1667,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#D97706',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
+    backgroundColor: colors.ink,
+    height: 44,
+    borderRadius: radii.pill,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
   },
   applySplitButtonText: {
-    color: '#FFFFFF',
+    color: colors.accent,
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: fonts.thaiBold,
   },
   inputDisabled: {
-    backgroundColor: '#F1F5F9',
-    borderColor: '#E2E8F0',
-    color: '#64748B',
+    backgroundColor: '#EAF3EE',
+    color: colors.muted,
   },
   minimalLockBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#EAF3EE',
+    borderWidth: 1.5,
+    borderColor: colors.ink,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: radii.pill,
   },
   minimalLockBadgeText: {
     fontSize: 10,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: '700',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   minimalDcaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
+    backgroundColor: '#EAF3EE',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 14,
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 10,
     marginTop: -4,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   minimalDcaLeft: {
     flexDirection: 'row',
@@ -1864,13 +1721,14 @@ const styles = StyleSheet.create({
   },
   minimalDcaText: {
     fontSize: 12,
-    color: '#334155',
-    fontWeight: '500',
+    color: colors.ink,
+    fontFamily: fonts.thaiBold,
+    fontWeight: '700',
   },
   secondaryActionRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 10,
+    marginTop: 8,
   },
   sellButton: {
     flex: 1,
@@ -1878,16 +1736,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: 14,
-    paddingVertical: 12,
+    backgroundColor: '#EAF3EE',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: radii.pill,
+    height: 46,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   sellButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#D97706',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   deleteButtonRedSmall: {
     flex: 1,
@@ -1895,16 +1759,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: 14,
-    paddingVertical: 12,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: radii.pill,
+    height: 46,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   deleteButtonRedSmallText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#DC2626',
+    fontFamily: fonts.thaiBold,
+    color: colors.lossOnLight,
   },
 });
 
