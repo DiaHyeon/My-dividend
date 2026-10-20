@@ -59,3 +59,8 @@ scratch/
 # presentation & course materials
 Low-code/
 
+# Design bundles, HTML prototypes & calm docs
+calm-bundle/
+docs/calm/
+*.html
+
