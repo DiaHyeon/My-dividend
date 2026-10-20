@@ -1488,27 +1488,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </View>
 
         {/* Minimal Passive Income Goal Card */}
-        <View style={styles.goalCard}>
+        <Card shadow="md" padding={14} style={{ marginTop: 16, marginBottom: 16 }}>
           <View style={styles.goalHeaderRow}>
             <View style={styles.goalTitleLeft}>
               <View style={styles.goalIconCircle}>
-                <Ionicons name="flag" size={16} color="#059669" />
+                <Ionicons name="flag" size={16} color={colors.ink} />
               </View>
-              <View>
-                <Text style={styles.goalTitle}>
+              <View style={{ flex: 1 }}>
+                <CalmText variant="bodyBold" size={14} color={colors.ink}>
                   {currentGoalPreset ? currentGoalPreset.label : 'เป้าหมายกระแสเงินสด'}
-                </Text>
-                <Text style={styles.goalSubtitle} numberOfLines={1} ellipsizeMode="tail">
+                </CalmText>
+                <CalmText variant="monoRegular" size={12} color={colors.muted} numberOfLines={1} ellipsizeMode="tail">
                   ทำได้ {formatMoney(monthlyAvgInflow, 0)} จากเป้า {formatMoney(monthlyGoal, 0)} / เดือน
-                </Text>
+                </CalmText>
               </View>
             </View>
             <TouchableOpacity
               style={styles.goalSettingsBtn}
               onPress={() => setIsGoalModalVisible(true)}
               activeOpacity={0.7}
+              accessibilityLabel="ตั้งค่าเป้าหมาย"
             >
-              <Ionicons name="settings-outline" size={18} color="#64748B" />
+              <Ionicons name="settings-outline" size={18} color={colors.ink} />
             </TouchableOpacity>
           </View>
 
@@ -1517,23 +1518,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <View
               style={[
                 styles.goalProgressBarFill,
-                { width: `${goalProgressPercent}%` },
-                goalProgressPercent >= 100 && styles.goalProgressBarComplete,
+                { width: `${Math.min(100, goalProgressPercent)}%` },
               ]}
             />
           </View>
 
           <View style={styles.goalFooterRow}>
-            <Text style={styles.goalPercentText}>
+            <CalmText variant="mono" size={12} color={colors.ink}>
               {goalProgressPercent.toFixed(1)}% สำเร็จ
-            </Text>
-            <Text style={styles.goalRemainingText} numberOfLines={1} ellipsizeMode="tail">
+            </CalmText>
+            <CalmText variant="monoRegular" size={12} color={colors.muted} numberOfLines={1} ellipsizeMode="tail">
               {goalProgressPercent >= 100
                 ? '🎉 พิชิตเป้าหมายแล้ว!'
                 : `ขาดอีก ${formatMoney(goalRemaining, 0)}/ด. จะถึงเป้าหมาย`}
-            </Text>
+            </CalmText>
           </View>
-        </View>
+        </Card>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -2573,20 +2573,6 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     fontWeight: '600',
   },
-  goalCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-  },
   goalHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2602,57 +2588,34 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: colors.accent,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  goalTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  goalSubtitle: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#64748B',
-    marginTop: 1,
-    minHeight: 16,
   },
   goalSettingsBtn: {
     padding: 6,
   },
   goalProgressBarBg: {
-    height: 8,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 4,
+    height: 12,
+    backgroundColor: colors.track,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.ink,
     overflow: 'hidden',
     marginTop: 14,
     marginBottom: 8,
   },
   goalProgressBarFill: {
     height: '100%',
-    backgroundColor: '#059669',
-    borderRadius: 4,
-  },
-  goalProgressBarComplete: {
-    backgroundColor: '#10B981',
+    backgroundColor: colors.accent,
+    borderRadius: 999,
   },
   goalFooterRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  goalPercentText: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  goalRemainingText: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#64748B',
-    minHeight: 16,
   },
   topAssetRightSub: {
     flexDirection: 'row',

@@ -308,17 +308,40 @@
 
 ---
 
-## 14. ขั้นตอนต่อไป
+## 14. การดำเนินการขั้นตอนที่ 2G-0: ปรับการ์ดเป้าหมาย Passive Income บน Dashboard (`Dashboard.tsx`)
 
-พร้อมเข้าสู่ **ขั้นตอนที่ 2G** ตาม [PLAN.md](file:///c:/Users/lenovo/Documents/My%20dividend/docs/calm/PLAN.md):
-- **2G-0**: การ์ดเป้าหมาย Passive Income บน Dashboard (`Dashboard.tsx`)
-  - ใช้ `<Card shadow="md" padding={14}>`
-  - แถบ Progress หนา 12px ขอบมน 999 มีกรอบ `borderWidth: 2, borderColor: colors.ink` และ fill `colors.accent`
-  - ข้อความสถิติและเป้าหมายด้วย `<CalmText>` tokens
-- **2G-1**: `AdjustDividendModal.tsx`
-- **2G-2**: `AnnualComparisonSheet.tsx`
-- **2G-3**: `GoalSettingsModal.tsx`
-- **2G-4**: `CategoryBreakdownModal.tsx` (คงสีชิ้นโดนัทตามหมวดหมู่เดิม)
+- **ไฟล์ที่แก้ไข**: `src/screens/Dashboard.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **การ์ดคอนเทนเนอร์ (Goal Card Container)**:
+     - ห่อหุ้มด้วย `<Card shadow="md" padding={14} style={{ marginTop: 16, marginBottom: 16 }}>` สไตล์ Calm Mint
+     - ขจัดเงาและกรอบเดิมของ `styles.goalCard` ออกทั้งหมด
+  2. **หัวข้อและไอคอนเป้าหมาย (Goal Header)**:
+     - ไอคอนธง: วงกลมขนาด 32x32 พื้นหลัง `colors.accent`, ขอบ 1.5px `colors.ink`, ไอคอนธงสี `colors.ink`
+     - หัวข้อเป้าหมาย: `<CalmText variant="bodyBold" size={14} color={colors.ink}>`
+     - คำอธิบายความคืบหน้า: `<CalmText variant="monoRegular" size={12} color={colors.muted}>`
+     - ปุ่มตั้งค่าเป้าหมาย (Settings Button): ไอคอนรูปฟันเฟืองสี `colors.ink` พร้อม `accessibilityLabel="ตั้งค่าเป้าหมาย"`
+  3. **แถบความคืบหน้า (Progress Bar)**:
+     - ปรับแถบ Progress Bar ให้หนา 12px ขอบมน 999 (`height: 12, borderRadius: 999`)
+     - กรอบขอบหนา 2px `borderColor: colors.ink` พร้อมรางพื้นหลัง `backgroundColor: colors.track`
+     - แถบความคืบหน้าภายใน: สี `colors.accent` ขอบมน 999 สไตล์เดียวกับหมวดหมู่ใน Step 2B
+  4. **แถวสรุปด้านล่าง (Footer Row)**:
+     - สถิติเปอร์เซ็นต์: `<CalmText variant="mono" size={12} color={colors.ink}>`
+     - ข้อความขาดอีก/พิชิตเป้าหมายแล้ว: `<CalmText variant="monoRegular" size={12} color={colors.muted}>`
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+---
+
+## 15. ขั้นตอนต่อไป
+
+พร้อมเข้าสู่ **ขั้นตอนที่ 2G-1**:
+- ปรับ Modal ปรับปรุงเงินปันผล `src/components/AdjustDividendModal.tsx`
+  - ใช้ `<SheetFrame title="..." onClose={handler}>`
+  - ห่อด้วย `KeyboardAvoidingView` ชั้นนอกสุดภายใน `<Modal>` เนื่องจากมี input fields
+  - ช่องกรอก: ใช้ `inputStyle` จาก Calm tokens (คง props คีย์บอร์ดและ validation เดิม)
+  - ปุ่มหลัก: `<CapsuleButton variant="ink">`, ปุ่มรอง: `<CapsuleButton variant="surface">`
+
 
 
 
