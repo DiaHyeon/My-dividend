@@ -731,6 +731,27 @@
   - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
   - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
 
+---
+
+## 16. ผลการดำเนินการแปลงรายละเอียดปันผลรายเดือนเป็น Bottom Sheet Modal ตาม 04-chart-12m-modal.html
+
+- **ไฟล์ที่แก้ไข**: `src/screens/Dashboard.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **ย้ายการแสดงผลรายการปันผลรายเดือนออกจาก In-line Card**:
+     - หน้า Overview ไม่มีการยืดหดหรือดันคอนเทนต์ลงด้านล่างเมื่อแตะแท่งกราฟ การ์ดคงรูปทรงกะทัดรัดสง่างาม
+  2. **สร้าง Bottom Sheet Modal สไตล์ Calm Mint ด้วย `<SheetFrame>`**:
+     - เมื่อแตะแท่งกราฟเดือนใดก็ตาม จะเปิด Bottom Sheet สไลด์ขึ้นมาจากด้านล่างพร้อมเงาดำ Scrim ด้านหลัง
+     - **Header**: แสดงชื่อเดือนและปี (เช่น `ต.ค. 2026`) ฟอนต์ Display 24px พร้อมป้าย `<Pill kind="accent" size="sm" label="เดือนปัจจุบัน">` และปุ่มกากบาททรงกลม 44px ขอบหมึกหนา 2px
+     - **Subheader**: แสดงยอดรวมเดือนขนาดใหญ่ 36px (`฿...`) คู่กับสรุปยอด `รับแล้ว ฿... · รอรับ ฿...` (ฟอนต์ `JetBrains Mono` 11px)
+     - **Dashed Divider**: เส้นประคั่นสีเงา `#A9CDB9`
+     - **Items List**: รายชื่อหุ้น/กองทุน/เงินฝาก แสดงด้วย `JetBrains Mono` 16px พร้อมชุดป้ายสถานะ `Dividend` / `Interest`, `Received` / `รอรับ`, `Special`, ยอดเงินสุทธิ (บาท และ USD) และไอคอนลูกศร `chevron-forward`
+     - **Interaction**: แตะที่แต่ละรายการเพื่อเปิด `AdjustDividendModal` ปรับแก้ DPU / ทำเครื่องหมายพิเศษได้ตามเดิม 100%
+     - **Footer**: ข้อความแนะนำ "แตะรายการเพื่อปรับยอดหรือทำเครื่องหมายพิเศษ" กึ่งกลางล่าง
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+
 
 
 

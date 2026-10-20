@@ -1473,107 +1473,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 >
                   แตะแท่งกราฟเพื่อดูรายการปันผลรายเดือน
                 </CalmText>
-
-                {/* Selected Month Detail Pop-out */}
-                {activeMonthData && activeMonthData.amount > 0 && (
-                <View style={styles.selectedMonthDetails}>
-                  <View style={styles.selectedMonthHeader}>
-                    <Ionicons name="calendar-outline" size={18} color={colors.ink} />
-                    <CalmText variant="display" size={22} color={colors.ink}>
-                      รายละเอียดปันผลเดือน {activeMonthData.monthName}: {formatMoney(activeMonthData.amount)}
-                    </CalmText>
-                  </View>
-                  {activeMonthData.details.map((d, idx) => (
-                    <View key={idx}>
-                      {idx > 0 && <DashedDivider marginVertical={4} />}
-                      <TouchableOpacity
-                        style={styles.detailRow}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          setSelectedScheduleForAdjust({
-                            scheduleId: d.scheduleId,
-                            assetId: d.assetId,
-                            symbol: d.symbol,
-                            dpu: d.dpu,
-                            shares: d.shares,
-                            netAmount: d.netAmount,
-                            xdDate: d.xdDate,
-                            isInterest: d.isInterest,
-                            currency: d.currency,
-                            taxRate: d.taxRate,
-                            isProjected: d.isProjected,
-                            exchangeRate,
-                          });
-                          setIsAdjustModalVisible(true);
-                        }}
-                      >
-                        <View style={styles.detailRowLeft}>
-                          <View style={styles.detailSymbolRow}>
-                            <CalmText variant="mono" size={14} color={colors.ink}>
-                              {d.symbol}
-                            </CalmText>
-                            <Pill
-                              kind={d.isInterest ? 'outline' : 'accent'}
-                              size="sm"
-                              label={d.isInterest ? 'ดอกเบี้ย' : 'ปันผล'}
-                            />
-                            {d.isSpecial && (
-                              <Pill
-                                kind="dashed"
-                                size="sm"
-                                label="ปันผลพิเศษ"
-                              />
-                            )}
-                            {d.isProjected === false && (
-                              <Pill
-                                kind="ink"
-                                size="sm"
-                                label="ได้รับแล้ว"
-                              />
-                            )}
-                            {d.isInterest && d.daysInfo ? (
-                              <Pill
-                                kind="outline"
-                                size="sm"
-                                label={d.isPartialCycle ? `🕒 ${d.daysInfo}` : d.daysInfo}
-                              />
-                            ) : null}
-                          </View>
-                          <CalmText variant="monoRegular" size={11} color={colors.muted}>
-                            {d.isInterest
-                              ? `ยอดเงินฝาก ${formatMoney(d.shares, 0)} • จ่ายเข้า ${d.xdDate}`
-                              : d.currency === 'USD'
-                              ? `${isPrivateMode ? '••••' : d.shares.toLocaleString()} หุ้น × $${d.dpu.toFixed(4)} (~฿${(d.dpu * (exchangeRate || 34.0)).toFixed(2)}) (XD: ${d.xdDate})`
-                              : `${isPrivateMode ? '••••' : d.shares.toLocaleString()} หุ้น × ฿${d.dpu.toFixed(4)} (XD: ${d.xdDate})`}
-                          </CalmText>
-                        </View>
-                        <View style={styles.detailRowRight}>
-                          {d.currency === 'USD' ? (
-                            <>
-                              <Text style={styles.detailAmount}>
-                                {isPrivateMode ? '฿••••••' : `$${(d.shares * d.dpu * (1 - (d.taxRate || 0))).toFixed(2)}`}
-                              </Text>
-                              <Text style={styles.detailSubAmount}>
-                                {formatMoney(d.netAmount)}
-                              </Text>
-                            </>
-                          ) : (
-                            <Text style={styles.detailAmount}>
-                              {formatMoney(d.netAmount)}
-                            </Text>
-                          )}
-                          <View style={styles.detailActionIndicator}>
-                            <CalmText variant="monoRegular" size={10} color={colors.muted}>ปรับยอด</CalmText>
-                            <Ionicons name="pencil" size={10} color={colors.muted} />
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </>
-          )}
+              </>
+            )}
           </Card>
         </View>
 
@@ -1884,6 +1785,144 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </ScrollView>
         </SheetFrame>
       </Modal>
+
+      {/* 13. Modal: รายละเอียดปันผลรายเดือน (ตามแบบ 04-chart-12m-modal.html) */}
+      <Modal
+        visible={selectedMonth !== null && !!activeMonthData && activeMonthData.amount > 0}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedMonth(null)}
+      >
+        <SheetFrame
+          title={
+            activeMonthData
+              ? `${activeMonthData.monthName} ${selectedYear === 'ROLLING' ? new Date().getFullYear() : selectedYear}`
+              : ''
+          }
+          onClose={() => setSelectedMonth(null)}
+        >
+          {activeMonthData && (
+            <View>
+              {activeMonthData.isCurrent && (
+                <View style={{ marginTop: 4, marginBottom: 2 }}>
+                  <Pill kind="accent" size="sm" label="เดือนปัจจุบัน" />
+                </View>
+              )}
+
+              {/* Subheader: Month Total Amount & Received vs Pending */}
+              <View style={styles.monthSheetSubheaderRow}>
+                <CalmText variant="display" size={36} color={colors.ink}>
+                  {formatMoney(activeMonthData.amount)}
+                </CalmText>
+                <CalmText variant="monoRegular" size={11} color={colors.ink}>
+                  {(() => {
+                    const received = activeMonthData.details
+                      .filter((d) => d.isProjected === false)
+                      .reduce((sum, d) => sum + d.netAmount, 0);
+                    const pending = activeMonthData.details
+                      .filter((d) => d.isProjected !== false)
+                      .reduce((sum, d) => sum + d.netAmount, 0);
+                    if (received > 0 && pending > 0) {
+                      return `รับแล้ว ${formatMoney(received)} · รอรับ ${formatMoney(pending)}`;
+                    } else if (received > 0) {
+                      return `รับแล้วทั้งหมด ${formatMoney(received)}`;
+                    } else {
+                      return `รอรับ ${formatMoney(pending)}`;
+                    }
+                  })()}
+                </CalmText>
+              </View>
+
+              <DashedDivider color={colors.shadow} marginVertical={8} />
+
+              {/* List of items */}
+              <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+                {activeMonthData.details.map((d, idx) => (
+                  <View key={idx}>
+                    {idx > 0 && <DashedDivider color={colors.shadow} marginVertical={4} />}
+                    <TouchableOpacity
+                      style={styles.monthSheetItemRow}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setSelectedScheduleForAdjust({
+                          scheduleId: d.scheduleId,
+                          assetId: d.assetId,
+                          symbol: d.symbol,
+                          dpu: d.dpu,
+                          shares: d.shares,
+                          netAmount: d.netAmount,
+                          xdDate: d.xdDate,
+                          isInterest: d.isInterest,
+                          currency: d.currency,
+                          taxRate: d.taxRate,
+                          isProjected: d.isProjected,
+                          exchangeRate,
+                        });
+                        setIsAdjustModalVisible(true);
+                      }}
+                    >
+                      <View style={{ flex: 1, paddingRight: 12 }}>
+                        <CalmText variant="mono" size={16} color={colors.ink}>
+                          {d.symbol}
+                        </CalmText>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                          <Pill
+                            kind={d.isInterest ? 'outline' : 'accent'}
+                            size="sm"
+                            label={d.isInterest ? 'Interest' : 'Dividend'}
+                          />
+                          {d.isSpecial && (
+                            <Pill kind="dashed" size="sm" label="Special" />
+                          )}
+                          {d.isProjected === false ? (
+                            <Pill kind="ink" size="sm" label="Received" />
+                          ) : (
+                            <Pill kind="outline" size="sm" label="รอรับ" />
+                          )}
+                          {d.isInterest && d.daysInfo ? (
+                            <Pill kind="outline" size="sm" label={d.isPartialCycle ? `🕒 ${d.daysInfo}` : d.daysInfo} />
+                          ) : null}
+                        </View>
+                        <CalmText variant="monoRegular" size={11} color={colors.muted} style={{ marginTop: 4 }}>
+                          {d.isInterest
+                            ? `เงินฝาก ${formatMoney(d.shares, 0)} • จ่าย ${d.xdDate}`
+                            : d.currency === 'USD'
+                            ? `${isPrivateMode ? '••••' : d.shares.toLocaleString()} หุ้น × $${d.dpu.toFixed(4)} (XD: ${d.xdDate})`
+                            : `${isPrivateMode ? '••••' : d.shares.toLocaleString()} หุ้น × ฿${d.dpu.toFixed(4)} (XD: ${d.xdDate})`}
+                        </CalmText>
+                      </View>
+
+                      <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 8 }}>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <CalmText variant="mono" size={15} color={colors.ink}>
+                            {formatMoney(d.netAmount)}
+                          </CalmText>
+                          {d.currency === 'USD' && (
+                            <CalmText variant="monoRegular" size={11} color={colors.muted}>
+                              {isPrivateMode ? '$••••' : `$${(d.shares * d.dpu * (1 - (d.taxRate || 0))).toFixed(2)}`}
+                            </CalmText>
+                          )}
+                        </View>
+                        <Ionicons name="chevron-forward" size={18} color={colors.ink} />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+
+              {/* Hint below list */}
+              <CalmText
+                variant="monoRegular"
+                size={11}
+                color={colors.muted}
+                style={{ textAlign: 'center', marginTop: 12 }}
+              >
+                แตะรายการเพื่อปรับยอดหรือทำเครื่องหมายพิเศษ
+              </CalmText>
+            </View>
+          )}
+        </SheetFrame>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -2158,58 +2197,19 @@ const styles = StyleSheet.create({
     aspectRatio: 326 / 244,
     position: 'relative',
   },
-  selectedMonthDetails: {
-    marginTop: 14,
-    padding: 14,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: colors.ink,
-  },
-  selectedMonthHeader: {
+  monthSheetSubheaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginTop: 6,
+    marginBottom: 4,
   },
-  detailRow: {
+  monthSheetItemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
-    minHeight: 44,
-  },
-  detailRowLeft: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  detailSymbolRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 4,
-  },
-  detailAmount: {
-    fontSize: 14,
-    fontFamily: fonts.mono,
-    color: colors.ink,
-  },
-  detailSubAmount: {
-    fontSize: 11,
-    fontFamily: fonts.monoRegular,
-    color: colors.muted,
-    marginTop: 1,
-  },
-  detailRowRight: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  detailActionIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    marginTop: 2,
+    paddingVertical: 10,
+    minHeight: 48,
   },
   assetCard: {
     backgroundColor: '#FFFFFF',
