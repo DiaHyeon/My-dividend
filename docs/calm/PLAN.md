@@ -494,16 +494,16 @@
 
 ---
 
-# Phase 4 — Holdings & Transactions Screen (`AssetsScreen.tsx` & `AssetSparklineCard.tsx`)
+# Phase 4 — Holdings & Transactions Screen (`AssetsScreen.tsx` & `AssetSparklineCard.tsx`) — ✅ 100% COMPLETE
 
 > **ไฟล์ต้นแบบ**:
 > 1. `calm-bundle/design/calm/05-holdings.html` (หน้าถือครองหลัก Tab คงเหลือ)
 > 2. `calm-bundle/design/calm/06-holdings-sort-sheet.html` (Bottom Sheet เรียงลำดับ)
 > 3. `calm-bundle/add,holding/Calm – Holdings (ประวัติรายการ)-html/CalmHistory.dc.html` (หน้าประวัติธุรกรรม Tab ประวัติ)
 
-## Execution Steps (4A → 4E)
+## Execution Steps (4A → 4E) — ✅ ALL COMPLETED
 
-### 4A — Header & Mode Switcher (`AssetsScreen.tsx`)
+### ✅ 4A — Header & Mode Switcher (`AssetsScreen.tsx`) [Commit `3cf5049`]
 - พื้นหลังหน้าจอเปลี่ยนเป็น `colors.bg` (`#EAF3EE`)
 - หัวข้อหน้า: `สินทรัพย์\n& ธุรกรรม` ฟอนต์ Bricolage Grotesque / Noto Sans Thai ขนาด 34px หนา 800 ชิดซ้าย
 - ปุ่ม Actions ด้านขวา:
@@ -514,36 +514,38 @@
   - แคปซูลรางยาวขอบเข้ม บรรจุ 2 แท็บ: `คงเหลือ (X)` และ `ประวัติ (X)`
   - แท็บที่เลือกมีพื้นหลัง `#123D2A` ข้อความ `#6FCDA8` มุมโค้งมน 999px
 
-### 4B — Search, Sort & Filter Bar (`AssetsScreen.tsx`)
+### ✅ 4B — Search, Sort & Filter Bar (`AssetsScreen.tsx`) [Commit `e9aba52`]
 - แถบค้นหา & ปุ่มเรียงลำดับ (แนวนอนคู่กันตาม `05-holdings.html#L26-L32`):
-  - ฝั่งซ้าย: ช่องค้นหาแคปซูลขอบเข้ม 2px เงาเขียวมิ้นต์ 3px `#A9CDB9` ไอคอนแว่นขยาย placeholder `ค้นหาหุ้น กองทุน บัญชี`
-  - ฝั่งขวา: ปุ่มเรียงลำดับแคปซูลสีเข้ม `#123D2A` ข้อความ `#6FCDA8` เช่น `มูลค่า ▼`
+  - ฝั่งซ้าย: ช่องค้นหาแคปซูลขอบเข้ม 2px ไอคอนแว่นขยาย placeholder
+  - ฝั่งขวา: ปุ่มเรียงลำดับแคปซูลสีพื้นผิว `#FBFFFD` ขอบเข้ม `#123D2A` ข้อความ `มูลค่า ▼`
 - Bottom Sheet เรียงลำดับ (`06-holdings-sort-sheet.html`):
   - ใช้ `SheetFrame` แสดงรายการ: `มูลค่าสูงสุด`, `กำไรสูงสุด`, `ขาดทุนมากสุด`, `A-Z`
-  - ตัวเลือกที่ถูกเลือกมีพื้นหลังสีเขียวมิ้นต์ `#6FCDA8` พร้อมวงกลมเช็คถูกสีเข้ม `#123D2A`
+  - ตัวเลือกที่ถูกเลือกมีพื้นหลังไฮไลต์ `#EAF3EE` ขอบเข้ม พร้อมวงกลมเช็คถูกสีเขียวมิ้นต์
 - ตัวกรองหมวดหมู่แคปซูล: `ทั้งหมด`, `หุ้น`, `กองทุน`, `เงินฝาก`
 
-### 4C — Holdings Summary Banner (`AssetsScreen.tsx`)
+### ✅ 4C — Holdings Summary Banner (`AssetsScreen.tsx`) [Commit `47df638`]
 - การ์ดสรุปมูลค่ารวมตาม `05-holdings.html#L41-L47`:
-  - การ์ดพื้นขาว `#FBFFFD` ขอบเข้ม 2px เงาเขียวมิ้นต์ 4px `#A9CDB9` รัศมี 26px
+  - การ์ด `<Card variant="surface">` พื้นขาว `#FBFFFD` ขอบเข้ม 2px เงาเขียวมิ้นต์ 4px `#A9CDB9` รัศมี 26px
   - ฝั่งซ้าย: ป้ายกำกับ `มูลค่ารวม (X รายการ)` (10px JetBrains Mono) + ยอดเงินรวม 28px Bricolage Grotesque
-  - ฝั่งขวา: ป้ายแคปซูลกำไร/ขาดทุน `#123D2A` ข้อความ `#6FCDA8` แสดง `+฿190 (0.3%)`
+  - ฝั่งขวา: ป้ายแคปซูลกำไร/ขาดทุน `#123D2A` ข้อความ `#6FCDA8` (หรือ `#F5A593`) แสดง `+฿190 (0.3%)`
 
-### 4D — Asset Holdings Cards (`AssetSparklineCard.tsx`)
-- การ์ดพื้นขาว `#FBFFFD` ขอบเข้ม 2px เงาเขียวมิ้นต์ 6px `#A9CDB9` รัศมี 26px ตาม `05-holdings.html#L49-L74`:
-  - แถวที่ 1: ชื่อหุ้น Symbol 26px Bricolage + ป้าย `USD $` ทางซ้าย, ป้ายแคปซูล `แก้ไข` ทางขวา
-  - แถวที่ 2: มูลค่าตลาด 32px Bricolage ทางซ้าย, กำไร/ขาดทุน `+฿151.20 (+1.4%)` 12px mono ทางขวา
-  - เส้นคั่น: เส้นประ `#A9CDB9`
+### ✅ 4D — Asset Holdings Cards (`AssetSparklineCard.tsx`) [Commit `0e1eb4f`]
+- การ์ดห่อด้วย `<HardShadow size="md" radius={26}>` พื้นขาว `#FBFFFD` ขอบเข้ม 2px เงาเขียวมิ้นต์ 4px `#A9CDB9` ตาม `05-holdings.html#L49-L74`:
+  - แถวที่ 1: ชื่อหุ้น Symbol 24px Bricolage + ป้าย `USD $` ทางซ้าย, ป้ายแคปซูล `แก้ไข` ทางขวา
+  - แถวที่ 2: มูลค่าตลาด 28px Bricolage ทางซ้าย, กำไร/ขาดทุน `+฿151.20 (+1.4%)` 12px mono ทางขวา
+  - เส้นคั่น: เส้นประ `DashedDivider` (`#A9CDB9`)
   - แถวที่ 3 (สถิติ 3 ช่อง): `จำนวนที่ถือ` | `ต้นทุน` | `ราคาตลาด` ฟอนต์ mono
-  - เส้นคั่น: เส้นประ `#A9CDB9`
+  - เส้นคั่น: เส้นประ `DashedDivider` (`#A9CDB9`)
   - แถวที่ 4 (กราฟ 7 วัน): แถบข้อความ `7 DAYS` พร้อม % เปลี่ยนแปลง + กราฟพื้นที่ Sparkline สไตล์ Calm Mint
 
-### 4E — Transaction History View (`AssetsScreen.tsx`)
+### ✅ 4E — Transaction History View (`AssetsScreen.tsx`) [Commit `8f9d37e`]
 - ปรับเลย์เอาต์ตาม `CalmHistory.dc.html`:
-  - แถบตัวกรองแคปซูล 3 มิติ: `ทุกปี ▼` | `ทุกเดือน ▼` | `ทุกประเภท ▼`
-  - การ์ดสรุปธุรกรรม: `ยอดเงินธุรกรรมรวม (ทุกปี / ทุกเดือน)` ขนาด 30px Bricolage พร้อมป้ายแคปซูลสีเข้ม `X รายการ`
+  - แถบตัวกรองแคปซูล 44px: `ทุกปี ▼` | `ทุกเดือน ▼` | `ทุกประเภท ▼` (พื้นผิว `#FBFFFD` ขอบ 2px `#123D2A`)
+  - การ์ดสรุปธุรกรรม: `ยอดเงินธุรกรรมรวม (ทุกปี / ทุกเดือน)` ขนาด 28px Bricolage พร้อมป้ายแคปซูลสีเข้ม `X รายการ`
   - การ์ดประวัติแต่ละไม้:
-    - แถวบน: วันที่ทำรายการ (เช่น `20 ต.ค. 2569`) ทางซ้าย, ป้ายประเภท `ซื้อ (BUY)` สีมิ้นต์ หรือ `ขาย (SELL)` สีส้ม ทางขวา พร้อมปุ่มกลมแก้ไข
-    - เส้นประคั่น `#A9CDB9`
-    - แถวล่าง: ชื่อหุ้น Symbol ขนาด 24px + จำนวนหุ้น @ ต้นทุน ทางซ้าย, `มูลค่ารายการ` + ยอดเงิน 24px ชิดขวา
+    - แถวบน: วันที่ทำรายการ (เช่น `20 ต.ค. 2569`) ทางซ้าย, ป้ายประเภท `ซื้อ (BUY)` สีมิ้นต์ หรือ `ขาย (SELL)` สีส้ม ทางขวา พร้อมปุ่มกลมแก้ไข 34x34px
+    - เส้นประคั่น `DashedDivider`
+    - แถวล่าง: ชื่อหุ้น Symbol ขนาด 22px Bricolage + จำนวนหุ้น @ ต้นทุน ทางซ้าย, `มูลค่ารายการ` + ยอดเงิน 22px Bricolage ชิดขวา
+  - ตัวเลือกตัวกรองปี/เดือน/ประเภท: ปรับมาใช้ `<SheetFrame>` ทั้งหมดเพื่อความกลมกลืนแบบ Calm Mint 100%
+
 
