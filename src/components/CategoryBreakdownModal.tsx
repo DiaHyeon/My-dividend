@@ -20,6 +20,12 @@ import {
 } from '../services/sectorService';
 import { THAI_SAVINGS_TAX_FREE_LIMIT, detectCashFrequency } from '../services/taxService';
 import { usePrivacyMode } from '../services/privacyService';
+import { SheetFrame } from './ui/SheetFrame';
+import { Pill } from './ui/Pill';
+import { Card } from './ui/Card';
+import { CalmText } from './ui/CalmText';
+import { DashedDivider } from './ui/DashedDivider';
+import { colors, fonts } from '../theme/tokens';
 
 interface CategoryBreakdownModalProps {
   visible: boolean;
@@ -41,7 +47,7 @@ interface SegmentGroup {
   assets: AssetSummary[];
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const getShortSegmentLabel = (label: string): string => {
   if (label.includes('เทคโนโลยี')) return 'เทคโนโลยี';
@@ -228,7 +234,7 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
       segmentLabel: group.definition.label,
       segmentColor: group.definition.color,
       strokeWidth: 2,
-      strokeColor: '#0F172A',
+      strokeColor: colors.ink,
       focused: isSelected,
       onPress: () => {
         setSelectedSegmentId(isSelected ? null : group.definition.id);
@@ -244,11 +250,11 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
 
     pieData.push({
       value: Math.max(0.1, roundedOther),
-      color: '#64748B',
+      color: colors.muted,
       segmentLabel: 'อื่นๆ',
-      segmentColor: '#94A3B8',
+      segmentColor: colors.muted,
       strokeWidth: 2,
-      strokeColor: '#0F172A',
+      strokeColor: colors.ink,
       focused: isOtherSelected,
       isOther: true,
       onPress: () => {
@@ -264,307 +270,294 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
       transparent={true}
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.sheetContainer}>
-          {/* Header */}
-          <View style={styles.sheetHeader}>
-            <View style={styles.headerTitleRow}>
-              <View style={[styles.categoryIconCircle, { backgroundColor: categoryColor + '18' }]}>
-                <Ionicons name={categoryIcon} size={22} color={categoryColor} />
-              </View>
-              <View style={styles.titleTextContainer}>
-                <Text style={styles.sheetTitle}>{categoryLabel}</Text>
-                <Text style={styles.sheetSubtitle}>
-                  {categoryType === 'STOCKS'
-                    ? 'สัดส่วนตามกลุ่มอุตสาหกรรม (Sectors)'
-                    : categoryType === 'FUNDS'
-                    ? 'สัดส่วนตามประเภทกองทุน (Categories)'
-                    : 'สัดส่วนตามประเภทบัญชีเงินฝาก'}
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              onPress={onClose}
-              style={styles.closeButton}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="close" size={24} color="#64748B" />
-            </TouchableOpacity>
-          </View>
+      <SheetFrame title={categoryLabel} onClose={onClose}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+          <Ionicons name={categoryIcon} size={16} color={colors.ink} />
+          <CalmText variant="monoRegular" size={12} color={colors.muted}>
+            {categoryType === 'STOCKS'
+              ? 'สัดส่วนตามกลุ่มอุตสาหกรรม (Sectors)'
+              : categoryType === 'FUNDS'
+              ? 'สัดส่วนตามประเภทกองทุน (Categories)'
+              : 'สัดส่วนตามประเภทบัญชีเงินฝาก'}
+          </CalmText>
+        </View>
 
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Category Overview Summary Box */}
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>มูลค่ารวม</Text>
-                <Text style={styles.summaryValue}>
+        <ScrollView
+          style={{ maxHeight: SCREEN_HEIGHT * 0.72 }}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Category Overview Summary Box */}
+          <Card shadow="md" padding={14} style={{ marginBottom: 14 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <CalmText variant="monoRegular" size={11} color={colors.muted} style={{ marginBottom: 4 }}>
+                  มูลค่ารวม
+                </CalmText>
+                <CalmText variant="display" size={20} color={colors.ink}>
                   {isPrivateMode
                     ? '฿••••••'
                     : `฿${totalMarketValue.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                </Text>
+                </CalmText>
               </View>
-              <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>
+              <View style={{ width: 1.5, height: 36, backgroundColor: colors.ink }} />
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <CalmText variant="monoRegular" size={11} color={colors.muted} style={{ marginBottom: 4 }}>
                   {categoryType === 'CASH' ? 'จำนวนบัญชี' : 'กำไร/ขาดทุน (P/L)'}
-                </Text>
+                </CalmText>
                 {categoryType === 'CASH' ? (
-                  <Text style={styles.summaryValue}>{categoryAssets.length} บัญชี</Text>
+                  <CalmText variant="display" size={20} color={colors.ink}>
+                    {categoryAssets.length} บัญชี
+                  </CalmText>
                 ) : (
-                  <Text
-                    style={[
-                      styles.summaryValue,
-                      unrealizedPL >= 0 ? styles.profitText : styles.lossText,
-                    ]}
-                  >
-                    {unrealizedPL >= 0 ? '+' : ''}
-                    {unrealizedPLPercent.toFixed(2)}%
-                  </Text>
+                  <Pill
+                    kind={unrealizedPL >= 0 ? 'accent' : 'outline'}
+                    size="md"
+                    label={`${unrealizedPL >= 0 ? '▲ +' : '▼ '}${Math.abs(unrealizedPLPercent).toFixed(2)}%`}
+                  />
                 )}
               </View>
             </View>
+          </Card>
 
-            {/* Thai 20,000 THB Bank Interest Tax Quota Tracker Card (Only for CASH) */}
-            {categoryType === 'CASH' && portfolioTaxSummary && (
-              <View style={styles.taxQuotaCard}>
-                <View style={styles.taxQuotaHeader}>
-                  <View style={styles.taxQuotaTitleRow}>
-                    <Ionicons
-                      name={portfolioTaxSummary.isExceededLimit ? 'alert-circle' : 'shield-checkmark'}
-                      size={18}
-                      color={portfolioTaxSummary.isExceededLimit ? '#D97706' : '#059669'}
-                    />
-                    <Text style={styles.taxQuotaTitle}>เกณฑ์ภาษีดอกเบี้ยเงินฝาก 20,000 บาท/ปี</Text>
-                  </View>
+          {/* Thai 20,000 THB Bank Interest Tax Quota Tracker Card (Only for CASH) */}
+          {categoryType === 'CASH' && portfolioTaxSummary && (
+            <Card shadow="md" padding={14} style={{ marginBottom: 14 }}>
+              <View style={styles.taxQuotaHeader}>
+                <View style={styles.taxQuotaTitleRow}>
+                  <Ionicons
+                    name={portfolioTaxSummary.isExceededLimit ? 'alert-circle' : 'shield-checkmark'}
+                    size={18}
+                    color={colors.ink}
+                  />
+                  <CalmText variant="bodyBold" size={13} color={colors.ink}>
+                    เกณฑ์ภาษีดอกเบี้ยเงินฝาก 20,000 บาท/ปี
+                  </CalmText>
+                </View>
+                <Pill
+                  kind={portfolioTaxSummary.isExceededLimit ? 'dashed' : 'accent'}
+                  size="sm"
+                  label={portfolioTaxSummary.isExceededLimit ? '⚠️ เสียภาษี 15%' : '✅ ปลอดภาษี (0%)'}
+                />
+              </View>
+
+              <CalmText variant="monoRegular" size={11} color={colors.muted} style={{ lineHeight: 16, marginVertical: 8 }}>
+                เกณฑ์กรมสรรพากร: ดอกเบี้ยเงินฝากออมทรัพย์ทุกธนาคารรวมกันตลอดปีไม่เกิน 20,000 บาท ได้รับยกเว้นภาษี (หากเกินจะถูกหัก 15% ตั้งแต่บาทแรก)
+              </CalmText>
+
+              {/* Quota Progress Bar */}
+              <View style={styles.quotaProgressContainer}>
+                <View style={styles.quotaProgressLabelRow}>
+                  <CalmText variant="monoRegular" size={11} color={colors.muted}>
+                    ดอกเบี้ยออมทรัพย์คาดการณ์ทั้งพอร์ต:
+                  </CalmText>
+                  <CalmText variant="mono" size={12} color={colors.ink}>
+                    {isPrivateMode
+                      ? '฿•••••• / ฿20,000'
+                      : `฿${portfolioTaxSummary.totalAnnualGrossInterest.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ฿20,000`}
+                  </CalmText>
+                </View>
+                <View style={styles.quotaTrack}>
                   <View
                     style={[
-                      styles.taxQuotaStatusBadge,
-                      portfolioTaxSummary.isExceededLimit
-                        ? styles.taxQuotaStatusExceeded
-                        : styles.taxQuotaStatusSafe,
+                      styles.quotaBar,
+                      { width: `${Math.min(100, Math.max(0, portfolioTaxSummary.quotaUsedPercent))}%` },
+                      portfolioTaxSummary.isExceededLimit ? styles.quotaBarExceeded : styles.quotaBarSafe,
                     ]}
-                  >
-                    <Text
-                      style={[
-                        styles.taxQuotaStatusText,
-                        portfolioTaxSummary.isExceededLimit
-                          ? styles.taxQuotaStatusTextExceeded
-                          : styles.taxQuotaStatusTextSafe,
-                      ]}
-                    >
-                      {portfolioTaxSummary.isExceededLimit ? '⚠️ เสียภาษี 15%' : '✅ ปลอดภาษี (0%)'}
-                    </Text>
-                  </View>
-                </View>
-
-                <Text style={styles.taxQuotaDescription}>
-                  เกณฑ์กรมสรรพากร: ดอกเบี้ยเงินฝากออมทรัพย์ทุกธนาคารรวมกันตลอดปีไม่เกิน 20,000 บาท ได้รับยกเว้นภาษี (หากเกินจะถูกหัก 15% ตั้งแต่บาทแรก)
-                </Text>
-
-                {/* Quota Progress Bar */}
-                <View style={styles.quotaProgressContainer}>
-                  <View style={styles.quotaProgressLabelRow}>
-                    <Text style={styles.quotaProgressLabel}>ดอกเบี้ยออมทรัพย์คาดการณ์ทั้งพอร์ต:</Text>
-                    <Text style={styles.quotaProgressValue}>
-                      {isPrivateMode
-                        ? '฿•••••• / ฿20,000'
-                        : `฿${portfolioTaxSummary.totalAnnualGrossInterest.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ฿20,000`}
-                    </Text>
-                  </View>
-                  <View style={styles.quotaTrack}>
-                    <View
-                      style={[
-                        styles.quotaBar,
-                        { width: `${Math.min(100, Math.max(0, portfolioTaxSummary.quotaUsedPercent))}%` },
-                        portfolioTaxSummary.isExceededLimit ? styles.quotaBarExceeded : styles.quotaBarSafe,
-                      ]}
-                    />
-                  </View>
-                  <View style={styles.quotaFooterRow}>
-                    <Text style={styles.quotaPercentText}>
-                      ใช้โควตาไป {portfolioTaxSummary.quotaUsedPercent.toFixed(1)}%
-                    </Text>
-                    <Text
-                      style={[
-                        styles.quotaRemainingText,
-                        portfolioTaxSummary.isExceededLimit && styles.quotaRemainingTextExceeded,
-                      ]}
-                    >
-                      {portfolioTaxSummary.isExceededLimit
-                        ? (isPrivateMode
-                            ? 'เกินเพดาน ฿•••••• (ภาษี ฿••••••)'
-                            : `เกินเพดาน ฿${(portfolioTaxSummary.totalAnnualGrossInterest - 20000).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (ภาษี ฿${portfolioTaxSummary.totalTaxAmount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`)
-                        : (isPrivateMode
-                            ? 'คงเหลือโควตาปลอดภาษีอีก ฿••••••'
-                            : `คงเหลือโควตาปลอดภาษีอีก ฿${portfolioTaxSummary.remainingQuota.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Net Annual Highlight Row */}
-                <View style={styles.quotaNetBox}>
-                  <View style={styles.quotaNetRow}>
-                    <Text style={styles.quotaNetLabel}>ดอกเบี้ยรับสุทธิหลังหักภาษีทั้งพอร์ต:</Text>
-                    <Text style={styles.quotaNetValue}>
-                      {isPrivateMode
-                        ? '฿•••••• /ปี'
-                        : `฿${portfolioTaxSummary.totalAnnualNetInterest.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} /ปี`}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {/* Circular Pie Chart Card with White Callout Lines */}
-            <View style={styles.chartCard}>
-              <View style={styles.chartHeader}>
-                <Ionicons name="pie-chart-outline" size={16} color="#34D399" />
-                <Text style={styles.chartTitle}>สัดส่วน Segment (Pie Chart)</Text>
-              </View>
-
-              {segmentGroups.length === 0 ? (
-                <View style={styles.emptyChartBox}>
-                  <Ionicons name="alert-circle-outline" size={32} color="#64748B" />
-                  <Text style={styles.emptyChartText}>ยังไม่มีสินทรัพย์ในหมวดหมู่นี้</Text>
-                </View>
-              ) : (
-                <View style={styles.chartContainer}>
-                  <PieChart
-                    data={pieData}
-                    donut={true}
-                    radius={SCREEN_WIDTH * 0.22}
-                    innerRadius={SCREEN_WIDTH * 0.13}
-                    innerCircleColor="#0F172A"
-                    strokeWidth={2}
-                    strokeColor="#0F172A"
-                    extraRadius={70}
-                    paddingHorizontal={44}
-                    paddingVertical={16}
-                    showExternalLabels={true}
-                    labelLineConfig={{
-                      color: '#FFFFFF',
-                      thickness: 1.5,
-                      length: 22,
-                      tailLength: 12,
-                      avoidOverlappingOfLabels: true,
-                      labelComponentHeight: 30,
-                      labelComponentWidth: 68,
-                      labelComponentMargin: 6,
-                    }}
-                    externalLabelComponent={(item?: any) => {
-                      const shortLabel = getShortSegmentLabel(item?.segmentLabel || '');
-                      const percentText = item?.value !== undefined ? `${item.value}%` : '';
-                      const strokeColor = item?.segmentColor || '#38BDF8';
-                      return (
-                        <SvgG>
-                          <Rect
-                            x={0}
-                            y={-30}
-                            width={68}
-                            height={30}
-                            rx={6}
-                            fill="#0F172A"
-                            stroke={strokeColor}
-                            strokeWidth={1.5}
-                          />
-                          <SvgText
-                            x={34}
-                            y={-17}
-                            fill="#94A3B8"
-                            fontSize={8.5}
-                            fontWeight="600"
-                            textAnchor="middle"
-                          >
-                            {shortLabel}
-                          </SvgText>
-                          <SvgText
-                            x={34}
-                            y={-5}
-                            fill="#FFFFFF"
-                            fontSize={10.5}
-                            fontWeight="bold"
-                            textAnchor="middle"
-                          >
-                            {percentText}
-                          </SvgText>
-                        </SvgG>
-                      );
-                    }}
-                    centerLabelComponent={() => (
-                      <View style={styles.centerLabelContainer}>
-                        <Text style={styles.centerLabelCount}>{segmentGroups.length}</Text>
-                        <Text style={styles.centerLabelSub}>Segments</Text>
-                      </View>
-                    )}
                   />
-                  <Text style={styles.chartNote}>แตะที่ชิ้นพายหรือการ์ดด้านล่างเพื่อโฟกัส</Text>
                 </View>
-              )}
+                <View style={styles.quotaFooterRow}>
+                  <CalmText variant="monoRegular" size={11} color={colors.muted}>
+                    ใช้โควตาไป {portfolioTaxSummary.quotaUsedPercent.toFixed(1)}%
+                  </CalmText>
+                  <CalmText
+                    variant="monoRegular"
+                    size={11}
+                    color={portfolioTaxSummary.isExceededLimit ? colors.lossOnLight : colors.gainOnLight}
+                  >
+                    {portfolioTaxSummary.isExceededLimit
+                      ? (isPrivateMode
+                          ? 'เกินเพดาน ฿•••••• (ภาษี ฿••••••)'
+                          : `เกินเพดาน ฿${(portfolioTaxSummary.totalAnnualGrossInterest - 20000).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (ภาษี ฿${portfolioTaxSummary.totalTaxAmount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`)
+                      : (isPrivateMode
+                          ? 'คงเหลือโควตาปลอดภาษีอีก ฿••••••'
+                          : `คงเหลือโควตาปลอดภาษีอีก ฿${portfolioTaxSummary.remainingQuota.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
+                  </CalmText>
+                </View>
+              </View>
+
+              {/* Net Annual Highlight Row */}
+              <View style={styles.quotaNetBox}>
+                <CalmText variant="bodyBold" size={12} color={colors.ink}>
+                  ดอกเบี้ยรับสุทธิหลังหักภาษีทั้งพอร์ต:
+                </CalmText>
+                <CalmText variant="mono" size={13} color={colors.ink}>
+                  {isPrivateMode
+                    ? '฿•••••• /ปี'
+                    : `฿${portfolioTaxSummary.totalAnnualNetInterest.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} /ปี`}
+                </CalmText>
+              </View>
+            </Card>
+          )}
+
+          {/* Circular Pie Chart Card with White Callout Lines */}
+          <View style={styles.chartCard}>
+            <View style={styles.chartHeader}>
+              <Ionicons name="pie-chart-outline" size={16} color={colors.accent} />
+              <CalmText variant="bodyBold" size={13} color={colors.surface}>
+                สัดส่วน Segment (Pie Chart)
+              </CalmText>
             </View>
 
-            {/* Segment Breakdown & Asset Details */}
-            <Text style={styles.sectionHeaderTitle}>รายละเอียดแต่ละ Segment</Text>
+            {segmentGroups.length === 0 ? (
+              <View style={styles.emptyChartBox}>
+                <Ionicons name="alert-circle-outline" size={32} color={colors.muted} />
+                <CalmText variant="monoRegular" size={12} color={colors.muted}>
+                  ยังไม่มีสินทรัพย์ในหมวดหมู่นี้
+                </CalmText>
+              </View>
+            ) : (
+              <View style={styles.chartContainer}>
+                <PieChart
+                  data={pieData}
+                  donut={true}
+                  radius={SCREEN_WIDTH * 0.22}
+                  innerRadius={SCREEN_WIDTH * 0.13}
+                  innerCircleColor={colors.ink}
+                  strokeWidth={2}
+                  strokeColor={colors.ink}
+                  extraRadius={70}
+                  paddingHorizontal={44}
+                  paddingVertical={16}
+                  showExternalLabels={true}
+                  labelLineConfig={{
+                    color: colors.surface,
+                    thickness: 1.5,
+                    length: 22,
+                    tailLength: 12,
+                    avoidOverlappingOfLabels: true,
+                    labelComponentHeight: 30,
+                    labelComponentWidth: 68,
+                    labelComponentMargin: 6,
+                  }}
+                  externalLabelComponent={(item?: any) => {
+                    const shortLabel = getShortSegmentLabel(item?.segmentLabel || '');
+                    const percentText = item?.value !== undefined ? `${item.value}%` : '';
+                    const strokeColor = item?.segmentColor || '#38BDF8';
+                    return (
+                      <SvgG>
+                        <Rect
+                          x={0}
+                          y={-30}
+                          width={68}
+                          height={30}
+                          rx={6}
+                          fill={colors.ink}
+                          stroke={strokeColor}
+                          strokeWidth={1.5}
+                        />
+                        <SvgText
+                          x={34}
+                          y={-17}
+                          fill="#94A3B8"
+                          fontSize={8.5}
+                          fontWeight="600"
+                          textAnchor="middle"
+                        >
+                          {shortLabel}
+                        </SvgText>
+                        <SvgText
+                          x={34}
+                          y={-5}
+                          fill="#FFFFFF"
+                          fontSize={10.5}
+                          fontWeight="bold"
+                          textAnchor="middle"
+                        >
+                          {percentText}
+                        </SvgText>
+                      </SvgG>
+                    );
+                  }}
+                  centerLabelComponent={() => (
+                    <View style={styles.centerLabelContainer}>
+                      <CalmText variant="display" size={22} color={colors.surface}>
+                        {segmentGroups.length}
+                      </CalmText>
+                      <CalmText variant="monoRegular" size={10} color={colors.accent}>
+                        Segments
+                      </CalmText>
+                    </View>
+                  )}
+                />
+                <CalmText variant="monoRegular" size={11} color={colors.muted} style={{ marginTop: 12 }}>
+                  แตะที่ชิ้นพายหรือการ์ดด้านล่างเพื่อโฟกัส
+                </CalmText>
+              </View>
+            )}
+          </View>
 
-            {segmentGroups.map((group) => {
-              const isMinor = minorGroups.some((mg) => mg.definition.id === group.definition.id);
-              const isSelected =
-                selectedSegmentId === group.definition.id ||
-                (selectedSegmentId === 'OTHER_COMBINED' && isMinor);
+          {/* Segment Breakdown & Asset Details */}
+          <CalmText variant="bodyBold" size={14} color={colors.ink} style={{ marginBottom: 10 }}>
+            รายละเอียดแต่ละ Segment
+          </CalmText>
 
-              return (
-                <View
-                  key={group.definition.id}
-                  style={[styles.segmentCard, isSelected && styles.segmentCardSelected]}
+          {segmentGroups.map((group) => {
+            const isMinor = minorGroups.some((mg) => mg.definition.id === group.definition.id);
+            const isSelected =
+              selectedSegmentId === group.definition.id ||
+              (selectedSegmentId === 'OTHER_COMBINED' && isMinor);
+
+            return (
+              <View
+                key={group.definition.id}
+                style={[styles.segmentCard, isSelected && styles.segmentCardSelected]}
+              >
+                <TouchableOpacity
+                  style={styles.segmentCardHeader}
+                  onPress={() =>
+                    setSelectedSegmentId(isSelected ? null : group.definition.id)
+                  }
+                  activeOpacity={0.7}
                 >
-                  <TouchableOpacity
-                    style={styles.segmentCardHeader}
-                    onPress={() =>
-                      setSelectedSegmentId(isSelected ? null : group.definition.id)
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.segmentLeft}>
-                      <View
-                        style={[
-                          styles.segmentColorBar,
-                          { backgroundColor: isMinor ? '#64748B' : group.definition.color },
-                        ]}
-                      />
-                      <View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={styles.segmentName}>{group.definition.label}</Text>
-                          {isMinor && (
-                            <View style={styles.minorBadge}>
-                              <Text style={styles.minorBadgeText}>อื่นๆ</Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text style={styles.segmentSubName}>{group.definition.enLabel}</Text>
+                  <View style={styles.segmentLeft}>
+                    <View
+                      style={[
+                        styles.segmentColorBar,
+                        { backgroundColor: isMinor ? colors.muted : group.definition.color },
+                      ]}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <CalmText variant="bodyBold" size={13} color={colors.ink}>
+                          {group.definition.label}
+                        </CalmText>
+                        {isMinor && (
+                          <Pill kind="dashed" size="sm" label="อื่นๆ" />
+                        )}
                       </View>
+                      <CalmText variant="monoRegular" size={11} color={colors.muted} style={{ marginTop: 1 }}>
+                        {group.definition.enLabel}
+                      </CalmText>
                     </View>
+                  </View>
 
-                    <View style={styles.segmentRight}>
-                      <Text style={styles.segmentValue}>
-                        {isPrivateMode
-                          ? '฿••••••'
-                          : `฿${group.totalMarketValue.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`}
-                      </Text>
-                      <View style={styles.segmentPercentBadge}>
-                        <Text style={styles.segmentPercentText}>
-                          {group.percentage.toFixed(1)}%
-                        </Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
+                  <View style={styles.segmentRight}>
+                    <CalmText variant="mono" size={13} color={colors.ink}>
+                      {isPrivateMode
+                        ? '฿••••••'
+                        : `฿${group.totalMarketValue.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`}
+                    </CalmText>
+                    <Pill kind="ink" size="sm" label={`${group.percentage.toFixed(1)}%`} />
+                  </View>
+                </TouchableOpacity>
 
-                  {/* Asset Items within this Segment */}
-                  <View style={styles.assetsInsideList}>
-                    {group.assets.map((asset) => (
+                {/* Asset Items within this Segment */}
+                <View style={styles.assetsInsideList}>
+                  {group.assets.map((asset, aIdx) => (
+                    <React.Fragment key={asset.id}>
+                      {aIdx > 0 && <DashedDivider marginVertical={2} />}
                       <TouchableOpacity
-                        key={asset.id}
                         style={styles.assetItemRow}
                         onPress={() => {
                           onClose();
@@ -573,8 +566,10 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
                         activeOpacity={0.7}
                       >
                         <View style={styles.assetItemLeft}>
-                          <Text style={styles.assetItemSymbol}>{asset.symbol}</Text>
-                          <Text style={styles.assetItemSub}>
+                          <CalmText variant="mono" size={13} color={colors.ink}>
+                            {asset.symbol}
+                          </CalmText>
+                          <CalmText variant="monoRegular" size={11} color={colors.muted}>
                             {categoryType === 'CASH'
                               ? 'บัญชีเงินฝาก'
                               : isPrivateMode
@@ -582,136 +577,44 @@ export const CategoryBreakdownModal: React.FC<CategoryBreakdownModalProps> = ({
                               : (categoryType === 'FUNDS'
                                 ? `${Number(asset.net_shares).toLocaleString()} หน่วย`
                                 : `${Number(asset.net_shares).toLocaleString()} หุ้น`)}
-                          </Text>
+                          </CalmText>
                         </View>
 
                         <View style={styles.assetItemRight}>
-                          <Text style={styles.assetItemValue}>
+                          <CalmText variant="mono" size={13} color={colors.ink}>
                             {isPrivateMode
                               ? '฿••••••'
                               : `฿${Number(asset.market_value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                          </Text>
-                          <View style={styles.editMiniBadge}>
-                            <Ionicons name="pencil" size={10} color="#059669" />
-                            <Text style={styles.editMiniBadgeText}>แก้ไข</Text>
-                          </View>
+                          </CalmText>
+                          <Pill
+                            kind="outline"
+                            size="sm"
+                            label="✎ แก้ไข"
+                          />
                         </View>
                       </TouchableOpacity>
-                    ))}
-                  </View>
+                    </React.Fragment>
+                  ))}
                 </View>
-              );
-            })}
+              </View>
+            );
+          })}
 
-            <View style={{ height: 32 }} />
-          </ScrollView>
-        </View>
-      </View>
+          <View style={{ height: 24 }} />
+        </ScrollView>
+      </SheetFrame>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    justifyContent: 'flex-end',
-  },
-  sheetContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    maxHeight: '92%',
-    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  categoryIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  titleTextContainer: {
-    flex: 1,
-  },
-  sheetTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  sheetSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  closeButton: {
-    padding: 6,
-    borderRadius: 20,
-    backgroundColor: '#F8FAFC',
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-  },
-  summaryCard: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 16,
-  },
-  summaryItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  summaryDivider: {
-    width: 1,
-    height: '80%',
-    backgroundColor: '#E2E8F0',
-    alignSelf: 'center',
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  summaryValue: {
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '800',
-    color: '#0F172A',
-    minHeight: 22,
-  },
-  profitText: {
-    color: '#059669',
-  },
-  lossText: {
-    color: '#DC2626',
-  },
   chartCard: {
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.ink,
     borderRadius: 20,
-    padding: 18,
-    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    padding: 16,
+    marginBottom: 16,
     alignItems: 'center',
   },
   chartHeader: {
@@ -719,94 +622,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     alignSelf: 'flex-start',
-    marginBottom: 14,
-  },
-  chartTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#F8FAFC',
+    marginBottom: 12,
   },
   chartContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 6,
     width: '100%',
   },
   emptyChartBox: {
-    paddingVertical: 30,
+    paddingVertical: 24,
     alignItems: 'center',
-    gap: 8,
-  },
-  emptyChartText: {
-    color: '#94A3B8',
-    fontSize: 13,
-  },
-  externalLabelBadge: {
-    backgroundColor: 'rgba(15, 23, 42, 0.95)',
-    paddingHorizontal: 4,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#475569',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 64,
-  },
-  externalLabelCategoryText: {
-    color: '#94A3B8',
-    fontSize: 8.5,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 1,
-  },
-  externalLabelPercentText: {
-    color: '#FFFFFF',
-    fontSize: 10.5,
-    fontWeight: '800',
-    textAlign: 'center',
+    gap: 6,
   },
   centerLabelContainer: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  centerLabelCount: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  centerLabelSub: {
-    fontSize: 10,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
-  chartNote: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginTop: 14,
-  },
-  sectionHeaderTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 12,
-  },
   segmentCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    marginBottom: 8,
     overflow: 'hidden',
   },
   segmentCardSelected: {
-    borderColor: '#059669',
-    backgroundColor: '#F0FDF4',
+    backgroundColor: colors.track,
   },
   segmentCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 14,
+    padding: 12,
   },
   segmentLeft: {
     flexDirection: 'row',
@@ -815,116 +663,41 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   segmentColorBar: {
-    width: 6,
-    height: 36,
+    width: 5,
+    height: 34,
     borderRadius: 3,
-  },
-  segmentName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  segmentSubName: {
-    fontSize: 11,
-    color: '#64748B',
   },
   segmentRight: {
     alignItems: 'flex-end',
-    gap: 2,
-  },
-  segmentValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  segmentPercentBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  segmentPercentText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  minorBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-  },
-  minorBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#64748B',
+    gap: 4,
   },
   assetsInsideList: {
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    backgroundColor: '#FAFAFA',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    borderTopWidth: 1.5,
+    borderTopColor: colors.ink,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
   },
   assetItemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    minHeight: 44,
   },
   assetItemLeft: {
     flex: 1,
-  },
-  assetItemSymbol: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  assetItemSub: {
-    fontSize: 11,
-    color: '#64748B',
+    gap: 2,
   },
   assetItemRight: {
     alignItems: 'flex-end',
-    gap: 2,
-  },
-  assetItemValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  editMiniBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  editMiniBadgeText: {
-    fontSize: 10,
-    color: '#059669',
-    fontWeight: '600',
-  },
-  taxQuotaCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    gap: 3,
   },
   taxQuotaHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   taxQuotaTitleRow: {
     flexDirection: 'row',
@@ -932,65 +705,26 @@ const styles = StyleSheet.create({
     gap: 6,
     flex: 1,
   },
-  taxQuotaTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  taxQuotaStatusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  taxQuotaStatusSafe: {
-    backgroundColor: '#ECFDF5',
-  },
-  taxQuotaStatusExceeded: {
-    backgroundColor: '#FEF3C7',
-  },
-  taxQuotaStatusText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  taxQuotaStatusTextSafe: {
-    color: '#059669',
-  },
-  taxQuotaStatusTextExceeded: {
-    color: '#B45309',
-  },
-  taxQuotaDescription: {
-    fontSize: 11,
-    color: '#64748B',
-    lineHeight: 16,
-    marginBottom: 12,
-  },
   quotaProgressContainer: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.track,
     borderRadius: 12,
-    padding: 12,
+    padding: 10,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: colors.ink,
+    marginBottom: 8,
   },
   quotaProgressLabelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  quotaProgressLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  quotaProgressValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    marginBottom: 6,
   },
   quotaTrack: {
     height: 8,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.surface,
     borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.ink,
     overflow: 'hidden',
     marginBottom: 6,
   },
@@ -999,48 +733,22 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   quotaBarSafe: {
-    backgroundColor: '#059669',
+    backgroundColor: colors.accent,
   },
   quotaBarExceeded: {
-    backgroundColor: '#DC2626',
+    backgroundColor: colors.ink,
   },
   quotaFooterRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  quotaPercentText: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  quotaRemainingText: {
-    fontSize: 11,
-    color: '#059669',
-    fontWeight: '700',
-  },
-  quotaRemainingTextExceeded: {
-    color: '#DC2626',
-  },
   quotaNetBox: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  quotaNetRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  quotaNetLabel: {
-    fontSize: 12,
-    color: '#475569',
-    fontWeight: '500',
-  },
-  quotaNetValue: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#059669',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.ink,
   },
 });

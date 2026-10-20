@@ -434,13 +434,48 @@
 
 ---
 
-## 18. ขั้นตอนต่อไป
+## 18. การดำเนินการขั้นตอนที่ 2G-4: ปรับ Modal สัดส่วนสินทรัพย์รายหมวดหมู่ (`src/components/CategoryBreakdownModal.tsx`)
 
-พร้อมเข้าสู่ **ขั้นตอนที่ 2G-4**:
-- ปรับ Modal สัดส่วนสินทรัพย์ `src/components/CategoryBreakdownModal.tsx`
-  - ใช้ `<SheetFrame title="..." onClose={onClose}>`
-  - คงสี Donut chart slices ตามหมวดสินทรัพย์/ภาคธุรกิจ (`sliceColor` by sector) ห้ามลดทอนเหลือสีเดียว
-  - ปรับป้ายกำกับ, ตัวเลขสถิติ, ขอบการ์ด และ Legend ตาม Calm tokens
+- **ไฟล์ที่แก้ไข**: `src/components/CategoryBreakdownModal.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **โครงสร้าง SheetFrame**:
+     - เปลี่ยนกรอบภายนอกมาใช้ `<SheetFrame title={categoryLabel} onClose={onClose}>` พร้อม Subtitle แสดงบริบท (Sectors/Categories/บัญชีเงินฝาก) และไอคอนประจำหมวดหมู่
+     - ควบคุมการเลื่อนด้วย `<ScrollView style={{ maxHeight: SCREEN_HEIGHT * 0.72 }}>` ให้ใช้งานได้ลื่นไหล ไม่ล้นจอ
+  2. **กล่องสรุปภาพรวมหมวดหมู่ (Category Overview Summary Card)**:
+     - ห่อด้วย `<Card shadow="md" padding={14}>`
+     - มูลค่ารวม: แสดงผลด้วย `<CalmText variant="display" size={20} color={colors.ink}>` พร้อมรองรับ Privacy Masking
+     - ฝั่งกำไร/ขาดทุน (P/L): แสดงผลด้วย `<Pill kind={unrealizedPL >= 0 ? 'accent' : 'outline'} size="md">` หรือจำนวนบัญชีเงินฝาก
+  3. **การ์ดติดตามโควตาภาษีดอกเบี้ยเงินฝาก 20,000 บาท (กรณี CASH)**:
+     - แปลงเป็นการ์ด Calm สไตล์โมเดิร์น พร้อม `<Pill kind={isExceededLimit ? 'dashed' : 'accent'}>`
+     - แถบ Quota Progress Bar: พื้นหลังราง `colors.surface` ขอบ 1px `colors.ink`, ตัวแท่งใช้ `colors.accent` (ปลอดภัย) หรือ `colors.ink` (เกินเพดาน)
+     - กล่องสรุปดอกเบี้ยสุทธิ: กรอบ 1px `colors.ink` พร้อมตัวเลข mono
+  4. **Circular Donut Pie Chart (Gifted Charts)**:
+     - การ์ดชาร์ต: พื้นหลัง `colors.ink`, ขอบ 2px `colors.ink`, มน 20px
+     - **คงสีชิ้นพายตาม Sector เดิมครบถ้วน 100%**: ใช้ `color: group.definition.color` โดยไม่ลดทอนเหลือสีเดียว
+     - ขอบชิ้นพายและแกนกลางวงกลม: ปรับใช้สี `colors.ink` เชื่อมโยงกับดีไซน์รวม
+     - ป้าย Callout ชี้ออกภายนอก: ปรับกรอบ Rect เป็นสี `colors.ink` ขอบสีตาม Sector และข้อความ Mono
+     - ตัวเลขตรงกลางโดนัท: `<CalmText variant="display" size={22} color={colors.surface}>` แสดงจำนวน Segments
+  5. **รายละเอียดแต่ละ Segment & รายการสินทรัพย์**:
+     - การ์ด Segment: ขอบ 1.5px `colors.ink`, รัศมี 14px, แถบสีด้านซ้ายคงสีประจำ Sector เดิม
+     - ชิปสัดส่วนเปอร์เซ็นต์: `<Pill kind="ink" size="sm" label={`${group.percentage.toFixed(1)}%`} />`
+     - แถวสินทรัพย์ภายใน Segment: คั่นด้วย `<DashedDivider marginVertical={2} />`
+     - ปุ่มแก้ไขสินทรัพย์: เปลี่ยนเป็น `<Pill kind="outline" size="sm" label="✎ แก้ไข" />` สไตล์มินิมอล
+  6. **การคลีน Hex Code**: ลบ raw hex colors ที่กระจัดกระจายในสไตล์ชีตเดิมออกทั้งหมด 100%
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+---
+
+## 19. ขั้นตอนต่อไป
+
+พร้อมเข้าสู่ **ขั้นตอนที่ 2H (Bottom Tab Bar & FAB - `App.tsx`)**:
+- อัปเดตแถบนำทางด้านล่าง (Bottom Tab Bar) และปุ่มลอยเพิ่มสินทรัพย์ `+` (FAB) ใน `App.tsx`
+  - ขอบบนของ Tab Bar: ใช้ `<DashedDivider>` คั่นด้านบน
+  - แท็บที่เลือกอยู่ (Active tab): แคปซูล `colors.ink` ตัวอักษรและไอคอนสี `colors.accent`
+  - แท็บที่ไม่ได้เลือก: ไอคอนและตัวอักษรสี `colors.ink` หรือ `colors.muted`
+  - ปุ่มลอย `+` ตรงกลาง: ใช้ `<CapsuleButton variant="ink" hardShadow round height={60} ... />` หรือสไตล์ปุ่มวงกลมสีดำหมึก ขอบ 2px เงาคม 4px
+
 
 
 
