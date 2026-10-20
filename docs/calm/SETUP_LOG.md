@@ -552,6 +552,27 @@
   - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
   - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
 
+---
+
+## 23. Step 3A — Header Bar, Privacy Eye & View Switcher ใน Portfolio Screen (`Portfolio.tsx`)
+
+- **ไฟล์ที่แก้ไข**: `src/screens/Portfolio.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. นำเข้า `colors, fonts` จาก `../theme/tokens` และ `CalmText` จาก `../components/ui/CalmText`
+  2. ปรับพื้นหลัง Safe Area:
+     - `styles.safeArea.backgroundColor`: เปลี่ยนเป็น `colors.bg` (`#EAF3EE`) สีนวลตาตามระบบธีม
+  3. ปรับแต่ง Header Bar:
+     - หัวข้อ: ใช้ `<CalmText variant="display" size={32} color={colors.ink}>` ("พอร์ตการลงทุน") ฟอนต์ Bricolage Grotesque 800
+     - ป้าย Subtitle: ใช้ `<CalmText variant="monoRegular" size={11} color={colors.muted}>` แสดงมุมมอง (`ALLOCATION` / `PERFORMANCE`) และจำนวนรายการ
+     - ปุ่ม Privacy Mode: ขยายขนาดเป็น 46x46px ทรงกลมรัศมี 999, พื้นหลัง `colors.surface`, ขอบ `borderWidth: 2, borderColor: colors.ink`, เงาแข็ง `colors.shadow` 3px 3px, ไอคอน `Ionicons` ขนาด 20px (เปิดโหมด = `colors.accent`, ปิดโหมด = `colors.ink`)
+  4. ปรับแต่ง View Switcher (สลับ สัดส่วนพอร์ต Allocation / ผลงานพอร์ต Performance):
+     - คอนเทนเนอร์แคปซูลยาว: พื้นหลัง `colors.surface`, ขอบหมึก `borderWidth: 2, borderColor: colors.ink`, รัศมี 999, padding 4, gap 4
+     - แท็บ Active: พื้นหลัง `colors.ink`, ตัวหนังสือและไอคอน `colors.accent` ฟอนต์ `fonts.mono`, รัศมี 999, paddingVertical 10
+     - แท็บ Inactive: พื้นหลังใส, ตัวหนังสือและไอคอน `colors.ink` ฟอนต์ `fonts.mono`, รัศมี 999
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
 
 
 

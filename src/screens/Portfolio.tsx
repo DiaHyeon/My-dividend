@@ -36,6 +36,8 @@ import {
 } from '../services/benchmarkService';
 import { getCachedPortfolio, savePortfolioCache, notifyOffline } from '../services/portfolioCacheService';
 import { portfolioEvents } from '../services/eventService';
+import { colors, fonts } from '../theme/tokens';
+import { CalmText } from '../components/ui/CalmText';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -705,13 +707,15 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         {/* Header Bar */}
         <View style={styles.headerBar}>
           <View style={styles.headerTitleBox}>
-            <Text style={styles.headerTitle}>พอร์ตการลงทุน (Portfolio)</Text>
-            <Text style={styles.headerSubtitle}>
-              สัดส่วนการกระจายความเสี่ยงและผลการดำเนินงาน ({assets.length} รายการ)
-            </Text>
+            <CalmText variant="display" size={32} color={colors.ink}>
+              พอร์ตการลงทุน
+            </CalmText>
+            <CalmText variant="monoRegular" size={11} color={colors.muted} style={{ marginTop: 4 }}>
+              {portfolioView === 'ALLOCATION' ? 'ALLOCATION' : 'PERFORMANCE'} · {assets.length} รายการ
+            </CalmText>
           </View>
           <TouchableOpacity
-            style={[styles.headerActionBtn, isPrivateMode && styles.headerActionBtnActive]}
+            style={styles.headerActionBtn}
             onPress={togglePrivateMode}
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -719,8 +723,8 @@ export const Portfolio: React.FC<PortfolioProps> = ({
           >
             <Ionicons
               name={isPrivateMode ? 'eye-off-outline' : 'eye-outline'}
-              size={18}
-              color={isPrivateMode ? '#059669' : '#475569'}
+              size={20}
+              color={isPrivateMode ? colors.accent : colors.ink}
             />
           </TouchableOpacity>
         </View>
@@ -735,7 +739,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
             <Ionicons
               name="pie-chart"
               size={15}
-              color={portfolioView === 'ALLOCATION' ? '#0F172A' : '#64748B'}
+              color={portfolioView === 'ALLOCATION' ? colors.accent : colors.ink}
             />
             <Text
               style={[
@@ -755,7 +759,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
             <Ionicons
               name="trending-up"
               size={15}
-              color={portfolioView === 'PERFORMANCE' ? '#0F172A' : '#64748B'}
+              color={portfolioView === 'PERFORMANCE' ? colors.accent : colors.ink}
             />
             <Text
               style={[
@@ -1496,7 +1500,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.bg,
   },
   container: {
     flex: 1,
@@ -1516,36 +1520,44 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerActionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    width: 46,
+    height: 46,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 12,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   headerActionBtnActive: {
-    backgroundColor: 'rgba(5, 150, 105, 0.1)',
-    borderColor: '#A7F3D0',
+    backgroundColor: colors.ink,
+    borderColor: colors.ink,
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.ink,
   },
   headerSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: colors.muted,
     marginTop: 2,
   },
   portfolioViewSwitcher: {
     flexDirection: 'row',
-    backgroundColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 3,
-    marginBottom: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    borderRadius: 999,
+    padding: 4,
+    gap: 4,
+    marginBottom: 16,
   },
   portfolioViewTab: {
     flex: 1,
@@ -1553,25 +1565,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 9,
-    borderRadius: 10,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: 'transparent',
   },
   portfolioViewTabActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: colors.ink,
   },
   portfolioViewTabText: {
+    fontFamily: fonts.mono,
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
+    color: colors.ink,
   },
   portfolioViewTabTextActive: {
-    color: '#0F172A',
-    fontWeight: '700',
+    color: colors.accent,
   },
   perfHeroCard: {
     backgroundColor: '#0F172A',
