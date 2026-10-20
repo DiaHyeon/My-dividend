@@ -273,14 +273,53 @@
 
 ---
 
-## 13. ขั้นตอนต่อไป
+## 13. การดำเนินการขั้นตอนที่ 2F: ปรับกล่องรายละเอียดเดือนที่ถูกเลือก (Selected Month Detail Pop-out - `Dashboard.tsx`)
 
-พร้อมเข้าสู่ **ขั้นตอนที่ 2F** ตาม [PLAN.md](file:///c:/Users/lenovo/Documents/My%20dividend/docs/calm/PLAN.md):
-- Selected Month Detail Pop-out (`src/screens/Dashboard.tsx`)
-- หัวข้อเดือนและยอดรวม: `<CalmText variant="display" size={22}>`
-- เส้นคั่นรายการสินทรัพย์: `<DashedDivider />`
-- ป้ายประเภทสินทรัพย์และสถานะ: `<Pill>` (Dividend = accent, Interest = outline, Received = ink, Special = dashed)
-- ยอดเงินและอัตราแลกเปลี่ยน: ฟอนต์ mono และ layout เดิม
+- **ไฟล์ที่แก้ไข**: `src/screens/Dashboard.tsx`
+- **รูปแบบ**: เป็น inline `<View>` pop-out ภายในหน้าจอเดิม (ไม่มีการสร้าง Modal ใหม่ตามข้อกำหนด)
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **กรอบกล่องรายละเอียด (Pop-out Container)**:
+     - ใช้พื้นหลัง `backgroundColor: colors.surface`
+     - ขอบหนา 2px `borderColor: colors.ink`, มนโค้ง `borderRadius: 16`, ระยะเว้นขอบ `padding: 14`
+  2. **หัวข้อเดือน & ยอดรวม (Header Title & Total)**:
+     - ใช้ `<CalmText variant="display" size={22} color={colors.ink}>`
+     - รักษาข้อความและตัวเลขยอดรวมเดิมไว้ครบถ้วน ไม่มีการแยกยอดรวมออกจากข้อความหัวเรื่อง
+     - **ไม่เพิ่มป้าย "เดือนปัจจุบัน"** ตามข้อกำหนดที่ระบุไว้
+  3. **เส้นคั่นรายการสินทรัพย์ (List Divider)**:
+     - คั่นระหว่างรายการสินทรัพย์ด้วย `<DashedDivider marginVertical={4} />` สี sage มาตรฐาน
+  4. **ป้ายประเภทสินทรัพย์และสถานะ (Tags & Pills)**:
+     - **ป้ายปันผล (Dividend)**: `<Pill kind="accent" size="sm" label="ปันผล" />`
+     - **ป้ายดอกเบี้ย (Interest)**: `<Pill kind="outline" size="sm" label="ดอกเบี้ย" />`
+     - **ป้ายปันผลพิเศษ (Special Dividend)**: `<Pill kind="dashed" size="sm" label="ปันผลพิเศษ" />`
+     - **ป้ายได้รับแล้ว (Received)**: `<Pill kind="ink" size="sm" label="ได้รับแล้ว" />`
+     - **ป้ายจำนวนวันดอกเบี้ย (Interest Days Info)**: `<Pill kind="outline" size="sm" label={...} />`
+  5. **ชื่อสินทรัพย์และข้อมูลหุ้น (Symbol & Info Text)**:
+     - ชื่อหุ้น: `<CalmText variant="mono" size={14} color={colors.ink}>`
+     - ข้อมูลหุ้น (จำนวนหุ้น, DPU, XD date, ยอดเงินฝาก, วันที่เข้า): `<CalmText variant="monoRegular" size={11} color={colors.muted}>`
+     - คง privacy masking `••••` และนิพจน์คำนวณเดิมไว้ 100%
+  6. **การแสดงผลยอดเงินและแอคชัน (Amounts & Action)**:
+     - ยอดเงินหลัก: ใช้ฟอนต์ `fontFamily: fonts.mono`, ขนาด 14, สี `colors.ink`
+     - ยอดเงินรอง (USD dual view): `fontFamily: fonts.monoRegular`, ขนาด 11, สี `colors.muted`
+     - ลิงก์ "ปรับยอด": `<CalmText variant="monoRegular" size={10} color={colors.muted}>` พร้อมไอคอนดินสอ
+     - ขนาดแถวรายการมีความสูงขั้นต่ำ `minHeight: 44` เพื่อความสะดวกในการแตะเปิด `AdjustDividendModal`
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+---
+
+## 14. ขั้นตอนต่อไป
+
+พร้อมเข้าสู่ **ขั้นตอนที่ 2G** ตาม [PLAN.md](file:///c:/Users/lenovo/Documents/My%20dividend/docs/calm/PLAN.md):
+- **2G-0**: การ์ดเป้าหมาย Passive Income บน Dashboard (`Dashboard.tsx`)
+  - ใช้ `<Card shadow="md" padding={14}>`
+  - แถบ Progress หนา 12px ขอบมน 999 มีกรอบ `borderWidth: 2, borderColor: colors.ink` และ fill `colors.accent`
+  - ข้อความสถิติและเป้าหมายด้วย `<CalmText>` tokens
+- **2G-1**: `AdjustDividendModal.tsx`
+- **2G-2**: `AnnualComparisonSheet.tsx`
+- **2G-3**: `GoalSettingsModal.tsx`
+- **2G-4**: `CategoryBreakdownModal.tsx` (คงสีชิ้นโดนัทตามหมวดหมู่เดิม)
+
 
 
 

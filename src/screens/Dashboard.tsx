@@ -4,6 +4,7 @@ import { Card } from '../components/ui/Card';
 import { Pill } from '../components/ui/Pill';
 import { CalmText } from '../components/ui/CalmText';
 import { SheetFrame } from '../components/ui/SheetFrame';
+import { DashedDivider } from '../components/ui/DashedDivider';
 import { colors, fonts, chartColors, trend } from '../theme/tokens';
 import {
   ScrollView,
@@ -1387,91 +1388,97 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {activeMonthData && activeMonthData.amount > 0 && (
                 <View style={styles.selectedMonthDetails}>
                   <View style={styles.selectedMonthHeader}>
-                    <Ionicons name="calendar-outline" size={16} color="#059669" />
-                    <Text style={styles.selectedMonthTitle}>
+                    <Ionicons name="calendar-outline" size={18} color={colors.ink} />
+                    <CalmText variant="display" size={22} color={colors.ink}>
                       รายละเอียดปันผลเดือน {activeMonthData.monthName}: {formatMoney(activeMonthData.amount)}
-                    </Text>
+                    </CalmText>
                   </View>
                   {activeMonthData.details.map((d, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      style={styles.detailRow}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        setSelectedScheduleForAdjust({
-                          scheduleId: d.scheduleId,
-                          assetId: d.assetId,
-                          symbol: d.symbol,
-                          dpu: d.dpu,
-                          shares: d.shares,
-                          netAmount: d.netAmount,
-                          xdDate: d.xdDate,
-                          isInterest: d.isInterest,
-                          currency: d.currency,
-                          taxRate: d.taxRate,
-                          isProjected: d.isProjected,
-                          exchangeRate,
-                        });
-                        setIsAdjustModalVisible(true);
-                      }}
-                    >
-                      <View style={styles.detailRowLeft}>
-                        <View style={styles.detailSymbolRow}>
-                          <Text style={styles.detailSymbol}>{d.symbol}</Text>
-                          <View style={d.isInterest ? styles.interestTag : styles.divTag}>
-                            <Text style={d.isInterest ? styles.interestTagText : styles.divTagText}>
-                              {d.isInterest ? 'ดอกเบี้ย' : 'ปันผล'}
-                            </Text>
+                    <View key={idx}>
+                      {idx > 0 && <DashedDivider marginVertical={4} />}
+                      <TouchableOpacity
+                        style={styles.detailRow}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setSelectedScheduleForAdjust({
+                            scheduleId: d.scheduleId,
+                            assetId: d.assetId,
+                            symbol: d.symbol,
+                            dpu: d.dpu,
+                            shares: d.shares,
+                            netAmount: d.netAmount,
+                            xdDate: d.xdDate,
+                            isInterest: d.isInterest,
+                            currency: d.currency,
+                            taxRate: d.taxRate,
+                            isProjected: d.isProjected,
+                            exchangeRate,
+                          });
+                          setIsAdjustModalVisible(true);
+                        }}
+                      >
+                        <View style={styles.detailRowLeft}>
+                          <View style={styles.detailSymbolRow}>
+                            <CalmText variant="mono" size={14} color={colors.ink}>
+                              {d.symbol}
+                            </CalmText>
+                            <Pill
+                              kind={d.isInterest ? 'outline' : 'accent'}
+                              size="sm"
+                              label={d.isInterest ? 'ดอกเบี้ย' : 'ปันผล'}
+                            />
+                            {d.isSpecial && (
+                              <Pill
+                                kind="dashed"
+                                size="sm"
+                                label="ปันผลพิเศษ"
+                              />
+                            )}
+                            {d.isProjected === false && (
+                              <Pill
+                                kind="ink"
+                                size="sm"
+                                label="ได้รับแล้ว"
+                              />
+                            )}
+                            {d.isInterest && d.daysInfo ? (
+                              <Pill
+                                kind="outline"
+                                size="sm"
+                                label={d.isPartialCycle ? `🕒 ${d.daysInfo}` : d.daysInfo}
+                              />
+                            ) : null}
                           </View>
-                          {d.isSpecial && (
-                            <View style={styles.specialTag}>
-                              <Ionicons name="sparkles" size={10} color="#B45309" />
-                              <Text style={styles.specialTagText}>ปันผลพิเศษ</Text>
-                            </View>
-                          )}
-                          {d.isProjected === false && (
-                            <View style={styles.receivedBadge}>
-                              <Ionicons name="checkmark-circle" size={10} color="#059669" />
-                              <Text style={styles.receivedBadgeText}>ได้รับแล้ว</Text>
-                            </View>
-                          )}
-                          {d.isInterest && d.daysInfo ? (
-                            <View style={[styles.daysTag, d.isPartialCycle ? styles.daysTagPartial : styles.daysTagFull]}>
-                              <Text style={[styles.daysTagText, d.isPartialCycle ? styles.daysTagTextPartial : styles.daysTagTextFull]}>
-                                {d.isPartialCycle ? `🕒 ${d.daysInfo}` : d.daysInfo}
-                              </Text>
-                            </View>
-                          ) : null}
+                          <CalmText variant="monoRegular" size={11} color={colors.muted}>
+                            {d.isInterest
+                              ? `ยอดเงินฝาก ${formatMoney(d.shares, 0)} • จ่ายเข้า ${d.xdDate}`
+                              : d.currency === 'USD'
+                              ? `${isPrivateMode ? '••••' : d.shares.toLocaleString()} หุ้น × $${d.dpu.toFixed(4)} (~฿${(d.dpu * (exchangeRate || 34.0)).toFixed(2)}) (XD: ${d.xdDate})`
+                              : `${isPrivateMode ? '••••' : d.shares.toLocaleString()} หุ้น × ฿${d.dpu.toFixed(4)} (XD: ${d.xdDate})`}
+                          </CalmText>
                         </View>
-                        <Text style={styles.detailInfo}>
-                          {d.isInterest
-                            ? `ยอดเงินฝาก ${formatMoney(d.shares, 0)} • จ่ายเข้า ${d.xdDate}`
-                            : d.currency === 'USD'
-                            ? `${isPrivateMode ? '••••' : d.shares.toLocaleString()} หุ้น × $${d.dpu.toFixed(4)} (~฿${(d.dpu * (exchangeRate || 34.0)).toFixed(2)}) (XD: ${d.xdDate})`
-                            : `${isPrivateMode ? '••••' : d.shares.toLocaleString()} หุ้น × ฿${d.dpu.toFixed(4)} (XD: ${d.xdDate})`}
-                        </Text>
-                      </View>
-                      <View style={styles.detailRowRight}>
-                        {d.currency === 'USD' ? (
-                          <>
+                        <View style={styles.detailRowRight}>
+                          {d.currency === 'USD' ? (
+                            <>
+                              <Text style={styles.detailAmount}>
+                                {isPrivateMode ? '฿••••••' : `$${(d.shares * d.dpu * (1 - (d.taxRate || 0))).toFixed(2)}`}
+                              </Text>
+                              <Text style={styles.detailSubAmount}>
+                                {formatMoney(d.netAmount)}
+                              </Text>
+                            </>
+                          ) : (
                             <Text style={styles.detailAmount}>
-                              {isPrivateMode ? '฿••••••' : `$${(d.shares * d.dpu * (1 - (d.taxRate || 0))).toFixed(2)}`}
-                            </Text>
-                            <Text style={styles.detailSubAmount}>
                               {formatMoney(d.netAmount)}
                             </Text>
-                          </>
-                        ) : (
-                          <Text style={styles.detailAmount}>
-                            {formatMoney(d.netAmount)}
-                          </Text>
-                        )}
-                        <View style={styles.detailActionIndicator}>
-                          <Text style={styles.detailActionText}>ปรับยอด</Text>
-                          <Ionicons name="pencil" size={10} color="#94A3B8" />
+                          )}
+                          <View style={styles.detailActionIndicator}>
+                            <CalmText variant="monoRegular" size={10} color={colors.muted}>ปรับยอด</CalmText>
+                            <Ionicons name="pencil" size={10} color={colors.muted} />
+                          </View>
                         </View>
-                      </View>
-                    </TouchableOpacity>
+                      </TouchableOpacity>
+                    </View>
                   ))}
                 </View>
               )}
@@ -2239,30 +2246,24 @@ const styles = StyleSheet.create({
   },
   selectedMonthDetails: {
     marginTop: 14,
-    padding: 12,
-    backgroundColor: '#F0FDF4',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
+    padding: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: colors.ink,
   },
   selectedMonthHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     marginBottom: 8,
-  },
-  selectedMonthTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#166534',
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 7,
-    borderTopWidth: 1,
-    borderTopColor: '#DCFCE7',
+    paddingVertical: 8,
+    minHeight: 44,
   },
   detailRowLeft: {
     flex: 1,
@@ -2271,72 +2272,19 @@ const styles = StyleSheet.create({
   detailSymbolRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 2,
-  },
-  detailSymbol: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  interestTag: {
-    backgroundColor: '#E0F2FE',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  interestTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  divTag: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  divTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#16A34A',
-  },
-  daysTag: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  daysTagPartial: {
-    backgroundColor: '#FEF3C7',
-    borderWidth: 0.5,
-    borderColor: '#FDE68A',
-  },
-  daysTagFull: {
-    backgroundColor: '#F1F5F9',
-  },
-  daysTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  daysTagTextPartial: {
-    color: '#B45309',
-  },
-  daysTagTextFull: {
-    color: '#64748B',
-  },
-  detailInfo: {
-    fontSize: 11,
-    color: '#475569',
+    marginBottom: 4,
   },
   detailAmount: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#059669',
+    fontSize: 14,
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   detailSubAmount: {
-    fontSize: 10,
-    color: '#64748B',
-    fontWeight: '500',
+    fontSize: 11,
+    fontFamily: fonts.monoRegular,
+    color: colors.muted,
     marginTop: 1,
   },
   detailRowRight: {
@@ -2348,39 +2296,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     marginTop: 2,
-  },
-  detailActionText: {
-    fontSize: 10,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
-  receivedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-  },
-  receivedBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  specialTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-  },
-  specialTagText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#B45309',
   },
   assetCard: {
     backgroundColor: '#FFFFFF',
