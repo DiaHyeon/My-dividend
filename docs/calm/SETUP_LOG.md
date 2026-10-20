@@ -907,3 +907,40 @@
   - `npx tsc --noEmit`: 0 error
   - `npm test`: 83/83 ผ่านทั้งหมด 100% (39 unit + 27 security + 17 performance scenarios)
 
+---
+
+## 22. Phase 7 — Utility Modals & Transaction History (Option B: CalendarPicker, SectorPicker, EditTransaction)
+
+- **วันที่**: 20 ตุลาคม 2026
+- **เป้าหมาย**: ปรับโฉมหน้าต่างย่อย 3 รายการ ได้แก่ หน้าต่างเลือกวันที่ (`CalendarPickerModal.tsx`), หน้าต่างเลือกหมวดหมู่อุตสาหกรรม/กองทุน/เงินฝาก (`SectorPickerModal.tsx`) และหน้าต่างแก้ไขประวัติไม้ DCA (`EditTransactionModal.tsx`) สู่ธีม **Calm Mint** ให้สมบูรณ์สอดคล้องกับทั้งระบบ 100%
+- **ไฟล์ที่แก้ไข**: `src/components/CalendarPickerModal.tsx`, `src/components/SectorPickerModal.tsx`, `src/components/EditTransactionModal.tsx`, `docs/calm/SETUP_LOG.md`
+- **ดีไซน์อ้างอิง**: สไตล์ Calm Mint และดีไซน์ซิสเต็ม Tokens (`colors`, `borderWidth`, `radii`, `fonts`, `DashedDivider`)
+- **Commits**: `14ce343`, `a56fbcb`, `b5151c2`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **Step 7A — Calendar Picker Modal (`CalendarPickerModal.tsx`) [Commit `14ce343`]**:
+     - Scrim สี `rgba(18, 61, 42, 0.45)`, การ์ดโมดอลมน 24px ขอบ 2px `#123D2A` พื้นหลัง `#FBFFFD` พร้อมเงา 4px `#A9CDB9`
+     - หัวเรื่องพร้อมไอคอนปฏิทินในวงกลมมน `#EAF3EE` และปุ่มปิดกลม 32px ขอบ 2px
+     - เส้นประคั่น `<DashedDivider color="#A9CDB9" marginVertical={10} />`
+     - พิลล์ปุ่มลัดวันที่อัจฉริยะ (วันนี้, เมื่อวาน, 1 สัปดาห์ก่อน, ต้นเดือนนี้ หรือ +30, +60, +90 วัน) สไตล์แคปซูลมน 999px ขอบ 2px พื้น `#EAF3EE`
+     - แถบเลื่อนเดือน/ปี พ.ศ. พร้อมปุ่มนำทางกลมมน 34px ขอบ 2px
+     - ตารางวันที่ 7 คอลัมน์ วันนี้มีกรอบขอบ 2px `#123D2A` พื้น `#EAF3EE`, วันที่เลือกไฮไลต์พื้นเข้ม `#123D2A` ตัวเลขสีมิ้นต์ `#6FCDA8` พร้อมเงา 2px
+  2. **Step 7B — Sector / Segment Picker Modal (`SectorPickerModal.tsx`) [Commit `a56fbcb`]**:
+     - Scrim สี `rgba(18, 61, 42, 0.45)`, การ์ดโมดอลมน 24px ขอบ 2px `#123D2A` พื้นหลัง `#FBFFFD` เงา 4px `#A9CDB9`
+     - หัวเรื่องพร้อมไอคอนหมวดหมู่ในวงกลมมน `#EAF3EE` และปุ่มปิดกลม 32px
+     - เส้นประคั่น `<DashedDivider color="#A9CDB9" marginVertical={10} />`
+     - รายการตัวเลือกหมวดหมู่ ปรับขอบมน 16px มีเส้นขอบและพื้นหลัง `#EAF3EE` เมื่อถูกเลือก
+     - ป้ายไอคอนหมวดหมู่สี่เหลี่ยมมน 10px ขอบ 1.5px `#123D2A`
+     - ไอคอนเช็กถูกสีเขียวเข้ม `#1F7A52` ขนาด 22px
+  3. **Step 7C — Edit Transaction Modal (`EditTransactionModal.tsx`) [Commit `b5151c2`]**:
+     - Sheet Container ด้านล่าง มนบน 30px ขอบ 2px `#123D2A` พื้นหลัง `#FBFFFD`
+     - Grab handle 44×5px `#A9CDB9`
+     - ป้ายกำกับประเภทธุรกรรม (BUY: สีเขียวอ่อน `#EAF3EE` ขอบ 2px, SELL: สีแดงอ่อน `#FEE2E2` ขอบ 2px, CASH: สีเหลืองอ่อน `#FEF3C7` ขอบ 2px)
+     - ปุ่มปิดกลม 34px ขอบ 2px และเส้นประคั่น `<DashedDivider>`
+     - ปุ่มเลือกวันที่ทำรายการ สูง 48px มน 16px ขอบ 2px ฟอนต์ JetBrains Mono
+     - ช่องระบุจำนวนหุ้น และราคาต่อหุ้น สูง 48px มน 16px ขอบ 2px ฟอนต์ JetBrains Mono
+     - ตัวเลือกสกุลเงินย่อย USD/THB แคปซูลมน 999px ขอบ 2px
+     - การ์ดสรุปมูลค่ารวมของรายการ (พื้นหลัง `#FBFFFD`, ขอบ 2px, เงา 3px `#A9CDB9`, ตัวเลขเด่นสีเขียวสด `#1F7A52`)
+     - ปุ่มบันทึกการแก้ไข (พื้นเข้ม `#123D2A`, ตัวอักษร `#6FCDA8`, เงา 4px) และปุ่มลบรายการ (พื้น `#FBFFFD`, ตัวอักษรแดง `colors.lossOnLight`, เงา 3px)
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error
+  - `npm test`: 83/83 ผ่านทั้งหมด 100% (39 unit + 27 security + 17 performance scenarios)
