@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '../components/ui/Card';
 import { Pill } from '../components/ui/Pill';
 import { CalmText } from '../components/ui/CalmText';
+import { SheetFrame } from '../components/ui/SheetFrame';
 import { colors, fonts, chartColors, trend } from '../theme/tokens';
 import {
   ScrollView,
@@ -1086,18 +1087,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* 3. Dividend & Interest Forecast Chart: Monthly Bar Chart (Jan - Dec) */}
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>
+            <CalmText variant="bodyBold" size={17} color={colors.ink}>
               {inflowFilter === 'ALL'
                 ? 'กระแสเงินปันผลและดอกเบี้ย 12 เดือน'
                 : inflowFilter === 'DIVIDENDS'
                 ? 'กระแสเงินปันผล 12 เดือน (หุ้น & กองทุน)'
                 : 'ดอกเบี้ยเงินฝากรับ 12 เดือน'}
-            </Text>
-            <Text style={styles.sectionSubtitle}>คำนวณสุทธิหลังหักภาษี (ตามรอบปันผล/ดอกเบี้ย)</Text>
+            </CalmText>
+            <CalmText variant="monoRegular" size={12} color={colors.muted} style={{ marginTop: 2 }}>
+              คำนวณสุทธิหลังหักภาษี (ตามรอบปันผล/ดอกเบี้ย)
+            </CalmText>
           </View>
-          <View style={styles.badgeXD}>
-            <Text style={styles.badgeXDText}>XD Cutoff</Text>
-          </View>
+          <Pill kind="outline" size="sm" label="XD Cutoff" />
         </View>
 
         {/* Mini Payday Radar (Events in next 30 days) */}
@@ -1129,31 +1130,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Unified Filter Bar: Left Inflow Dropdown + Right Year Selector (Option 2 แบบที่ 1) */}
         <View style={styles.forecastFilterRow}>
           {/* Left: Dropdown for Inflow Filter */}
-          <TouchableOpacity
-            style={styles.filterDropdownBtn}
-            onPress={() => setIsInflowFilterModalVisible(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name={
-                inflowFilter === 'ALL'
-                  ? 'wallet-outline'
-                  : inflowFilter === 'DIVIDENDS'
-                  ? 'trending-up-outline'
-                  : 'cash-outline'
-              }
-              size={13}
-              color="#059669"
-            />
-            <Text style={styles.filterDropdownText} numberOfLines={1}>
-              {inflowFilter === 'ALL'
-                ? 'ทั้งหมด'
+          <Pill
+            kind="outline"
+            size="md"
+            label={
+              inflowFilter === 'ALL'
+                ? 'ทั้งหมด ▾'
                 : inflowFilter === 'DIVIDENDS'
-                ? 'เฉพาะหุ้น/กองทุน'
-                : 'เฉพาะดอกเบี้ย'}
-            </Text>
-            <Ionicons name="chevron-down" size={12} color="#64748B" />
-          </TouchableOpacity>
+                ? 'เฉพาะหุ้น/กองทุน ▾'
+                : 'เฉพาะดอกเบี้ย ▾'
+            }
+            onPress={() => setIsInflowFilterModalVisible(true)}
+          />
 
           {/* Right: Year Selector with Prev/Next arrows (แบบที่ 1) */}
           <View style={styles.yearSelectorContainer}>
@@ -1163,23 +1151,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.6}
             >
-              <Ionicons name="chevron-back" size={15} color="#334155" />
+              <Ionicons name="chevron-back" size={15} color={colors.ink} />
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.yearDisplayBtn}
-              onPress={() => setIsYearPickerModalVisible(true)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.yearDisplayText}>
-                {selectedYear === 'ROLLING'
-                  ? 'Rolling 12M'
+            <Pill
+              kind="outline"
+              size="md"
+              label={
+                selectedYear === 'ROLLING'
+                  ? 'Rolling 12M ▾'
                   : selectedYear === currentYear
-                  ? `ปี ${selectedYear} (ปีนี้)`
-                  : `ปี ${selectedYear}`}
-              </Text>
-              <Ionicons name="chevron-down" size={11} color="#64748B" style={{ marginLeft: 3 }} />
-            </TouchableOpacity>
+                  ? `ปี ${selectedYear} (ปีนี้) ▾`
+                  : `ปี ${selectedYear} ▾`
+              }
+              onPress={() => setIsYearPickerModalVisible(true)}
+            />
 
             <TouchableOpacity
               style={styles.yearArrowBtn}
@@ -1187,108 +1173,84 @@ export const Dashboard: React.FC<DashboardProps> = ({
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.6}
             >
-              <Ionicons name="chevron-forward" size={15} color="#334155" />
+              <Ionicons name="chevron-forward" size={15} color={colors.ink} />
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.chartCard}>
-          {forecastYearTotal === 0 ? (
-            <View style={styles.emptyChartBox}>
-              <Ionicons name="bar-chart-outline" size={40} color="#CBD5E1" />
-              <Text style={styles.emptyChartText}>
-                {selectedYear === 'ROLLING'
-                  ? 'ยังไม่มีข้อมูลปันผลคาดการณ์'
-                  : `ไม่มีข้อมูลกระแสเงินสดในปี ${selectedYear}`}
-              </Text>
-              <Text style={styles.emptyChartSubtext}>
-                {selectedYear === 'ROLLING' || selectedYear === currentYear
-                  ? 'เพิ่มหุ้นหรือระบุ Expected DPU เพื่อดูแท่งกราฟกระแสเงินสดรายเดือน'
-                  : 'เลือกปีอื่น หรือบันทึกรายการธุรกรรมเพิ่มเติม'}
-              </Text>
-            </View>
-          ) : (
-            <>
-              {/* Year Summary Header Row (ข้อ 3 แบบ A) */}
-              <View style={styles.chartHeaderRow}>
-                <View style={styles.chartHeaderLeft}>
-                  <View style={styles.chartHeaderTitleRow}>
-                    <Text style={styles.chartCardTitle}>
-                      {selectedYear === 'ROLLING'
-                        ? 'กระแสเงินสดคาดการณ์ 12 เดือนข้างหน้า'
-                        : `กระแสเงินสดปี ${selectedYear}`}
-                    </Text>
-                    <View
-                      style={[
-                        styles.yearTagPill,
-                        selectedYear === currentYear || selectedYear === 'ROLLING'
-                          ? styles.yearTagPillCurrent
-                          : styles.yearTagPillDefault,
-                      ]}
-                    >
-                      <Ionicons
-                        name={
+        <View style={{ marginBottom: 20 }}>
+          <Card shadow="md" padding={16}>
+            {forecastYearTotal === 0 ? (
+              <View style={styles.emptyChartBox}>
+                <Ionicons name="bar-chart-outline" size={40} color={colors.divider} />
+                <CalmText variant="bodyBold" size={15} color={colors.ink} style={{ marginTop: 8, textAlign: 'center' }}>
+                  {selectedYear === 'ROLLING'
+                    ? 'ยังไม่มีข้อมูลปันผลคาดการณ์'
+                    : `ไม่มีข้อมูลกระแสเงินสดในปี ${selectedYear}`}
+                </CalmText>
+                <CalmText variant="monoRegular" size={11} color={colors.muted} style={{ marginTop: 4, textAlign: 'center' }}>
+                  {selectedYear === 'ROLLING' || selectedYear === currentYear
+                    ? 'เพิ่มหุ้นหรือระบุ Expected DPU เพื่อดูแท่งกราฟกระแสเงินสดรายเดือน'
+                    : 'เลือกปีอื่น หรือบันทึกรายการธุรกรรมเพิ่มเติม'}
+                </CalmText>
+              </View>
+            ) : (
+              <>
+                {/* Year Summary Header Row (ข้อ 3 แบบ A) */}
+                <View style={styles.chartHeaderRow}>
+                  <View style={styles.chartHeaderLeft}>
+                    <View style={styles.chartHeaderTitleRow}>
+                      <CalmText variant="bodyBold" size={13} color={colors.ink}>
+                        {selectedYear === 'ROLLING'
+                          ? 'กระแสเงินสดคาดการณ์ 12 เดือนข้างหน้า'
+                          : `กระแสเงินสดปี ${selectedYear}`}
+                      </CalmText>
+                      <Pill
+                        kind={selectedYear === currentYear || selectedYear === 'ROLLING' ? 'accent' : 'outline'}
+                        size="sm"
+                        label={
                           selectedYear === 'ROLLING'
-                            ? 'repeat-outline'
+                            ? 'Rolling 12M'
                             : selectedYear === currentYear
-                            ? 'sparkles'
-                            : 'calendar'
-                        }
-                        size={11}
-                        color={
-                          selectedYear === currentYear || selectedYear === 'ROLLING'
-                            ? '#059669'
-                            : '#64748B'
+                            ? 'ปีนี้'
+                            : typeof selectedYear === 'number' && selectedYear < currentYear
+                            ? 'ประวัติย้อนหลัง'
+                            : 'คาดการณ์'
                         }
                       />
-                      <Text
-                        style={[
-                          styles.yearTagText,
-                          selectedYear === currentYear || selectedYear === 'ROLLING'
-                            ? styles.yearTagTextCurrent
-                            : styles.yearTagTextDefault,
-                        ]}
-                      >
-                        {selectedYear === 'ROLLING'
-                          ? 'Rolling 12M'
-                          : selectedYear === currentYear
-                          ? 'ปีนี้'
-                          : typeof selectedYear === 'number' && selectedYear < currentYear
-                          ? 'ประวัติย้อนหลัง'
-                          : 'คาดการณ์'}
-                      </Text>
                     </View>
-                  </View>
 
-                  {/* Total Amount & Monthly Average */}
-                  <View style={styles.chartTotalRow}>
-                    <Text style={styles.chartTotalAmount}>
-                      {formatMoney(forecastYearTotal)}
-                    </Text>
-                    <Text style={styles.chartAvgText}>
-                      เฉลี่ย {formatMoney(forecastMonthlyAvg)}/ด.
-                    </Text>
-                  </View>
-
-                  {/* Subrow for Received vs Pending breakdown if current year */}
-                  {selectedYear === currentYear && (
-                    <View style={styles.receivedPendingRow}>
-                      <View style={styles.receivedPill}>
-                        <View style={styles.dotReceived} />
-                        <Text style={styles.receivedPillText}>
-                          รับแล้ว {formatMoney(forecastYearReceived)}
-                        </Text>
-                      </View>
-                      <View style={styles.pendingPill}>
-                        <View style={styles.dotPending} />
-                        <Text style={styles.pendingPillText}>
-                          รอรับ {formatMoney(forecastYearPending)}
-                        </Text>
-                      </View>
+                    {/* Total Amount & Monthly Average */}
+                    <View style={styles.chartTotalRow}>
+                      <CalmText variant="display" size={40} color={colors.ink}>
+                        {formatMoney(forecastYearTotal)}
+                      </CalmText>
+                      <Pill
+                        kind="ink"
+                        size="md"
+                        label={`เฉลี่ย ${formatMoney(forecastMonthlyAvg)}/ด.`}
+                      />
                     </View>
-                  )}
+
+                    {/* Subrow for Received vs Pending breakdown if current year */}
+                    {selectedYear === currentYear && (
+                      <View style={styles.receivedPendingRow}>
+                        <View style={styles.receivedPill}>
+                          <View style={styles.dotReceived} />
+                          <CalmText variant="mono" size={11} color={colors.ink}>
+                            รับแล้ว {formatMoney(forecastYearReceived)}
+                          </CalmText>
+                        </View>
+                        <View style={styles.pendingPill}>
+                          <View style={styles.dotPending} />
+                          <CalmText variant="mono" size={11} color={colors.muted}>
+                            รอรับ {formatMoney(forecastYearPending)}
+                          </CalmText>
+                        </View>
+                      </View>
+                    )}
+                  </View>
                 </View>
-              </View>
 
               {/* Monthly Bar Chart View (ข้อ 3 แบบ A) */}
               <View style={styles.barsContainer}>
@@ -1391,34 +1353,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   {selectedYear === currentYear ? (
                     <>
                       <View style={styles.chartLegendItem}>
-                        <View style={[styles.chartLegendDot, { backgroundColor: '#059669' }]} />
-                        <Text style={styles.chartLegendText}>รับแล้ว</Text>
+                        <View style={[styles.chartLegendDot, styles.chartLegendSquareReceived]} />
+                        <CalmText variant="monoRegular" size={11} color={colors.ink}>รับแล้ว</CalmText>
                       </View>
                       <View style={styles.chartLegendItem}>
-                        <View style={[styles.chartLegendDot, { backgroundColor: '#6EE7B7' }]} />
-                        <Text style={styles.chartLegendText}>รอรับ</Text>
+                        <View style={[styles.chartLegendDot, styles.chartLegendSquareProjected]} />
+                        <CalmText variant="monoRegular" size={11} color={colors.muted}>รอรับ</CalmText>
                       </View>
                       <View style={styles.chartLegendItem}>
                         <View style={styles.nowBadgeLegend}>
-                          <Ionicons name="caret-up" size={8} color="#059669" />
-                          <Text style={styles.nowBadgeText}>Now</Text>
+                          <Ionicons name="caret-up" size={8} color={colors.ink} />
+                          <CalmText variant="mono" size={9} color={colors.ink}>Now</CalmText>
                         </View>
-                        <Text style={styles.chartLegendText}>เดือนปัจจุบัน</Text>
+                        <CalmText variant="monoRegular" size={11} color={colors.ink}>เดือนปัจจุบัน</CalmText>
                       </View>
                     </>
                   ) : typeof selectedYear === 'number' && selectedYear < currentYear ? (
                     <View style={styles.chartLegendItem}>
-                      <View style={[styles.chartLegendDot, { backgroundColor: '#059669' }]} />
-                      <Text style={styles.chartLegendText}>รับจริงแล้วทั้งหมด</Text>
+                      <View style={[styles.chartLegendDot, styles.chartLegendSquareReceived]} />
+                      <CalmText variant="monoRegular" size={11} color={colors.ink}>รับจริงแล้วทั้งหมด</CalmText>
                     </View>
                   ) : (
                     <View style={styles.chartLegendItem}>
-                      <View style={[styles.chartLegendDot, { backgroundColor: '#6EE7B7' }]} />
-                      <Text style={styles.chartLegendText}>คาดการณ์ล่วงหน้า</Text>
+                      <View style={[styles.chartLegendDot, styles.chartLegendSquareProjected]} />
+                      <CalmText variant="monoRegular" size={11} color={colors.muted}>คาดการณ์ล่วงหน้า</CalmText>
                     </View>
                   )}
                 </View>
-                <Text style={styles.chartLegendHint}>แตะแท่งกราฟเพื่อดูรายการ</Text>
+                <CalmText variant="monoRegular" size={11} color={colors.muted}>แตะแท่งกราฟเพื่อดูรายการ</CalmText>
               </View>
 
               {/* Selected Month Detail Pop-out */}
@@ -1515,6 +1477,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               )}
             </>
           )}
+          </Card>
         </View>
 
         {/* Minimal Passive Income Goal Card */}
@@ -1642,229 +1605,187 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <Modal
         visible={isInflowFilterModalVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setIsInflowFilterModalVisible(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsInflowFilterModalVisible(false)}
+        <SheetFrame
+          title="ประเภทกระแสเงินสด"
+          onClose={() => setIsInflowFilterModalVisible(false)}
         >
-          <View style={styles.pickerModalContent} onStartShouldSetResponder={() => true}>
-            <View style={styles.pickerModalHeader}>
-              <View style={styles.pickerModalTitleRow}>
-                <Ionicons name="funnel-outline" size={17} color="#059669" />
-                <Text style={styles.pickerModalTitle}>กรองประเภทกระแสเงินสด</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setIsInflowFilterModalVisible(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="close" size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.pickerOptionsList}>
-              {[
-                {
-                  label: 'ทั้งหมด (ปันผล + ดอกเบี้ย)',
-                  sublabel: 'หุ้น, กองทุนรวม และเงินฝากธนาคาร',
-                  value: 'ALL',
-                  icon: 'wallet-outline',
-                  color: '#059669',
-                },
-                {
-                  label: 'เฉพาะหุ้นและกองทุน (เงินปันผล)',
-                  sublabel: 'เงินปันผลจากหุ้นไทย, หุ้นนอก และกองทุน',
-                  value: 'DIVIDENDS',
-                  icon: 'trending-up-outline',
-                  color: '#2563EB',
-                },
-                {
-                  label: 'เฉพาะบัญชีเงินฝาก (ดอกเบี้ย)',
-                  sublabel: 'ดอกเบี้ยเงินฝากออมทรัพย์และดิจิทัล',
-                  value: 'INTEREST',
-                  icon: 'cash-outline',
-                  color: '#10B981',
-                },
-              ].map((opt) => {
-                const isSelected = inflowFilter === opt.value;
-                return (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
-                    onPress={() => {
-                      setInflowFilter(opt.value as any);
-                      setIsInflowFilterModalVisible(false);
-                      setSelectedMonth(null);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.pickerOptionLeft}>
-                      <View style={[styles.pickerIconCircle, { backgroundColor: `${opt.color}15` }]}>
-                        <Ionicons name={opt.icon as any} size={16} color={opt.color} />
-                      </View>
-                      <View>
-                        <Text style={[styles.pickerOptionLabel, isSelected && styles.pickerOptionLabelSelected]}>
-                          {opt.label}
-                        </Text>
-                        <Text style={styles.pickerOptionSublabel}>{opt.sublabel}</Text>
-                      </View>
+          <View style={styles.pickerOptionsList}>
+            {[
+              {
+                label: 'ทั้งหมด (ปันผล + ดอกเบี้ย)',
+                sublabel: 'หุ้น, กองทุนรวม และเงินฝากธนาคาร',
+                value: 'ALL',
+                icon: 'wallet-outline',
+                color: chartColors.stocks,
+              },
+              {
+                label: 'เฉพาะหุ้นและกองทุน (เงินปันผล)',
+                sublabel: 'เงินปันผลจากหุ้นไทย, หุ้นนอก และกองทุน',
+                value: 'DIVIDENDS',
+                icon: 'trending-up-outline',
+                color: chartColors.stocks,
+              },
+              {
+                label: 'เฉพาะบัญชีเงินฝาก (ดอกเบี้ย)',
+                sublabel: 'ดอกเบี้ยเงินฝากออมทรัพย์และดิจิทัล',
+                value: 'INTEREST',
+                icon: 'cash-outline',
+                color: chartColors.cash,
+              },
+            ].map((opt) => {
+              const isSelected = inflowFilter === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
+                  onPress={() => {
+                    setInflowFilter(opt.value as any);
+                    setIsInflowFilterModalVisible(false);
+                    setSelectedMonth(null);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.pickerOptionLeft}>
+                    <View style={[styles.pickerIconCircle, { backgroundColor: isSelected ? colors.ink : colors.track }]}>
+                      <Ionicons name={opt.icon as any} size={16} color={isSelected ? colors.accent : colors.ink} />
                     </View>
-                    {isSelected ? (
-                      <Ionicons name="checkmark-circle" size={20} color="#059669" />
-                    ) : (
-                      <View style={styles.pickerUncheckedCircle} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+                    <View>
+                      <CalmText variant="bodyBold" size={13} color={colors.ink}>
+                        {opt.label}
+                      </CalmText>
+                      <CalmText variant="monoRegular" size={11} color={colors.muted}>
+                        {opt.sublabel}
+                      </CalmText>
+                    </View>
+                  </View>
+                  {isSelected ? (
+                    <Ionicons name="checkmark-circle" size={20} color={colors.gainOnLight} />
+                  ) : (
+                    <View style={styles.pickerUncheckedCircle} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </View>
-        </TouchableOpacity>
+        </SheetFrame>
       </Modal>
 
       {/* 12. Modal: เลือกปีแสดงผล */}
       <Modal
         visible={isYearPickerModalVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setIsYearPickerModalVisible(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsYearPickerModalVisible(false)}
+        <SheetFrame
+          title="เลือกปีแสดงกระแสเงินสด"
+          onClose={() => setIsYearPickerModalVisible(false)}
         >
-          <View style={styles.pickerModalContent} onStartShouldSetResponder={() => true}>
-            <View style={styles.pickerModalHeader}>
-              <View style={styles.pickerModalTitleRow}>
-                <Ionicons name="calendar-outline" size={17} color="#059669" />
-                <Text style={styles.pickerModalTitle}>เลือกปีแสดงกระแสเงินสด</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setIsYearPickerModalVisible(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="close" size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
+          <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+            <View style={styles.pickerOptionsList}>
+              {availableYears.map((yr) => {
+                const isSelected = selectedYear === yr;
+                const isCurYear = yr === currentYear;
+                const badgeText = isCurYear
+                  ? 'ปีนี้'
+                  : yr === currentYear - 1
+                  ? 'ปีที่แล้ว'
+                  : yr === currentYear + 1
+                  ? 'ปีหน้า'
+                  : null;
 
-            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-              <View style={styles.pickerOptionsList}>
-                {availableYears.map((yr) => {
-                  const isSelected = selectedYear === yr;
-                  const isCurYear = yr === currentYear;
-                  const badgeText = isCurYear
-                    ? 'ปีนี้'
-                    : yr === currentYear - 1
-                    ? 'ปีที่แล้ว'
-                    : yr === currentYear + 1
-                    ? 'ปีหน้า'
-                    : null;
-
-                  return (
-                    <TouchableOpacity
-                      key={yr}
-                      style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
-                      onPress={() => {
-                        setSelectedYear(yr);
-                        setIsYearPickerModalVisible(false);
-                        setSelectedMonth(null);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.pickerOptionLeft}>
-                        <View
-                          style={[
-                            styles.pickerIconCircle,
-                            { backgroundColor: isCurYear ? '#ECFDF5' : '#F1F5F9' },
-                          ]}
-                        >
-                          <Ionicons
-                            name="calendar"
-                            size={16}
-                            color={isCurYear ? '#059669' : '#64748B'}
-                          />
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text
-                            style={[
-                              styles.pickerOptionLabel,
-                              isSelected && styles.pickerOptionLabelSelected,
-                            ]}
-                          >
-                            ปี {yr}
-                          </Text>
-                          {badgeText && (
-                            <View
-                              style={[
-                                styles.yearBadgePill,
-                                isCurYear ? styles.yearBadgePillCurrent : styles.yearBadgePillDefault,
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.yearBadgeText,
-                                  isCurYear ? styles.yearBadgeTextCurrent : styles.yearBadgeTextDefault,
-                                ]}
-                              >
-                                {badgeText}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                      </View>
-                      {isSelected ? (
-                        <Ionicons name="checkmark-circle" size={20} color="#059669" />
-                      ) : (
-                        <View style={styles.pickerUncheckedCircle} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-
-                {/* Option: Rolling 12M */}
-                <TouchableOpacity
-                  style={[
-                    styles.pickerOptionItem,
-                    selectedYear === 'ROLLING' && styles.pickerOptionItemSelected,
-                  ]}
-                  onPress={() => {
-                    setSelectedYear('ROLLING');
-                    setIsYearPickerModalVisible(false);
-                    setSelectedMonth(null);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.pickerOptionLeft}>
-                    <View style={[styles.pickerIconCircle, { backgroundColor: '#ECFDF5' }]}>
-                      <Ionicons name="repeat-outline" size={16} color="#059669" />
-                    </View>
-                    <View>
-                      <Text
+                return (
+                  <TouchableOpacity
+                    key={yr}
+                    style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
+                    onPress={() => {
+                      setSelectedYear(yr);
+                      setIsYearPickerModalVisible(false);
+                      setSelectedMonth(null);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.pickerOptionLeft}>
+                      <View
                         style={[
-                          styles.pickerOptionLabel,
-                          selectedYear === 'ROLLING' && styles.pickerOptionLabelSelected,
+                          styles.pickerIconCircle,
+                          { backgroundColor: isSelected ? colors.ink : colors.track },
                         ]}
                       >
-                        12 เดือนข้างหน้า (Rolling 12M)
-                      </Text>
-                      <Text style={styles.pickerOptionSublabel}>
-                        คำนวณ 12 เดือนข้างหน้าเริ่มต้นจากเดือนปัจจุบัน
-                      </Text>
+                        <Ionicons
+                          name="calendar"
+                          size={16}
+                          color={isSelected ? colors.accent : colors.ink}
+                        />
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <CalmText
+                          variant="mono"
+                          size={14}
+                          color={colors.ink}
+                        >
+                          ปี {yr}
+                        </CalmText>
+                        {badgeText && (
+                          <Pill
+                            kind={isCurYear ? 'accent' : 'outline'}
+                            size="sm"
+                            label={badgeText}
+                          />
+                        )}
+                      </View>
                     </View>
+                    {isSelected ? (
+                      <Ionicons name="checkmark-circle" size={20} color={colors.gainOnLight} />
+                    ) : (
+                      <View style={styles.pickerUncheckedCircle} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+
+              {/* Option: Rolling 12M */}
+              <TouchableOpacity
+                style={[
+                  styles.pickerOptionItem,
+                  selectedYear === 'ROLLING' && styles.pickerOptionItemSelected,
+                ]}
+                onPress={() => {
+                  setSelectedYear('ROLLING');
+                  setIsYearPickerModalVisible(false);
+                  setSelectedMonth(null);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.pickerOptionLeft}>
+                  <View style={[styles.pickerIconCircle, { backgroundColor: selectedYear === 'ROLLING' ? colors.ink : colors.track }]}>
+                    <Ionicons name="repeat-outline" size={16} color={selectedYear === 'ROLLING' ? colors.accent : colors.ink} />
                   </View>
-                  {selectedYear === 'ROLLING' ? (
-                    <Ionicons name="checkmark-circle" size={20} color="#059669" />
-                  ) : (
-                    <View style={styles.pickerUncheckedCircle} />
-                  )}
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
+                  <View>
+                    <CalmText
+                      variant="bodyBold"
+                      size={13}
+                      color={colors.ink}
+                    >
+                      12 เดือนข้างหน้า (Rolling 12M)
+                    </CalmText>
+                    <CalmText variant="monoRegular" size={11} color={colors.muted}>
+                      คำนวณ 12 เดือนข้างหน้าเริ่มต้นจากเดือนปัจจุบัน
+                    </CalmText>
+                  </View>
+                </View>
+                {selectedYear === 'ROLLING' ? (
+                  <Ionicons name="checkmark-circle" size={20} color={colors.gainOnLight} />
+                ) : (
+                  <View style={styles.pickerUncheckedCircle} />
+                )}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </SheetFrame>
       </Modal>
     </SafeAreaView>
   );
@@ -2045,17 +1966,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   chartCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    elevation: 1,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
+    backgroundColor: colors.surface,
   },
   chartHeaderRow: {
     flexDirection: 'row',
@@ -2073,35 +1984,25 @@ const styles = StyleSheet.create({
   },
   chartCardTitle: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   yearTagPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 10,
-    borderWidth: 0.5,
   },
-  yearTagPillCurrent: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
-  },
-  yearTagPillDefault: {
-    backgroundColor: '#F1F5F9',
-    borderColor: '#E2E8F0',
-  },
+  yearTagPillCurrent: {},
+  yearTagPillDefault: {},
   yearTagText: {
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: fonts.mono,
   },
   yearTagTextCurrent: {
-    color: '#047857',
+    color: colors.ink,
   },
   yearTagTextDefault: {
-    color: '#64748B',
+    color: colors.muted,
   },
   chartTotalRow: {
     flexDirection: 'row',
@@ -2110,14 +2011,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   chartTotalAmount: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 40,
+    fontFamily: fonts.display,
+    color: colors.ink,
   },
   chartAvgText: {
     fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
+    fontFamily: fonts.mono,
   },
   receivedPendingRow: {
     flexDirection: 'row',
@@ -2128,34 +2028,36 @@ const styles = StyleSheet.create({
   receivedPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   pendingPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   dotReceived: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#059669',
+    width: 10,
+    height: 10,
+    borderRadius: 2,
+    backgroundColor: colors.ink,
   },
   dotPending: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#6EE7B7',
+    width: 10,
+    height: 10,
+    borderRadius: 2,
+    backgroundColor: colors.projected,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
   },
   receivedPillText: {
     fontSize: 11,
-    color: '#047857',
-    fontWeight: '600',
+    color: colors.ink,
+    fontFamily: fonts.mono,
   },
   pendingPillText: {
     fontSize: 11,
-    color: '#059669',
-    fontWeight: '600',
+    color: colors.muted,
+    fontFamily: fonts.mono,
   },
   emptyChartBox: {
     paddingVertical: 32,
@@ -2295,33 +2197,42 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 12,
     paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopWidth: 1.5,
+    borderTopColor: colors.track,
   },
   chartLegendItemsWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
   },
   chartLegendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   chartLegendDot: {
-    width: 6,
-    height: 6,
+    width: 14,
+    height: 14,
     borderRadius: 3,
+  },
+  chartLegendSquareReceived: {
+    backgroundColor: colors.ink,
+  },
+  chartLegendSquareProjected: {
+    backgroundColor: colors.projected,
+    borderWidth: 2,
+    borderColor: colors.ink,
   },
   chartLegendText: {
     fontSize: 11,
-    color: '#475569',
-    fontWeight: '600',
+    color: colors.ink,
+    fontFamily: fonts.monoRegular,
   },
   chartLegendHint: {
-    fontSize: 10,
-    color: '#94A3B8',
+    fontSize: 11,
+    color: colors.muted,
+    fontFamily: fonts.monoRegular,
   },
   selectedMonthDetails: {
     marginTop: 14,
@@ -2618,105 +2529,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  filterDropdownBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    elevation: 1,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-  },
-  filterDropdownText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
+  filterDropdownBtn: {},
+  filterDropdownText: {},
   yearSelectorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 3,
-    paddingVertical: 2,
-    elevation: 1,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
+    gap: 4,
   },
   yearArrowBtn: {
-    paddingHorizontal: 7,
-    paddingVertical: 5,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 999,
   },
-  yearDisplayBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
-  yearDisplayText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
-    justifyContent: 'flex-end',
-  },
-  pickerModalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
-    paddingHorizontal: 16,
-    maxHeight: '80%',
-  },
-  pickerModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    marginBottom: 8,
-  },
-  pickerModalTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  pickerModalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
+  yearDisplayBtn: {},
+  yearDisplayText: {},
   pickerOptionsList: {
     paddingVertical: 4,
-    gap: 4,
+    gap: 6,
   },
   pickerOptionItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 12,
+    borderRadius: 14,
   },
   pickerOptionItemSelected: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: colors.bg,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
   },
   pickerOptionLeft: {
     flexDirection: 'row',
@@ -2725,24 +2567,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pickerIconCircle: {
-    width: 34,
-    height: 34,
+    width: 36,
+    height: 36,
     borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pickerOptionLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#334155',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   pickerOptionLabelSelected: {
-    color: '#047857',
-    fontWeight: '700',
+    color: colors.ink,
   },
   pickerOptionSublabel: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: colors.muted,
+    fontFamily: fonts.thai,
     marginTop: 2,
   },
   pickerUncheckedCircle: {
@@ -2750,7 +2594,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderColor: colors.shadow,
   },
   yearBadgePill: {
     paddingHorizontal: 6,

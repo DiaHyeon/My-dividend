@@ -196,16 +196,57 @@
 
 ---
 
-## 11. ขั้นตอนต่อไป
+## 11. ผลการดำเนินการขั้นตอนที่ 2D (Chart Header, Filter Bar & Modals)
 
-พร้อมเข้าสู่ **ขั้นตอนที่ 2D** ตาม [PLAN.md](file:///c:/Users/lenovo/Documents/My%20dividend/docs/calm/PLAN.md):
-- Chart Header, Filter Bar & Modals (`src/screens/Dashboard.tsx`)
-- ปรับแถบปุ่มตัวกรอง (Inflow filter) และตัวเลือกปี (Year selector) เป็น `<Pill kind="outline">`
-- ปรับชิป "XD Cutoff" เป็น Pill outline
-- ปรับกรอบชาร์ตเป็น `<Card shadow="md" padding={16}>`
-- ปรับตัวเลขยอดรวมชาร์ตเป็น `<CalmText variant="display" size={40}>` และยอดเฉลี่ยเป็น `<Pill kind="ink">`
-- ปรับจุดสัญลักษณ์ Legend เป็นสี่เหลี่ยม 14px (ได้รับแล้ว = `colors.ink`, คาดการณ์ = `colors.projected` ขอบ ink 2)
-- ห่อ Modal ตัวกรองด้วย `<SheetFrame>` (ลบ backdrop View ซ้ำซ้อนออก และห่อ KeyboardAvoidingView ชั้นนอกสุด)
+- **ไฟล์ที่แก้ไข**: `src/screens/Dashboard.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **Section Header & XD Cutoff Badge**:
+     - หัวข้อปันผล 12 เดือนและคำอธิบายใต้หัวข้อ ปรับใช้ `<CalmText variant="bodyBold">` และ `<CalmText variant="monoRegular">`
+     - ชิป "XD Cutoff" แปลงเป็น `<Pill kind="outline" size="sm" label="XD Cutoff" />` สไตล์ Calm ขอบ 2px ink
+  2. **Unified Filter Bar (แถบตัวกรองคู่: Inflow Dropdown + Year Selector)**:
+     - ปุ่มเลือกประเภทกระแสเงินสด (Inflow filter) แปลงเป็น `<Pill kind="outline" size="md" ... />`
+     - แถบเลือกปี (Year selector) คงปุ่มลูกศร `[ ‹ ]` และ `[ › ]` พร้อมแปลงปุ่มแสดงปีตรงกลางเป็น `<Pill kind="outline" size="md" ... />`
+     - ปลดสไตล์กรอบขาว/เงาเบลอเดิมของ `yearSelectorContainer` ออก ให้เป็น Flex row ธรรมดาที่เชื่อมองค์ประกอบด้วย Pill
+  3. **โครงสร้างกรอบกราฟ (Chart Card Outer Frame)**:
+     - ห่อชาร์ตด้วย `<Card shadow="md" padding={16}>` พร้อมระยะห่าง `marginBottom: 20`
+     - กรณียังไม่มีข้อมูล (Empty State): ใช้ `<CalmText variant="bodyBold">` และ `<CalmText variant="monoRegular">` สี muted
+  4. **Year Summary Header (สรุปยอดรวมชาร์ต)**:
+     - หัวข้อปี/Rolling 12M ใช้ `<CalmText variant="bodyBold" size={13}>`
+     - ป้ายกำกับปี (Year Tag) แปลงเป็น `<Pill size="sm">` (ปีนี้/Rolling = `accent`, ปีย้อนหลัง = `outline`)
+     - ยอดรวมกระแสเงินสดทั้งปี: แสดงผลด้วยฟอนต์ใหญ่ `<CalmText variant="display" size={40} color={colors.ink}>`
+     - ยอดเฉลี่ยต่อเดือน: แปลงเป็น `<Pill kind="ink" size="md" label={`เฉลี่ย ${formatMoney(forecastMonthlyAvg)}/ด.`} />`
+     - แถบแจกแจง รับแล้ว vs รอรับ:
+       - จุดรับแล้ว: สี่เหลี่ยม 10x10 พื้นหลัง `colors.ink`
+       - จุดรอรับ: สี่เหลี่ยม 10x10 พื้นหลัง `colors.projected` ขอบ 1.5px `colors.ink`
+       - ข้อความยอดเงินคง privacy masking ผ่าน `formatMoney()` เดิม
+  5. **สัญลักษณ์ Legend (Chart Legend Row)**:
+     - ปรับจุดสัญลักษณ์ Legend จากเดิมวงกลม เป็นสี่เหลี่ยมขนาด 14px:
+       - ได้รับแล้ว: สี่เหลี่ยม 14x14 สี `colors.ink`
+       - คาดการณ์/รอรับ: สี่เหลี่ยม 14x14 สี `colors.projected` พร้อมขอบหนา 2px `colors.ink`
+       - เดือนปัจจุบัน (Now): ปรับใช้โทเค็น Calm ink
+     - ป้ายกำกับข้อความ Legend ทั้งหมดใช้ `<CalmText variant="monoRegular" size={11}>`
+  6. **Modal Bottom Sheets (Inflow Filter Modal & Year Picker Modal)**:
+     - ห่อทั้ง 2 Modal ด้วยคอมโพเนนต์สำเร็จรูป `<SheetFrame title="..." onClose={...}>`
+     - ลบ backdrop `modalOverlay`, `pickerModalContent`, และ `pickerModalHeader` เดิมออกทั้งหมด 100% ทำให้ไม่เกิดปัญหา Backdrop/Scrim ทับซ้อนกัน และได้ Grab handle + ปุ่มปิดกลม 44px ทันที
+     - ตัวเลือกรายการใน Modal: ปรับใช้ `<CalmText variant="bodyBold">`, `<CalmText variant="monoRegular">`, ขอบหนา 1.5px เมื่อถูกเลือก, และไอคอนติ๊กถูกสี `colors.gainOnLight`
+  7. **การคลีน Hex Code**: ลบ raw hex colors ใน style block ที่เกี่ยวข้องออกทั้งหมด
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+---
+
+## 12. ขั้นตอนต่อไป
+
+พร้อมเข้าสู่ **ขั้นตอนที่ 2E** ตาม [PLAN.md](file:///c:/Users/lenovo/Documents/My%20dividend/docs/calm/PLAN.md):
+- Bar Chart Colours & Bars (`src/screens/Dashboard.tsx`)
+- ขอบแสดงอยู่บนตัวแท่งกราฟ (`borderWidth: 2, borderColor: colors.ink`)
+- แท่งที่ได้รับแล้ว = `colors.ink`
+- แท่งเดือนปัจจุบัน = `colors.accent`
+- แท่งคาดการณ์ = `colors.projected`
+- แท่งค่า 0: `borderWidth: 0` และคงสูตรความสูงเดิม
+- ฟอนต์ตัวเลขเหนือแท่ง (JetBrains Mono 11) และชื่อเดือน (Noto Sans Thai 11)
+
 
 
 
