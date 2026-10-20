@@ -751,6 +751,84 @@
   - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
   - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
 
+---
+
+## 17. ผลการดำเนินการปรับโฉมหน้า Portfolio Screen (Phase 3) ตาม Calm Mint Theme
+
+- **ไฟล์ที่แก้ไข**: `src/screens/Portfolio.tsx`
+- **Commits**: `9e2e6f4`, `10f4d5f`, `47f000a`, `e1c8325`, `e0eead6`, `f5b35e2`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **Step 3A — ส่วนหัวหน้าจอและ Mode Switcher**:
+     - พื้นหลัง `#EAF3EE`, หัวข้อ `พอร์ตการลงทุน` (32px Bricolage Grotesque)
+     - แถบสลับโหมดแคปซูล 44px: `สัดส่วน` vs `ผลตอบแทน`
+  2. **Step 3B — โหมดสัดส่วนสินทรัพย์ (Portfolio Allocation View)**:
+     - Donut Chart สไตล์ Calm Mint ปรับขนาดรัศมี 140px ชัดเจน ตัดเส้นโยง (callout lines) ออกทั้งหมดเพื่อป้องกันปัญหาข้อความทับซ้อนในจอแคบ
+     - กล่อง Legend กะทัดรัด พร้อมการ์ดรายการสินทรัพย์ในพอร์ตห่อด้วย `<Card>`
+  3. **Step 3C — โหมดผลตอบแทนพอร์ต (Portfolio Performance View)**:
+     - การ์ดผลตอบแทนเทียบ Benchmark ห่อด้วย `<Card variant="dark">`
+     - แถบเลือก Timeframe แคปซูล (`1M`, `3M`, `6M`, `1Y`, `ALL`)
+     - กราฟเปรียบเทียบตลาด (Benchmark Curve) แสดงผลร่วมกับดัชนี (SET, S&P 500 ฯลฯ)
+  4. **Step 3D — Benchmark Selector Bottom Sheet Modal**:
+     - ปรับมาใช้ `<SheetFrame title="เลือกดัชนีเปรียบเทียบ">` พร้อมตัวเลือกและวงกลมเช็คถูกสีมิ้นต์
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error
+  - `npm test`: 83/83 ผ่านทั้งหมด
+
+---
+
+## 18. ผลการแก้ไขปัญหา Layout ชนกันและการแสดงผลในหน้า Overview & Portfolio (Bug Fixes)
+
+- **ไฟล์ที่แก้ไข**: `src/screens/Dashboard.tsx`, `src/screens/Portfolio.tsx`, `src/components/CategoryBreakdownModal.tsx`
+- **Commits**: `21fbb7a`, `5ce381a`, `f36305d`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **Commit `21fbb7a` — ป้องกันตัวเลขยอดเงินใน Hero Net Worth และ Category Cards ชนกันเมื่อมียอดเงินพอร์ตสูง**:
+     - เพิ่ม `adjustsFontSizeToFit` และ `minimumFontScale={0.75}`
+     - ปรับเลย์เอาต์ส่วนหัวกระแสเงินสดรายปี (Annual Inflow Header) เป็นแบบซ้อน (Stacked) แทนแนวนอน เพื่อป้องกันไม่ให้ตัวเลขเงินและเปอร์เซ็นต์ทับกับป้ายกำกับ
+  2. **Commit `5ce381a` — มาตรฐานการแสดงผล Privacy Mode ในหน้า Portfolio และจัดระเบียบ Legend**:
+     - ปรับแก้รายการสินทรัพย์ใต้กราฟ Donut ในหน้า Portfolio เมื่อเปิด Privacy Mode ให้แสดงเป็น `฿•••••• (▲ X.X%)` เหมือนกันทุกหน้า
+     - จัดกลุ่มสินทรัพย์ย่อยที่สัดส่วนน้อยเป็น `อื่นๆ (X รายการ)` เพื่อความสะอาดตา
+  3. **Commit `f36305d` — แก้ปัญหากล่องสรุปกำไร/ขาดทุนเบี้ยวใน CategoryBreakdownModal**:
+     - จัดคอลัมน์ฝั่งซ้าย (ต้นทุนรวม) และฝั่งขวา (มูลค่าตลาดปัจจุบัน) ให้สมมาตรกันด้วย `flex: 1`
+     - เพิ่มยอดกำไร/ขาดทุนที่เป็นจำนวนเงินบาทคู่กับเปอร์เซ็นต์
+     - ยืดเส้นประคั่น `DashedDivider` ให้เต็มความกว้างกล่อง ไม่เบี้ยวหรือขาดช่วง
+
+---
+
+## 19. ผลการดำเนินการปรับโฉมหน้า Holdings & Transactions Screen (Phase 4)
+
+- **ไฟล์ที่แก้ไข**: `src/screens/AssetsScreen.tsx`, `src/components/AssetSparklineCard.tsx`, `docs/calm/PLAN-HOLDINGS.md`, `docs/calm/PLAN.md`
+- **Commits**: `3cf5049`, `e9aba52`, `47df638`, `0e1eb4f`, `8f9d37e`, `2ae3dbf`, `d8144d3`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **Step 4A — Header Bar & Mode Switcher (`AssetsScreen.tsx`) [Commit `3cf5049`]**:
+     - พื้นหลัง `#EAF3EE`, หัวเรื่อง `สินทรัพย์\n& ธุรกรรม` (32px Bricolage Grotesque / Noto Sans Thai)
+     - ปุ่ม Actions ขอบเข้ม: ปุ่มปิดตา (Eye Privacy), ปุ่ม `ส่งออก`, และปุ่ม `นำเข้า CSV` (พื้นเข้ม `#123D2A` ข้อความ `#6FCDA8`)
+     - Mode Switcher: รางแคปซูลมน 44px สลับระหว่าง `คงเหลือ (X)` และ `ประวัติ (X)`
+  2. **Step 4B — Search Bar, Category Filter Pills & Sort Bottom Sheet Modal (`AssetsScreen.tsx`) [Commit `e9aba52`]**:
+     - ช่องค้นหาแคปซูล 44px ขอบเข้ม 2px วางแนวนอนคู่กับปุ่มเรียงลำดับ `มูลค่า ▼`
+     - Bottom Sheet เรียงลำดับสไตล์ Calm Mint ด้วย `<SheetFrame>` (มูลค่าสูงสุด, กำไรสูงสุด, ขาดทุนมากสุด, A-Z) ไฮไลต์ `#EAF3EE` พร้อมวงกลมเช็คถูกสีมิ้นต์
+     - แถบตัวกรองหมวดหมู่แคปซูลด้วย `<Pill>`: `ทั้งหมด`, `หุ้น`, `กองทุน`, `เงินฝาก`
+  3. **Step 4C — Holdings Summary Banner (`AssetsScreen.tsx`) [Commit `47df638`]**:
+     - การ์ดสรุปยอดพอร์ตคงเหลือ `<Card variant="surface">` ขอบ 2px `#123D2A` เงา 4px `#A9CDB9`
+     - ฝั่งซ้าย: ป้าย `มูลค่ารวม (X รายการ)` 10px JetBrains Mono + ยอดเงิน 28px Bricolage
+     - ฝั่งขวา: แคปซูลสีเข้ม `#123D2A` แสดงตัวเลขกำไร/ขาดทุน `+฿190 (0.3%)` สี `#6FCDA8` (หรือ `#F5A593`)
+  4. **Step 4D — Asset Holdings Cards & Sparklines (`AssetSparklineCard.tsx`) [Commit `0e1eb4f`]**:
+     - การ์ดสินทรัพย์ห่อด้วย `<HardShadow size="md" radius={26}>` พื้นขาว `#FBFFFD` ขอบ 2px `#123D2A`
+     - แถวบน: ชื่อหุ้น 24px Bricolage + ป้าย `USD $` (หุ้นสหรัฐฯ) + ปุ่มแคปซูล `แก้ไข`
+     - แถวสอง: มูลค่าตลาด 28px Bricolage + กำไร/ขาดทุน 12px mono (`colors.gainOnLight` / `colors.lossOnLight`)
+     - เส้นประคั่น `DashedDivider`
+     - ตารางสถิติ 3 ช่อง: `จำนวนที่ถือ` | `ต้นทุน` | `ราคาตลาด`
+     - แถบ Total Return เมื่อมีเงินปันผลสะสม
+     - กราฟ Sparkline 7 วัน: แถบหัวเรื่อง `7 DAYS` พร้อมเปอร์เซ็นต์, เส้นกราฟขอบหมึก `#123D2A` หนา 2px, พื้นที่ใต้กราฟสี `#6FCDA8`/`#F5A593` โปร่งแสง 45%
+  5. **Step 4E — Transaction History View & Filter Modals (`AssetsScreen.tsx`) [Commit `8f9d37e`]**:
+     - แถบตัวกรองแคปซูล 44px: `ทุกปี ▼` | `ทุกเดือน ▼` | `ทุกประเภท ▼` พร้อมปุ่ม `ล้าง`
+     - การ์ดสรุปยอดธุรกรรมรวม 28px Bricolage พร้อมป้ายแคปซูล `X รายการ`
+     - การ์ดประวัติรายการธุรกรรมแต่ละไม้: แถวบนแสดงวันที่ทำรายการและป้าย `ซื้อ (BUY)` / `ขาย (SELL)` พร้อมปุ่มกลมแก้ไข 34px, เส้นประคั่น `DashedDivider`, แถวล่างแสดงชื่อหุ้น, จำนวนหุ้น @ ราคา และยอดเงินธุรกรรม
+     - แปลง Bottom Sheet ตัวกรองปี/เดือน/ประเภท เป็น `<SheetFrame>` ทั้งหมด
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error
+  - `npm test`: 83/83 ผ่านทั้งหมด 100%
+
+
 
 
 
