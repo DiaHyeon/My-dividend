@@ -333,14 +333,52 @@
 
 ---
 
-## 15. ขั้นตอนต่อไป
+## 15. การดำเนินการขั้นตอนที่ 2G-1: ปรับ Modal ปรับปรุงเงินปันผล (`src/components/AdjustDividendModal.tsx`)
 
-พร้อมเข้าสู่ **ขั้นตอนที่ 2G-1**:
-- ปรับ Modal ปรับปรุงเงินปันผล `src/components/AdjustDividendModal.tsx`
-  - ใช้ `<SheetFrame title="..." onClose={handler}>`
-  - ห่อด้วย `KeyboardAvoidingView` ชั้นนอกสุดภายใน `<Modal>` เนื่องจากมี input fields
-  - ช่องกรอก: ใช้ `inputStyle` จาก Calm tokens (คง props คีย์บอร์ดและ validation เดิม)
-  - ปุ่มหลัก: `<CapsuleButton variant="ink">`, ปุ่มรอง: `<CapsuleButton variant="surface">`
+- **ไฟล์ที่แก้ไข**: `src/components/AdjustDividendModal.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **โครงสร้าง SheetFrame & KeyboardAvoidingView**:
+     - ปลด backdrop/scrim `styles.modalOverlay`, `styles.backdrop`, และ `styles.sheetContainer` เดิมออกทั้งหมด
+     - จัดโครงสร้างตามกติกา: `<Modal><KeyboardAvoidingView ...><SheetFrame title={`ปรับยอด ${target.symbol}`} onClose={onClose}>...</SheetFrame></KeyboardAvoidingView></Modal>`
+     - ทำให้ได้ Slide-up Bottom Sheet พร้อม Grab handle และปุ่มปิดกลม 44px ทันที โดยคีย์บอร์ดไม่บังช่องกรอก
+  2. **แถบข้อมูลอ้างอิงและประเภทสินทรัพย์ (Info Banner)**:
+     - ใช้ `<Pill kind={target.isInterest ? 'outline' : 'accent'} size="sm" label={target.isInterest ? 'ดอกเบี้ย' : 'ปันผล'} />`
+     - ข้อความรายละเอียด (เงินฝาก/จำนวนหุ้น, รอบวันที่ XD, อัตราภาษี): ใช้ `<CalmText variant="monoRegular" size={11} color={colors.ink}>`
+     - กรอบพื้นหลังสี `colors.track` ขอบมน 12px
+  3. **ช่องกรอกข้อมูลตัวเลข (Dual-sync Input Fields)**:
+     - ใช้ `inputStyle` จาก Calm tokens พร้อมระบุ `fontFamily: fonts.mono`, ขนาด 15
+     - ป้ายกำกับช่องกรอกใช้ `<CalmText variant="bodyBold" size={11} color={colors.muted}>`
+     - สี placeholder: `colors.muted`
+     - คง keyboardType, validation, dual-sync calculation (DPU <-> Net Amount), และ handlers เดิม 100%
+  4. **กล่องหมายเหตุอัตราแลกเปลี่ยน USD (USD Conversion Note)**:
+     - กรอบสี `colors.track` พร้อมเส้นขอบหนา 1.5px `colors.ink`
+     - แสดงผลการแปลงค่าเงินและอัตราแลกเปลี่ยนด้วย `<CalmText variant="monoRegular" size={11} color={colors.ink}>`
+  5. **กล่องสลับสถานะเงินเข้าและปันผลพิเศษ (Status Toggles & Checkbox)**:
+     - การ์ดตัวเลือกสถานะ: พื้นหลัง `colors.surface`, ขอบหนา 2px `colors.ink`, มนโค้ง 14px (เมื่อเลือกใช้พื้นหลัง `colors.bg`)
+     - กล่อง Checkbox: ขนาด 22x22, ขอบหนา 2px `colors.ink`, เมื่อเลือกใช้พื้นหลัง `colors.ink` พร้อมไอคอนติ๊กถูก/ประกายดาวสี `colors.accent`
+     - หัวข้อสถานะและคำอธิบาย: ใช้ `<CalmText>` tokens
+     - ป้าย One-off: ใช้ `<Pill kind="dashed" size="sm" label="One-off" />`
+  6. **ปุ่มขอบเขตการปรับ (Scope Buttons: ปรับเฉพาะงวดนี้ vs รอบอนาคต)**:
+     - คอนเทนเนอร์รางพื้นหลังสี `colors.track` มีกรอบหนา 1.5px `colors.ink`
+     - ปุ่มที่ Active: พื้นหลัง `colors.ink` พร้อมข้อความสี `colors.accent`
+     - ปุ่มที่ Inactive: ข้อความสี `colors.ink`
+  7. **ปุ่มดำเนินการ (Action Buttons)**:
+     - ปุ่มยกเลิก: `<CapsuleButton variant="surface" label="ยกเลิก" onPress={onClose} disabled={isSubmitting} />`
+     - ปุ่มบันทึกข้อมูล: `<CapsuleButton variant="ink" label="บันทึกข้อมูล" onPress={handleSave} disabled={isSubmitting} />` (แสดง ActivityIndicator สี mint เมื่อกำลังบันทึก)
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+---
+
+## 16. ขั้นตอนต่อไป
+
+พร้อมเข้าสู่ **ขั้นตอนที่ 2G-2**:
+- ปรับ Sheet เปรียบเทียบผลตอบแทนรายปี `src/components/AnnualComparisonSheet.tsx`
+  - ใช้ `<SheetFrame title="เปรียบเทียบผลตอบแทน" onClose={onClose}>`
+  - การ์ดและแถบสถิติ: ใช้ `<Card shadow="md">`, `<Pill>`, และ `<CalmText>` tokens
+  - ตารางประวัติและรายการสินทรัพย์: เส้นคั่น `<DashedDivider />`
+
 
 
 

@@ -16,6 +16,11 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { portfolioEvents } from '../services/eventService';
+import { SheetFrame } from './ui/SheetFrame';
+import { Pill } from './ui/Pill';
+import { CalmText } from './ui/CalmText';
+import { CapsuleButton } from './ui/CapsuleButton';
+import { colors, fonts, inputStyle } from '../theme/tokens';
 
 const SPECIAL_SCHEDULES_STORAGE_KEY = '@my_dividend_special_schedules';
 
@@ -202,78 +207,56 @@ export const AdjustDividendModal: React.FC<AdjustDividendModalProps> = ({
   return (
     <Modal
       visible={visible}
-      animationType="fade"
+      animationType="slide"
       transparent={true}
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'android' ? 'height' : 'padding'}
-        style={styles.modalOverlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
       >
-        <TouchableOpacity
-          style={styles.backdrop}
-          activeOpacity={1}
-          onPress={onClose}
-        />
-        <View style={styles.sheetContainer}>
-          {/* Header */}
-          <View style={styles.sheetHeader}>
-            <View style={styles.headerLeft}>
-              <View style={[styles.typeBadge, target.isInterest ? styles.typeBadgeCash : styles.typeBadgeStock]}>
-                <Ionicons
-                  name={target.isInterest ? 'wallet-outline' : 'trending-up-outline'}
-                  size={12}
-                  color={target.isInterest ? '#059669' : '#2563EB'}
-                />
-                <Text style={[styles.typeBadgeText, target.isInterest ? styles.typeBadgeCashText : styles.typeBadgeStockText]}>
-                  {target.isInterest ? 'ดอกเบี้ยเงินฝาก' : 'เงินปันผล'}
-                </Text>
-              </View>
-              <Text style={styles.sheetTitle}>{target.symbol}</Text>
-            </View>
-            <TouchableOpacity
-              onPress={onClose}
-              style={styles.closeBtn}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="close" size={20} color="#64748B" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Reference Info */}
+        <SheetFrame title={`ปรับยอด ${target.symbol}`} onClose={onClose}>
+          {/* Reference Info & Asset Type */}
           <View style={styles.infoBanner}>
-            <Text style={styles.infoText}>
+            <Pill
+              kind={target.isInterest ? 'outline' : 'accent'}
+              size="sm"
+              label={target.isInterest ? 'ดอกเบี้ย' : 'ปันผล'}
+            />
+            <CalmText variant="monoRegular" size={11} color={colors.ink} style={{ flex: 1 }}>
               {target.isInterest
                 ? `เงินฝาก ฿${target.shares.toLocaleString()} • รอบวันที่ ${target.xdDate}`
                 : `${target.shares.toLocaleString()} หุ้น • วันที่ ${target.xdDate} (หักภาษี ${(target.taxRate * 100).toFixed(0)}%)`}
-            </Text>
+            </CalmText>
           </View>
 
           {/* Dual-sync Input Fields */}
           <View style={styles.inputsRow}>
             <View style={styles.inputCol}>
-              <Text style={styles.inputLabel}>
+              <CalmText variant="bodyBold" size={11} color={colors.muted} style={{ marginBottom: 6 }}>
                 {target.isInterest ? 'อัตราดอกเบี้ยต่อปี (%)' : `ปันผล/หุ้น (${target.currency === 'USD' ? '$' : '฿'})`}
-              </Text>
+              </CalmText>
               <TextInput
-                style={styles.textInput}
+                style={[inputStyle, { fontFamily: fonts.mono, fontSize: 15 }]}
                 keyboardType="numeric"
                 value={dpuStr}
                 onChangeText={handleDpuChange}
                 placeholder="0.00"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={colors.muted}
                 selectTextOnFocus
               />
             </View>
             <View style={styles.inputCol}>
-              <Text style={styles.inputLabel}>ยอดสุทธิเข้าบัญชี ({isUSD ? '$ USD' : '฿'})</Text>
+              <CalmText variant="bodyBold" size={11} color={colors.muted} style={{ marginBottom: 6 }}>
+                ยอดสุทธิเข้าบัญชี ({isUSD ? '$ USD' : '฿'})
+              </CalmText>
               <TextInput
-                style={[styles.textInput, styles.netInput]}
+                style={[inputStyle, { fontFamily: fonts.mono, fontSize: 15 }]}
                 keyboardType="numeric"
                 value={netAmountStr}
                 onChangeText={handleNetAmountChange}
                 placeholder="0.00"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={colors.muted}
                 selectTextOnFocus
               />
             </View>
@@ -282,10 +265,10 @@ export const AdjustDividendModal: React.FC<AdjustDividendModalProps> = ({
           {/* USD to THB Live Converted Note */}
           {isUSD && (
             <View style={styles.usdConversionNote}>
-              <Ionicons name="swap-horizontal" size={13} color="#059669" />
-              <Text style={styles.usdConversionNoteText}>
+              <Ionicons name="swap-horizontal" size={13} color={colors.ink} />
+              <CalmText variant="monoRegular" size={11} color={colors.ink}>
                 ≈ ฿{((parseFloat(netAmountStr) || 0) * effectiveRate).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (อัตราแลกเปลี่ยน ~฿{effectiveRate.toFixed(2)}/$)
-              </Text>
+              </CalmText>
             </View>
           )}
 
@@ -296,17 +279,17 @@ export const AdjustDividendModal: React.FC<AdjustDividendModalProps> = ({
             activeOpacity={0.8}
           >
             <View style={[styles.checkbox, isReceived && styles.checkboxActive]}>
-              {isReceived && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+              {isReceived && <Ionicons name="checkmark" size={14} color={colors.accent} />}
             </View>
             <View style={styles.statusTextContainer}>
-              <Text style={[styles.statusTitle, isReceived && styles.statusTitleActive]}>
+              <CalmText variant="bodyBold" size={13} color={colors.ink}>
                 {isReceived ? 'ได้รับเงินเข้าบัญชีแล้ว (ยอดเงินจริง)' : 'ยังไม่ได้รับ (ยอดคาดการณ์)'}
-              </Text>
-              <Text style={styles.statusSubtitle}>
+              </CalmText>
+              <CalmText variant="monoRegular" size={11} color={colors.muted}>
                 {isReceived
                   ? 'ยืนยันว่าเงินโอนเข้าบัญชีธนาคารเรียบร้อยแล้ว'
                   : 'ยังอยู่ในช่วงรอประกาศหรือรอยอดโอนเข้า'}
-              </Text>
+              </CalmText>
             </View>
           </TouchableOpacity>
 
@@ -323,34 +306,30 @@ export const AdjustDividendModal: React.FC<AdjustDividendModalProps> = ({
             activeOpacity={0.8}
           >
             <View style={[styles.checkbox, isSpecialDividend && styles.checkboxSpecial]}>
-              {isSpecialDividend && <Ionicons name="sparkles" size={13} color="#FFFFFF" />}
+              {isSpecialDividend && <Ionicons name="sparkles" size={13} color={colors.accent} />}
             </View>
             <View style={styles.statusTextContainer}>
               <View style={styles.specialTitleRow}>
-                <Text style={[styles.statusTitle, isSpecialDividend && styles.statusTitleSpecial]}>
+                <CalmText variant="bodyBold" size={13} color={colors.ink}>
                   เป็นเงินปันผลพิเศษ (Special Dividend)
-                </Text>
-                <View style={[styles.specialBadge, isSpecialDividend && styles.specialBadgeActive]}>
-                  <Text style={[styles.specialBadgeText, isSpecialDividend && styles.specialBadgeTextActive]}>
-                    One-off
-                  </Text>
-                </View>
+                </CalmText>
+                <Pill kind="dashed" size="sm" label="One-off" />
               </View>
-              <Text style={styles.statusSubtitle}>
+              <CalmText variant="monoRegular" size={11} color={colors.muted}>
                 {isSpecialDividend
                   ? 'จ่ายพิเศษเฉพาะงวดนี้ครั้งเดียว ระบบจะไม่นำยอดนี้ไปคูณซ้ำในรอบอนาคต'
                   : 'แตะหากงวดนี้เป็นเงินปันผลพิเศษ (ไม่ใช่อัตราปกติ)'}
-              </Text>
+              </CalmText>
             </View>
           </TouchableOpacity>
 
           {/* Scope Selection: Current vs Future */}
           {isSpecialDividend ? (
             <View style={styles.specialNoticeBox}>
-              <Ionicons name="information-circle" size={15} color="#D97706" />
-              <Text style={styles.specialNoticeText}>
+              <Ionicons name="information-circle" size={16} color={colors.ink} />
+              <CalmText variant="monoRegular" size={11} color={colors.ink} style={{ flex: 1, lineHeight: 16 }}>
                 ปันผลพิเศษจะปรับเฉพาะงวดนี้ โดยไม่นำไปเขียนทับรอบอนาคต เพื่อความแม่นยำของกระแสเงินสด
-              </Text>
+              </CalmText>
             </View>
           ) : (
             <View style={styles.scopeContainer}>
@@ -359,132 +338,59 @@ export const AdjustDividendModal: React.FC<AdjustDividendModalProps> = ({
                 onPress={() => setApplyToFuture(false)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.scopeBtnText, !applyToFuture && styles.scopeBtnTextActive]}>
+                <CalmText variant="mono" size={12} color={!applyToFuture ? colors.accent : colors.ink}>
                   ปรับเฉพาะงวดนี้
-                </Text>
+                </CalmText>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.scopeBtn, applyToFuture && styles.scopeBtnActive]}
                 onPress={() => setApplyToFuture(true)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.scopeBtnText, applyToFuture && styles.scopeBtnTextActive]}>
+                <CalmText variant="mono" size={12} color={applyToFuture ? colors.accent : colors.ink}>
                   ปรับรอบอนาคตด้วย
-                </Text>
+                </CalmText>
               </TouchableOpacity>
             </View>
           )}
 
           {/* Action Buttons */}
           <View style={styles.actionsRow}>
-            <TouchableOpacity
-              style={styles.cancelBtn}
-              onPress={onClose}
-              disabled={isSubmitting}
-            >
-              <Text style={styles.cancelBtnText}>ยกเลิก</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
-              onPress={handleSave}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={styles.submitBtnText}>บันทึกข้อมูล</Text>
-              )}
-            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <CapsuleButton
+                variant="surface"
+                label="ยกเลิก"
+                onPress={onClose}
+                disabled={isSubmitting}
+              />
+            </View>
+            <View style={{ flex: 2 }}>
+              <CapsuleButton
+                variant="ink"
+                label={isSubmitting ? undefined : "บันทึกข้อมูล"}
+                icon={isSubmitting ? <ActivityIndicator size="small" color={colors.accent} /> : undefined}
+                onPress={handleSave}
+                disabled={isSubmitting}
+              />
+            </View>
           </View>
-        </View>
+        </SheetFrame>
       </KeyboardAvoidingView>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  sheetContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  headerLeft: {
+  infoBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  sheetTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  typeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  typeBadgeStock: {
-    backgroundColor: '#EFF6FF',
-  },
-  typeBadgeCash: {
-    backgroundColor: '#ECFDF5',
-  },
-  typeBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  typeBadgeStockText: {
-    color: '#2563EB',
-  },
-  typeBadgeCashText: {
-    color: '#059669',
-  },
-  closeBtn: {
-    padding: 4,
-  },
-  infoBanner: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
+    backgroundColor: colors.track,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    marginTop: 12,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  infoText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
   },
   inputsRow: {
     flexDirection: 'row',
@@ -494,217 +400,109 @@ const styles = StyleSheet.create({
   inputCol: {
     flex: 1,
   },
-  inputLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 6,
-  },
-  textInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  netInput: {
-    borderColor: '#A7F3D0',
-    backgroundColor: '#F0FDF4',
-    color: '#047857',
-  },
   usdConversionNote: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: colors.track,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 10,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  usdConversionNoteText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#065F46',
+    borderWidth: 1.5,
+    borderColor: colors.ink,
   },
   statusToggle: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.ink,
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 12,
   },
   statusToggleActive: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
+    backgroundColor: colors.bg,
   },
   checkbox: {
-    width: 20,
-    height: 20,
+    width: 22,
+    height: 22,
     borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: '#94A3B8',
+    borderWidth: 2,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   checkboxActive: {
-    backgroundColor: '#059669',
-    borderColor: '#059669',
+    backgroundColor: colors.ink,
+    borderColor: colors.ink,
   },
   statusTextContainer: {
     flex: 1,
   },
-  statusTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  statusTitleActive: {
-    color: '#065F46',
-  },
-  statusSubtitle: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 1,
-  },
   scopeContainer: {
     flexDirection: 'row',
     gap: 8,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 10,
-    padding: 3,
+    backgroundColor: colors.track,
+    borderRadius: 12,
+    padding: 4,
     marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
   },
   scopeBtn: {
     flex: 1,
-    paddingVertical: 7,
+    paddingVertical: 8,
     alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 8,
   },
   scopeBtnActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  scopeBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  scopeBtnTextActive: {
-    color: '#0F172A',
-    fontWeight: '700',
+    backgroundColor: colors.ink,
   },
   actionsRow: {
     flexDirection: 'row',
     gap: 10,
-  },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
-  },
-  cancelBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  submitBtn: {
-    flex: 2,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#059669',
-  },
-  submitBtnDisabled: {
-    backgroundColor: '#94A3B8',
-  },
-  submitBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    marginTop: 4,
   },
   specialDivRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.ink,
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 12,
   },
   specialDivRowActive: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
+    backgroundColor: colors.bg,
   },
   checkboxSpecial: {
-    backgroundColor: '#D97706',
-    borderColor: '#D97706',
+    backgroundColor: colors.ink,
+    borderColor: colors.ink,
   },
   specialTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  statusTitleSpecial: {
-    color: '#B45309',
-  },
-  specialBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  specialBadgeActive: {
-    backgroundColor: '#FEF3C7',
-  },
-  specialBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748B',
-  },
-  specialBadgeTextActive: {
-    color: '#B45309',
-  },
   specialNoticeBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
+    backgroundColor: colors.track,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 16,
-  },
-  specialNoticeText: {
-    flex: 1,
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#92400E',
-    lineHeight: 16,
   },
 });
