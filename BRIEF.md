@@ -744,35 +744,66 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - **5-Minute Master Catalog Sync Cooldown**: Applied a 5-minute memory cooldown on `action === 'sync-funds'`, preventing repeated concurrent triggering of full 5,790+ fund catalog synchronization from exhausting server resources.
 - **Android ADB Backup Mitigation**: Configured `"allowBackup": false` under `"android"` in `app.json` to prevent local device data extraction via ADB backup commands on unlocked devices.
 
+### 5.26 Calm Mint Design System & 100% Full Application Rollout
+- **Design Tokens Authority (`src/theme/tokens.ts`)**: Single source of truth for application theme:
+  - Palette: `colors.bg: #EAF3EE`, `surface: #FBFFFD`, `ink: #123D2A`, `accent: #6FCDA8`, `shadow: #A9CDB9`, `track: #D5E6DC`, `muted: #4F6B5C`, `gainOnLight: #1F7A52`, `lossOnLight: #B4412D`, `lossOnDark: #F5A593`.
+  - Metrics: `borderWidth: 2`, `radii.pill: 999`, `radii.field: 16`, `radii.card: 26`, `radii.sheet: 30`, hard shadows `shadowOffset: { sm: 3, md: 4, lg: 6 }`.
+- **Google Fonts Typography Stack**:
+  - `BricolageGrotesque_800ExtraBold`: Display titles and large monetary amounts (Latin & digits).
+  - `JetBrainsMono_700Bold` / `JetBrainsMono_500Medium`: Ticker symbols, metrics, percentages, and table numbers.
+  - `NotoSansThai_500Medium` / `NotoSansThai_700Bold`: Thai text across headers, labels, and descriptions (without duplicate `fontWeight`).
+- **Modular Calm UI Kit (`src/components/ui/`)**:
+  - `Card`: Surface, dark, or plain cards with customizable hard shadows (`sm`, `md`, `lg`) and 2px borders.
+  - `Pill`: Status badges in `ink`, `accent`, `outline`, `dashed`, `outlineDark`, `lossDark`.
+  - `CapsuleButton`: Action buttons in `primary`, `surface`, `danger`, `ghost` with pill geometry.
+  - `HardShadow`: Wrapper component for non-blurred crisp offset shadows (`shadowColor: colors.shadow`).
+  - `DashedDivider`: Clean dashed horizontal line separators using SVG dots/dashes without border collapsing bugs.
+  - `SheetFrame`: Standardized bottom sheet modal container with grab handle, title, close circle, and scrim.
+  - `CalmText`: Unified typography component mapping `variant` directly to the correct font family.
+- **Full Rollout Completion (Phases 1–8)**:
+  - 100% complete across all screens (`Dashboard`, `Portfolio`, `AssetsScreen`, `AuthScreen`) and all modals (`AddAssetModal`, `EditAssetModal`, `SellAssetModal`, `EditTransactionModal`, `CalendarPickerModal`, `SectorPickerModal`, `ImportCsvModal`, `AdjustDividendModal`, `AnnualComparisonSheet`, `GoalSettingsModal`, `CategoryBreakdownModal`, and `OfflineNoticeToast`).
+
+### 5.27 Sign-up Verification Notice, XD Star Iconography, Splash Screen & Git Hygiene
+- **In-App Sign-Up Verification Banner (`AuthScreen.tsx`)**: When a new account is registered requiring email verification, displays a prominent top-pinned Calm Mint banner (`colors.ink`, 2px `colors.accent`, 4px shadow) holding for 2.0 seconds with concise bilingual text (`ยืนยันอีเมลของคุณ / Verify Email ✉️`) before smoothly auto-transitioning to the Sign In tab, with 1-tap instant dismissal.
+- **Bilingual Email Guidance Alerts**: Concise bilingual alerts for unconfirmed email login attempts and verification reminders, eliminating lengthy obstructive text while preserving essential troubleshooting steps.
+- **Ex-Dividend (XD) Star Symbol (`notificationService.ts`)**: Formats all scheduled XD reminders with the Calm Mint star symbol `✦ [Symbol]` (e.g., `✦ [PTT] ขึ้นเครื่องหมาย XD พรุ่งนี้! ถือหุ้นไว้เพื่อรับสิทธิเงินปันผล`), replacing the yellow bell emoji `🔔` for sleek, minimalist, and premium brand aesthetics.
+- **Full-Bleed Seamless Splash Screen (`app.json`, `assets/splash-icon.png`)**: Pre-processed `assets/splash-icon.png` perimeter to eliminate white squircle corner artifacts with pure `#131E30` dark fill, paired with unified `backgroundColor: "#131E30"` across `app.json` (`splash`, `android.splash`, and `expo-splash-screen` plugin) for a 100% borderless launch experience.
+- **Git Hygiene for Design Materials (`.gitignore`)**: Added `calm-bundle/`, `docs/calm/`, and `*.html` to `.gitignore` and untracked them from repository history, ensuring external HTML prototypes and planning bundles remain strictly local and are never committed or pushed to GitHub.
+
 ---
 
 ## 6. Project File Structure
-- `App.tsx`: Root Application Component with `RootErrorBoundary` and bottom tab navigation (`Overview`, `Portfolio`, `Holdings`)
+- `App.tsx`: Root Application Component with `RootErrorBoundary`, docked Calm Mint bottom tab navigation (`Overview`, `Portfolio`, `Holdings`), and top dashed divider
 - `index.ts`: Application entry point registering Root Component with Expo
-- `app.json`: Expo configuration, Android permissions, splash screen, and plugin registry
+- `app.json`: Expo configuration, Android permissions, full-bleed seamless `#131E30` splash screen, and plugin registry
 - `eas.json`: Expo Application Services (EAS) Build configuration file for compiling standalone Android APK and AAB packages
+- `.gitignore`: Git exclusion rules protecting sensitive files, test builds, and local design prototypes (`calm-bundle/`, `docs/calm/`, `*.html`)
 - `src/`
   - `types/database.ts`: TypeScript Database Definitions for Supabase
   - `lib/supabase.ts`: Supabase Client initialization with AsyncStorage persistence
-  - `screens/Dashboard.tsx`: Overview Dashboard with net worth hero card, category summary cards, payday radar, annual cashflow bar chart with year selector and dropdown filter, and passive income goal card
-  - `screens/Portfolio.tsx`: Portfolio view with asset allocation donut pie chart, white callout lines, sector breakdown, and cumulative performance benchmark comparison
-  - `screens/AssetsScreen.tsx`: Holdings and transaction history management screen with search, sorting, sparkline cards, and single-row minimal dropdown filters
-  - `screens/AuthScreen.tsx`: Modern dark mode authentication screen with sign in, sign up, and password reset
-  - `components/AddAssetModal.tsx`: Bottom sheet modal for adding assets, stock lookup autocomplete, USD/THB currency toggle, and live DCA detection
-  - `components/EditAssetModal.tsx`: Bottom sheet modal for editing asset parameters, soft deletion, and stock split handling, with strict multi-DCA transaction locking and 1-tap navigation to individual lot history
-  - `components/SellAssetModal.tsx`: Minimal bottom sheet modal for recording asset sales (SELL) and cash principal withdrawals (WITHDRAW) with 25-100% presets, over-sell validation, and automatic soft deletion upon 100% exit
-  - `components/ImportCsvModal.tsx`: Bottom sheet modal for CSV portfolio import with file picker, direct paste, smart mapping, and live validation
-  - `components/CalendarPickerModal.tsx`: Pure React Native modal calendar picker with month navigation and quick presets for purchase and XD dates
-  - `components/SectorPickerModal.tsx`: Minimal bottom sheet modal picker for selecting GICS, AIMC, and deposit sector taxonomy
-  - `components/AssetSparklineCard.tsx`: FinTech asset holding card with 7-day closing price sparkline area chart and Once-a-Day EOD caching
-  - `components/CashAssetForm.tsx`: Modular form component for bank deposits, interest payout cycles, and pro-rata tax calculations
-  - `components/CategoryBreakdownModal.tsx`: Bottom sheet modal displaying segment breakdown donut chart and 20,000 THB tax-free interest quota meter
-  - `components/GoalSettingsModal.tsx`: Minimal bottom sheet modal for configuring monthly passive income goal targets and level presets
-  - `components/HeroNetWorthCard.tsx`: Zero-jitter hero card displaying total portfolio net worth, unrealized P/L, dual dividend yields (Current & YoC), YoY comparison pill, and privacy masking
-  - `components/UpcomingPaydayRadar.tsx`: Compact radar ticker displaying upcoming ex-dividend dates and bank interest payout events within 30 days with 1-click payday confirmation
-  - `components/AdjustDividendModal.tsx`: Minimal bottom sheet modal for manual dividend payout adjustments, actual received verification, special dividend tagging, and DPU overrides
-  - `components/AnnualComparisonSheet.tsx`: Bottom sheet modal comparing current projected annual dividend against prior year with special dividend disambiguation
-  - `components/OfflineNoticeToast.tsx`: Non-intrusive floating toast capsule notifying users when offline cached data is being displayed
+  - `theme/tokens.ts`: Single source of truth for Calm Mint design tokens (colors, typography, radii, borders, shadows, inputStyle)
+  - `theme/useCalmFonts.ts`: Font loading hook ensuring all Google Fonts are fully initialized before screen rendering
+  - `components/ui/`: Reusable Calm Mint UI Kit components (`Card`, `Pill`, `CapsuleButton`, `HardShadow`, `DashedDivider`, `SheetFrame`, `CalmText`, `trend`)
+  - `screens/Dashboard.tsx`: Overview Dashboard in Calm Mint theme with net worth hero card, category summary cards, payday radar, SVG 12-month annual cashflow bar chart with month popout bottom sheet, and passive income goal card
+  - `screens/Portfolio.tsx`: Portfolio view in Calm Mint theme with asset allocation donut chart, sector breakdown, top 3 holdings cards, and cumulative performance benchmark comparison
+  - `screens/AssetsScreen.tsx`: Holdings and transaction history management screen in Calm Mint theme with search, sorting, sparkline cards, and single-row minimal dropdown filters
+  - `screens/AuthScreen.tsx`: Authentication screen in Calm Mint theme with sign in, sign up, 2-second in-app bilingual verification notice, and password reset
+  - `components/AddAssetModal.tsx`: Bottom sheet modal in Calm Mint theme for adding assets, stock lookup autocomplete, USD/THB currency toggle, and live DCA detection
+  - `components/EditAssetModal.tsx`: Bottom sheet modal in Calm Mint theme for editing asset parameters, soft deletion, and stock split handling, with strict multi-DCA transaction locking and 1-tap navigation to individual lot history
+  - `components/SellAssetModal.tsx`: Bottom sheet modal in Calm Mint theme for recording asset sales (SELL) and cash principal withdrawals (WITHDRAW) with 25-100% presets, over-sell validation, and automatic soft deletion upon 100% exit
+  - `components/EditTransactionModal.tsx`: Bottom sheet modal in Calm Mint theme for editing individual DCA purchase lots, transaction dates, and prices with zero-destructive lot collapsing
+  - `components/ImportCsvModal.tsx`: Bottom sheet modal in Calm Mint theme for CSV portfolio import with file picker, direct paste, smart mapping, and live validation
+  - `components/CalendarPickerModal.tsx`: Pure React Native modal calendar picker in Calm Mint theme with month navigation and quick presets for purchase and XD dates
+  - `components/SectorPickerModal.tsx`: Bottom sheet modal picker in Calm Mint theme for selecting GICS, AIMC, and deposit sector taxonomy
+  - `components/AssetSparklineCard.tsx`: Asset holding card in Calm Mint theme with 7-day closing price sparkline area chart and Once-a-Day EOD caching
+  - `components/CashAssetForm.tsx`: Modular form component in Calm Mint theme for bank deposits, interest payout cycles, and pro-rata tax calculations
+  - `components/CategoryBreakdownModal.tsx`: Bottom sheet modal in Calm Mint theme displaying segment breakdown donut chart and 20,000 THB tax-free interest quota meter
+  - `components/GoalSettingsModal.tsx`: Bottom sheet modal in Calm Mint theme for configuring monthly passive income goal targets and level presets
+  - `components/HeroNetWorthCard.tsx`: Zero-jitter hero card in Calm Mint theme displaying total portfolio net worth, unrealized P/L, dual dividend yields (Current & YoC), YoY comparison pill, and privacy masking
+  - `components/UpcomingPaydayRadar.tsx`: Compact radar ticker in Calm Mint theme displaying upcoming ex-dividend dates and bank interest payout events within 30 days with 1-click payday confirmation
+  - `components/AdjustDividendModal.tsx`: Bottom sheet modal in Calm Mint theme for manual dividend payout adjustments, actual received verification, special dividend tagging, and DPU overrides
+  - `components/AnnualComparisonSheet.tsx`: Bottom sheet modal in Calm Mint theme comparing current projected annual dividend against prior year with special dividend disambiguation
+  - `components/OfflineNoticeToast.tsx`: Floating toast capsule in Calm Mint theme (`#123D2A`, border `#1F7A52`) notifying users when offline cached data is being displayed
   - `services/authService.ts`: Authentication service handling Supabase sessions, password resets, and clean cache invalidation on sign-out
   - `services/userService.ts`: User profile service managing custom display names and dynamic English time-of-day greetings
   - `services/privacyService.ts`: Global privacy state management and cross-screen masking synchronization via AsyncStorage
@@ -783,7 +814,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - `services/stockService.ts`: US/Thai stock search, closing price quotes, and FX rate retrieval service
   - `services/fundService.ts`: Thai mutual fund search, daily NAV quotes, and dividend history service via SEC Fund Check API & SEC Open API v2 with direct client fallback
   - `services/csvService.ts`: Portfolio CSV export, import parsing, column mapping, and automated asset creation service
-  - `services/notificationService.ts`: Local ex-dividend (XD) notification scheduling service for Android
+  - `services/notificationService.ts`: Local ex-dividend (XD) notification scheduling service with star symbol `✦`
   - `services/assetConsolidationService.ts`: Position accumulation, duplicate asset consolidation, and schedule deduplication service
   - `services/benchmarkService.ts`: Portfolio cumulative return, alpha calculation, market benchmark comparison service (SET, S&P 500, NASDAQ) with Once-a-Day Caching, and daily portfolio snapshot trajectory plotting
   - `services/historyService.ts`: 7-day historical closing price caching service with Once-a-Day EOD cache and on-demand refresh
