@@ -636,6 +636,28 @@
   - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
   - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
 
+---
+
+## 26. Step 3D — หน้าต่างเลือกดัชนีตลาดเปรียบเทียบ (Benchmark Picker Modal) ใน Portfolio Screen (`Portfolio.tsx`)
+
+- **ไฟล์ที่แก้ไข**: `src/screens/Portfolio.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. นำเข้าคอมโพเนนต์ `SheetFrame` จาก `../components/ui/SheetFrame`
+  2. ปรับปรุงหน้าต่าง Modal เลือกดัชนี (`isBenchmarkPickerVisible`):
+     - ห่อหุ้มโครงสร้างหน้าต่างด้วย `<SheetFrame title="เปรียบเทียบดัชนี" onClose={() => setIsBenchmarkPickerVisible(false)}>`
+     - ตัด `modalOverlay`, `benchmarkModalContainer`, และ Header เดิมออก เพื่อให้ Scrim และกรอบ Bottom Sheet สไตล์ Calm Mint ทำงานอย่างเป็นหนึ่งเดียวโดยไม่มีเงาซ้อนทับ
+     - แสดงคำอธิบายด้วย `<CalmText variant="monoRegular" size={11} color={colors.muted}>`
+     - ปรับแต่งรายการตัวเลือกดัชนี (`benchmarkModalItem`):
+       - กรอบตัวเลือก: ขอบหนา 2px, รัศมีความมน 14px, สีพื้นหลัง `colors.surface`
+       - ตัวเลือกที่กำลังเปิดใช้งาน: ขอบสีหมึก `colors.ink`, พื้นหลัง `colors.track`
+       - วงกลมไอคอนดัชนี: ขอบ 1.5px หมึก พร้อมสีพื้นหลังโปร่งแสงของดัชนีนั้นๆ
+       - ตัวอักษรชื่อดัชนีและรายละเอียด: ใช้ `CalmText variant="bodyBold"` และ `CalmText variant="monoRegular"`
+       - สัญลักษณ์เครื่องหมายถูก `Ionicons name="checkmark-circle"`: ใช้สีหมึก `colors.ink`
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+
 
 
 

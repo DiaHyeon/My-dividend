@@ -41,6 +41,7 @@ import { CalmText } from '../components/ui/CalmText';
 import { Card } from '../components/ui/Card';
 import { Pill } from '../components/ui/Pill';
 import { DashedDivider } from '../components/ui/DashedDivider';
+import { SheetFrame } from '../components/ui/SheetFrame';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -1402,92 +1403,69 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         animationType="fade"
         onRequestClose={() => setIsBenchmarkPickerVisible(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsBenchmarkPickerVisible(false)}
+        <SheetFrame
+          title="เปรียบเทียบดัชนี"
+          onClose={() => setIsBenchmarkPickerVisible(false)}
         >
-          <TouchableOpacity
-            style={styles.benchmarkModalContainer}
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <View style={styles.benchmarkModalHeader}>
-              <View style={styles.benchmarkModalHeaderLeft}>
-                <Ionicons name="stats-chart" size={18} color="#0F172A" />
-                <Text style={styles.benchmarkModalTitle}>เลือกดัชนีตลาดเปรียบเทียบ</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setIsBenchmarkPickerVisible(false)}
-                style={styles.benchmarkModalCloseBtn}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="close" size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
+          <CalmText variant="monoRegular" size={11} color={colors.muted} style={{ marginBottom: 14 }}>
+            เลือกดัชนีตลาดเพื่อเปรียบเทียบผลตอบแทนและวิเคราะห์ค่า Alpha ของพอร์ตคุณ
+          </CalmText>
 
-            <Text style={styles.benchmarkModalHint}>
-              เลือกดัชนีตลาดเพื่อเปรียบเทียบผลตอบแทนและวิเคราะห์ค่า Alpha ของพอร์ตคุณ
-            </Text>
-
-            {/* Benchmark Options */}
-            <View style={styles.benchmarkModalList}>
-              {BENCHMARKS.map((b) => {
-                const isSelected = selectedBenchmark === b.id;
-                return (
-                  <TouchableOpacity
-                    key={b.id}
-                    style={[
-                      styles.benchmarkModalItem,
-                      isSelected && styles.benchmarkModalItemSelected,
-                    ]}
-                    onPress={() => {
-                      setSelectedBenchmark(b.id);
-                      setIsBenchmarkPickerVisible(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.benchmarkModalItemLeft}>
-                      <View
-                        style={[
-                          styles.benchmarkModalIconCircle,
-                          {
-                            backgroundColor:
-                              b.id !== 'NONE' ? `${b.color}18` : '#F1F5F9',
-                          },
-                        ]}
-                      >
-                        <Ionicons
-                          name={b.icon as any}
-                          size={18}
-                          color={b.id !== 'NONE' ? b.color : '#64748B'}
-                        />
-                      </View>
-                      <View style={styles.benchmarkModalItemTextWrap}>
-                        <Text
-                          style={[
-                            styles.benchmarkModalItemTitle,
-                            isSelected && styles.benchmarkModalItemTitleSelected,
-                          ]}
-                        >
-                          {b.label}
-                        </Text>
-                        <Text style={styles.benchmarkModalItemSubtitle}>
-                          {b.name}
-                        </Text>
-                      </View>
+          {/* Benchmark Options */}
+          <View style={styles.benchmarkModalList}>
+            {BENCHMARKS.map((b) => {
+              const isSelected = selectedBenchmark === b.id;
+              return (
+                <TouchableOpacity
+                  key={b.id}
+                  style={[
+                    styles.benchmarkModalItem,
+                    isSelected && styles.benchmarkModalItemSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedBenchmark(b.id);
+                    setIsBenchmarkPickerVisible(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.benchmarkModalItemLeft}>
+                    <View
+                      style={[
+                        styles.benchmarkModalIconCircle,
+                        {
+                          backgroundColor:
+                            b.id !== 'NONE' ? `${b.color}25` : colors.track,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={b.icon as any}
+                        size={18}
+                        color={b.id !== 'NONE' ? b.color : colors.ink}
+                      />
                     </View>
+                    <View style={styles.benchmarkModalItemTextWrap}>
+                      <CalmText
+                        variant="bodyBold"
+                        size={14}
+                        color={colors.ink}
+                      >
+                        {b.label}
+                      </CalmText>
+                      <CalmText variant="monoRegular" size={11} color={colors.muted}>
+                        {b.name}
+                      </CalmText>
+                    </View>
+                  </View>
 
-                    {isSelected && (
-                      <Ionicons name="checkmark-circle" size={20} color="#059669" />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+                  {isSelected && (
+                    <Ionicons name="checkmark-circle" size={20} color={colors.ink} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </SheetFrame>
       </Modal>
     </SafeAreaView>
   );
@@ -1729,53 +1707,6 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontFamily: fonts.mono,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  benchmarkModalContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 36,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 12,
-  },
-  benchmarkModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  benchmarkModalHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  benchmarkModalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  benchmarkModalCloseBtn: {
-    padding: 4,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-  },
-  benchmarkModalHint: {
-    fontSize: 11.5,
-    color: '#64748B',
-    marginBottom: 14,
-  },
   benchmarkModalList: {
     gap: 8,
   },
@@ -1785,15 +1716,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.track,
   },
   benchmarkModalItemSelected: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#10B981',
-    borderWidth: 1.5,
+    backgroundColor: colors.track,
+    borderColor: colors.ink,
+    borderWidth: 2,
   },
   benchmarkModalItemLeft: {
     flexDirection: 'row',
@@ -1805,24 +1736,13 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   benchmarkModalItemTextWrap: {
     flex: 1,
-  },
-  benchmarkModalItemTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  benchmarkModalItemTitleSelected: {
-    color: '#065F46',
-  },
-  benchmarkModalItemSubtitle: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
   },
   perfChartCard: {
     backgroundColor: '#FFFFFF',
