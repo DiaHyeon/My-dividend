@@ -657,6 +657,33 @@
   - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
   - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
 
+---
+
+## 27. ปรับแต่ง Portfolio Allocation ตาม Feedback & ต้นแบบ HTML 07-portfolio-allocation.html
+
+- **ไฟล์ที่แก้ไข**: `src/screens/Portfolio.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **Portfolio View Switcher (แคปซูลสลับ สัดส่วน / ผลงานพอร์ต)**:
+     - ตัดไอคอน `pie-chart`, `trending-up` และภาษาอังกฤษยาวๆ `(Allocation)` และ `(Performance)` ออก
+     - ปรับข้อความเป็น `สัดส่วน` และ `ผลงานพอร์ต` สั้นกระชับตรงตาม `07-portfolio-allocation.html` line 16
+     - แก้ปัญหาข้อความยาวจนทับซ้อนหรือเบียดตกขอบได้อย่างสมบูรณ์
+  2. **เปลี่ยนสี PieChart (ในหมวดทั้งหมด)**:
+     - นำเข้า `chartColors` และเปลี่ยนสีในหมวด `ALL` ให้ตรงตามต้นแบบ HTML:
+       - หุ้น: `chartColors.stocks` (`#6FCDA8`)
+       - กองทุน: `chartColors.funds` (`#C7B8F5`)
+       - เงินฝาก: `chartColors.cash` (`#F2C879`)
+  3. **ตัดเส้นโยง (Callout lines) ออกเฉพาะหมวดทั้งหมด**:
+     - ตั้งค่า `showExternalLabels={activeCategoryFilter !== 'ALL'}`
+     - เมื่อดูภาพรวมทั้งพอร์ต ("ทั้งหมด") จะแสดงเฉพาะวงโดนัทคลีนๆ ไม่มีเส้นโยงลอยเกะกะตรงตาม HTML
+  4. **ขยายขนาด PieChart ให้ใหญ่ขึ้นเต็มตา**:
+     - เมื่อไม่มีเส้นโยงในหมวดทั้งหมด ปรับ `radius={105}` และ `innerRadius={68}` (เส้นผ่านศูนย์กลาง 210px) สวยงามสมส่วนกับการ์ดเขียวเข้ม Dark Ink
+  5. **แก้คำว่า "สินทรัพย์หลัก" เบียดกับปุ่ม "ดูทั้งหมด →"**:
+     - ตัดข้อความยาวในวงเล็บ `(X จาก Y รายการ)` ออก เหลือเพียงคำว่า `สินทรัพย์หลัก` ให้มีพื้นที่ว่างกว้างขวาง สบายตา ไม่เบียดปุ่ม
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+
 
 
 

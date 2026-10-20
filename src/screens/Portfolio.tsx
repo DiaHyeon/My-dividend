@@ -36,7 +36,7 @@ import {
   recordDailyPortfolioSnapshot,
 } from '../services/benchmarkService';
 import { getCachedPortfolio, savePortfolioCache, notifyOffline } from '../services/portfolioCacheService';
-import { colors, fonts, trend } from '../theme/tokens';
+import { colors, chartColors, fonts, trend } from '../theme/tokens';
 import { CalmText } from '../components/ui/CalmText';
 import { Card } from '../components/ui/Card';
 import { Pill } from '../components/ui/Pill';
@@ -547,16 +547,16 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         const rounded = Math.round(stocksPct * 10) / 10;
         pData.push({
           value: Math.max(0.1, rounded),
-          color: '#3B82F6',
+          color: chartColors.stocks,
           label: 'หุ้น (STOCKS)',
           shortLabel: 'หุ้น',
           percentText: `${stocksPct.toFixed(1)}%`,
           strokeWidth: 2,
-          strokeColor: '#0F172A',
+          strokeColor: colors.ink,
         });
         lItems.push({
           id: 'stocks',
-          color: '#3B82F6',
+          color: chartColors.stocks,
           label: `หุ้น (${stocksPct.toFixed(1)}%)`,
           val: stocksTotal,
           pct: stocksPct,
@@ -567,12 +567,12 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         const rounded = Math.round(fundsPct * 10) / 10;
         pData.push({
           value: Math.max(0.1, rounded),
-          color: '#8B5CF6',
+          color: chartColors.funds,
           label: 'กองทุน (FUNDS)',
           shortLabel: 'กองทุน',
           percentText: `${fundsPct.toFixed(1)}%`,
           strokeWidth: 2,
-          strokeColor: '#0F172A',
+          strokeColor: colors.ink,
           hideLabel: hideFundsCallout,
           labelLineConfig: hideFundsCallout
             ? { color: 'transparent', length: 0, tailLength: 0, thickness: 0 }
@@ -580,7 +580,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         });
         lItems.push({
           id: 'funds',
-          color: '#8B5CF6',
+          color: chartColors.funds,
           label: `กองทุน (${fundsPct.toFixed(1)}%)`,
           val: fundsTotal,
           pct: fundsPct,
@@ -591,12 +591,12 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         const rounded = Math.round(cashPct * 10) / 10;
         pData.push({
           value: Math.max(0.1, rounded),
-          color: '#10B981',
+          color: chartColors.cash,
           label: 'เงินฝาก (CASH)',
           shortLabel: 'เงินฝาก',
           percentText: `${cashPct.toFixed(1)}%`,
           strokeWidth: 2,
-          strokeColor: '#0F172A',
+          strokeColor: colors.ink,
           hideLabel: hideCashCallout,
           labelLineConfig: hideCashCallout
             ? { color: 'transparent', length: 0, tailLength: 0, thickness: 0 }
@@ -604,7 +604,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         });
         lItems.push({
           id: 'cash',
-          color: '#10B981',
+          color: chartColors.cash,
           label: `เงินฝาก (${cashPct.toFixed(1)}%)`,
           val: cashTotal,
           pct: cashPct,
@@ -740,18 +740,13 @@ export const Portfolio: React.FC<PortfolioProps> = ({
             onPress={() => setPortfolioView('ALLOCATION')}
             activeOpacity={0.7}
           >
-            <Ionicons
-              name="pie-chart"
-              size={15}
-              color={portfolioView === 'ALLOCATION' ? colors.accent : colors.ink}
-            />
             <Text
               style={[
                 styles.portfolioViewTabText,
                 portfolioView === 'ALLOCATION' && styles.portfolioViewTabTextActive,
               ]}
             >
-              สัดส่วนพอร์ต (Allocation)
+              สัดส่วน
             </Text>
           </TouchableOpacity>
 
@@ -760,18 +755,13 @@ export const Portfolio: React.FC<PortfolioProps> = ({
             onPress={() => setPortfolioView('PERFORMANCE')}
             activeOpacity={0.7}
           >
-            <Ionicons
-              name="trending-up"
-              size={15}
-              color={portfolioView === 'PERFORMANCE' ? colors.accent : colors.ink}
-            />
             <Text
               style={[
                 styles.portfolioViewTabText,
                 portfolioView === 'PERFORMANCE' && styles.portfolioViewTabTextActive,
               ]}
             >
-              ผลงานพอร์ต (Performance)
+              ผลงานพอร์ต
             </Text>
           </TouchableOpacity>
         </View>
@@ -825,15 +815,15 @@ export const Portfolio: React.FC<PortfolioProps> = ({
                   <PieChart
                     data={pieData}
                     donut={true}
-                    radius={SCREEN_WIDTH * 0.19}
-                    innerRadius={SCREEN_WIDTH * 0.11}
+                    radius={activeCategoryFilter === 'ALL' ? 105 : SCREEN_WIDTH * 0.20}
+                    innerRadius={activeCategoryFilter === 'ALL' ? 68 : SCREEN_WIDTH * 0.12}
                     innerCircleColor={colors.ink}
                     strokeWidth={2}
                     strokeColor={colors.ink}
-                    extraRadius={48}
-                    paddingHorizontal={32}
-                    paddingVertical={6}
-                    showExternalLabels={true}
+                    extraRadius={activeCategoryFilter === 'ALL' ? 0 : 40}
+                    paddingHorizontal={activeCategoryFilter === 'ALL' ? 0 : 28}
+                    paddingVertical={8}
+                    showExternalLabels={activeCategoryFilter !== 'ALL'}
                     labelLineConfig={{
                       color: colors.shadow,
                       thickness: 1.5,
@@ -926,7 +916,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({
             {/* Section Header: Holdings Preview & Link to AssetsScreen */}
             <View style={styles.sectionHeaderRow}>
               <CalmText variant="display" size={22} color={colors.ink}>
-                สินทรัพย์หลัก ({Math.min(3, filteredAssets.length)} จาก {filteredAssets.length} รายการ)
+                สินทรัพย์หลัก
               </CalmText>
               {onNavigateToAssets && (
                 <Pill
@@ -1535,10 +1525,8 @@ const styles = StyleSheet.create({
   },
   portfolioViewTab: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
     paddingVertical: 10,
     borderRadius: 999,
     backgroundColor: 'transparent',
@@ -1549,7 +1537,9 @@ const styles = StyleSheet.create({
   portfolioViewTabText: {
     fontFamily: fonts.mono,
     fontSize: 12,
+    fontWeight: '700',
     color: colors.ink,
+    textAlign: 'center',
   },
   portfolioViewTabTextActive: {
     color: colors.accent,
