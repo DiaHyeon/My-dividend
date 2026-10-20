@@ -3,6 +3,7 @@ import { StyleSheet, Text, Animated, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { subscribeOfflineNotice } from '../services/portfolioCacheService';
+import { colors, fonts, radii } from '../theme/tokens';
 
 export const OfflineNoticeToast: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -85,7 +86,7 @@ export const OfflineNoticeToast: React.FC = () => {
         },
       ]}
     >
-      <Ionicons name="information-circle-outline" size={17} color="#94A3B8" style={styles.icon} />
+      <Ionicons name="information-circle" size={17} color={colors.accent} style={styles.icon} />
       <Text style={styles.text} numberOfLines={1}>
         {message}
       </Text>
@@ -99,35 +100,35 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.94)',
-    borderWidth: 1,
-    borderColor: 'rgba(51, 65, 85, 0.85)',
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    borderRadius: 20,
+    backgroundColor: colors.ink,
+    borderWidth: 2,
+    borderColor: colors.gainOnLight,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
     zIndex: 9999,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: colors.ink,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 8,
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
       },
       android: {
         elevation: 6,
       },
       web: {
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
+        boxShadow: '0 4px 16px rgba(18, 61, 42, 0.35)',
       },
     }),
   },
   icon: {
-    marginRight: 6,
+    marginRight: 8,
   },
   text: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#CBD5E1',
+    fontFamily: fonts.thai,
+    fontSize: 12.5,
+    color: '#EAF3EE',
     letterSpacing: -0.2,
   },
 });
