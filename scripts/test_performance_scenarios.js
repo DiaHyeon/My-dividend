@@ -385,7 +385,124 @@ async function main() {
     assert.deepStrictEqual(samplePercentagePoints(negSnaps, 6), [-1.5, 0.0, 0.0, 2.0, 2.0, 4.5]);
   });
 
-  console.log('\n============================================================');
+  // -------------------------------------------------------------------------
+  // SCENARIO 8: Negative Territory & Bear Market Scale Dynamics
+  // -------------------------------------------------------------------------
+  console.log('\n--- SCENARIO 8: Negative Territory & Bear Market Scale Dynamics ---');
+
+  const computeChartScale = (pVals, bVals, selectedBenchmark = 'SP500') => {
+    const allVals = selectedBenchmark !== 'NONE' ? [...pVals, ...bVals] : [...pVals];
+    const maxVal = allVals.length > 0 ? Math.max(...allVals) : 5;
+    const minVal = allVals.length > 0 ? Math.min(...allVals) : 0;
+    const absMin = Math.abs(minVal);
+
+    const targetPeak = Math.max(maxVal * 1.08, maxVal + 0.5, 1.0);
+    const targetTrough = minVal < 0 ? Math.min(minVal * 1.08, minVal - 0.5) : 0;
+
+    const NICE_STEPS = [
+      0.2, 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 75, 100
+    ];
+
+    const TARGET_TOTAL_HEIGHT = 150;
+    let bestConfig = {
+      stepValue: 5,
+      noOfSections: 2,
+      maxValue: 10,
+      mostNegativeValue: 0,
+      noOfSectionsBelowXAxis: 0,
+      stepHeight: 75,
+      chartHeight: 150,
+      totalHeight: 150,
+    };
+    let minExcess = Infinity;
+
+    for (const step of NICE_STEPS) {
+      const posSec = Math.max(1, Math.ceil(targetPeak / step));
+      const negSec = minVal < 0 ? Math.max(1, Math.ceil(Math.abs(targetTrough) / step)) : 0;
+      const totSec = posSec + negSec;
+
+      if (totSec >= 2 && totSec <= 5) {
+        const candidateMax = posSec * step;
+        const candidateMin = -(negSec * step);
+
+        if (candidateMax >= maxVal && (!minVal || candidateMin <= minVal)) {
+          const excess = (candidateMax - maxVal) + (Math.abs(candidateMin) - absMin);
+          if (excess < minExcess) {
+            minExcess = excess;
+            const stepHeight = Math.round(TARGET_TOTAL_HEIGHT / totSec);
+            const chartHeight = posSec * stepHeight;
+            const totalHeight = totSec * stepHeight;
+            bestConfig = {
+              stepValue: step,
+              noOfSections: posSec,
+              maxValue: candidateMax,
+              mostNegativeValue: candidateMin,
+              noOfSectionsBelowXAxis: negSec,
+              stepHeight,
+              chartHeight,
+              totalHeight,
+            };
+          }
+        }
+      }
+    }
+    return { minVal, maxVal, bestConfig };
+  };
+
+  runScenario('8.1 Market Crash (-20%) with positive portfolio (+5%) opens negative floor for market line without clipping', () => {
+    const portfolioVals = [0.0, 1.5, 3.2, 5.0];
+    const marketVals = [0.0, -5.4, -12.8, -20.0];
+    const { minVal, maxVal, bestConfig } = computeChartScale(portfolioVals, marketVals, 'SP500');
+
+    assert.strictEqual(minVal, -20.0, 'Min value must accurately reflect market crash');
+    assert.strictEqual(maxVal, 5.0, 'Max value must accurately reflect portfolio return');
+    assert.ok(bestConfig.noOfSectionsBelowXAxis >= 1, 'Must create sections below X axis');
+    assert.ok(bestConfig.mostNegativeValue <= -20.0, `mostNegativeValue (${bestConfig.mostNegativeValue}) must cover -20% crash`);
+    assert.ok(bestConfig.maxValue >= 5.0, `maxValue (${bestConfig.maxValue}) must cover +5% peak`);
+  });
+
+  runScenario('8.2 Portfolio Crash (-15%) with moderate market dip (-5%) opens negative floor for portfolio line', () => {
+    const portfolioVals = [0.0, -4.5, -9.8, -15.0];
+    const marketVals = [0.0, -1.2, -3.1, -5.0];
+    const { minVal, bestConfig } = computeChartScale(portfolioVals, marketVals, 'SET');
+
+    assert.strictEqual(minVal, -15.0);
+    assert.ok(bestConfig.noOfSectionsBelowXAxis >= 1);
+    assert.ok(bestConfig.mostNegativeValue <= -15.0, `mostNegativeValue (${bestConfig.mostNegativeValue}) must cover -15% trough`);
+  });
+
+  runScenario('8.3 Simultaneous Bear Market (Portfolio -12%, Market -18%) accommodates both curves below zero', () => {
+    const portfolioVals = [0.0, -3.0, -7.5, -12.0];
+    const marketVals = [0.0, -5.0, -11.0, -18.0];
+    const { minVal, bestConfig } = computeChartScale(portfolioVals, marketVals, 'NASDAQ');
+
+    assert.strictEqual(minVal, -18.0);
+    assert.ok(bestConfig.noOfSectionsBelowXAxis >= 1);
+    assert.ok(bestConfig.mostNegativeValue <= -18.0, `mostNegativeValue (${bestConfig.mostNegativeValue}) must cover -18% trough`);
+    assert.ok(bestConfig.maxValue >= 1.0, 'Must keep at least 1 section above zero so zero line is visible');
+  });
+
+  runScenario('8.4 Mild market dip (-1.5%) with flat portfolio (0.0%) selects tight clean step without crowding', () => {
+    const portfolioVals = [0.0, 0.0, 0.0, 0.0];
+    const marketVals = [0.0, -0.4, -0.9, -1.5];
+    const { minVal, bestConfig } = computeChartScale(portfolioVals, marketVals, 'SET');
+
+    assert.strictEqual(minVal, -1.5);
+    assert.ok(bestConfig.noOfSectionsBelowXAxis >= 1);
+    assert.ok(bestConfig.mostNegativeValue <= -1.5);
+    const totalSec = bestConfig.noOfSections + bestConfig.noOfSectionsBelowXAxis;
+    assert.ok(totalSec >= 2 && totalSec <= 5, `Total sections must be between 2 and 5, got ${totalSec}`);
+  });
+
+  runScenario('8.5 Benchmark NONE with negative portfolio (-6.5%) opens negative floor independently', () => {
+    const portfolioVals = [0.0, -2.0, -4.5, -6.5];
+    const { minVal, bestConfig } = computeChartScale(portfolioVals, [], 'NONE');
+
+    assert.strictEqual(minVal, -6.5);
+    assert.ok(bestConfig.noOfSectionsBelowXAxis >= 1);
+    assert.ok(bestConfig.mostNegativeValue <= -6.5);
+  });
+
   console.log(` SCENARIO SUMMARY: ${passedScenarios} PASSED, ${failedScenarios} FAILED`);
   console.log('============================================================\n');
 

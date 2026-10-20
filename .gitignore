@@ -55,3 +55,7 @@ scratch/
 
 # documents / worksheets
 *.docx
+
+# presentation & course materials
+Low-code/
+

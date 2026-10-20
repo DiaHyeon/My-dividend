@@ -14,10 +14,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.mydividend.app"
+      "bundleIdentifier": "app.mydividend.portfolio"
     },
     "android": {
-      "package": "com.mydividend.app",
+      "package": "app.mydividend.portfolio",
       "versionCode": 8,
       "allowBackup": false,
       "splash": {

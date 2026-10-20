@@ -627,8 +627,8 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - Tunnel mode via `@expo/ngrok` provides a public `.exp.direct` proxy enabling instant QR code scanning and bundle loading across any network.
 
 ### 5.4 Google Play Store Configuration & Compliance (`app.json`)
-- **Package Name**: Enforces official unique Android application ID `"package": "com.mydividend.app"`.
-- **Version Code**: Managed as integer `versionCode: 1` for Android App Bundle (AAB) store releases.
+- **Package Name**: Enforces official unique Android application ID `"package": "app.mydividend.portfolio"` and iOS bundle identifier `"bundleIdentifier": "app.mydividend.portfolio"`.
+- **Version Code**: Managed as integer `versionCode: 8` for Android App Bundle (AAB) store releases.
 - **Deep Linking Scheme**: Configured with `"scheme": "mydividend"` for authentication callbacks.
 - **Visual Branding**: `userInterfaceStyle` set to `"dark"`, with `#0F172A` dark slate adaptive icon background and `#10B981` emerald notification accents to eliminate bright flashes upon app launch.
 - **Permissions**: Declares `POST_NOTIFICATIONS` (Android 13+), `SCHEDULE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, and `VIBRATE`.
@@ -797,7 +797,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
   - `patch-expo-notifications.js`: Patch script resolving Expo Go Android notification crashes
   - `test_dividend_logic.js`: Comprehensive automated unit & integration test suite (39 test cases) runnable via `npm test`
   - `test_security_hardening.js`: Automated security hardening and penetration test suite (27 test cases) verifying auth guards, catalog write revocation, sliding window rate limits, cooldowns, and velocity guards
-  - `test_performance_scenarios.js`: Scenario-based portfolio simulation runner (9 test cases) validating inception scaling, timeline axis generation, timeframe Baht/percentage harmony, alpha formatting, cash exclusion, and daily caching (total 75 automated tests across suites)
+  - `test_performance_scenarios.js`: Scenario-based portfolio simulation runner (17 test cases across 8 scenarios) validating inception scaling, timeline axis generation, timeframe Baht/percentage harmony, alpha formatting, cash exclusion, drawing from zero for 3M/6M/1Y, and negative territory/bear market scale dynamics (total 83 automated tests across suites)
 - `supabase/migrations/`
   - `005_unified_schema_update.sql`: Idempotent migration script adding sector, currency, exchange_rate, and is_special columns
   - `006_thai_funds_catalog.sql`: Master catalog table for 5,790+ registered Thai mutual funds with multi-column B-Tree indexes and public read access
