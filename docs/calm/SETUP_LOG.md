@@ -236,16 +236,52 @@
 
 ---
 
-## 12. ขั้นตอนต่อไป
+## 12. การดำเนินการขั้นตอนที่ 2E: ปรับสีแท่งชาร์ตและป้ายกำกับ (Bar Chart Colours & Bars - `Dashboard.tsx`)
 
-พร้อมเข้าสู่ **ขั้นตอนที่ 2E** ตาม [PLAN.md](file:///c:/Users/lenovo/Documents/My%20dividend/docs/calm/PLAN.md):
-- Bar Chart Colours & Bars (`src/screens/Dashboard.tsx`)
-- ขอบแสดงอยู่บนตัวแท่งกราฟ (`borderWidth: 2, borderColor: colors.ink`)
-- แท่งที่ได้รับแล้ว = `colors.ink`
-- แท่งเดือนปัจจุบัน = `colors.accent`
-- แท่งคาดการณ์ = `colors.projected`
-- แท่งค่า 0: `borderWidth: 0` และคงสูตรความสูงเดิม
-- ฟอนต์ตัวเลขเหนือแท่ง (JetBrains Mono 11) และชื่อเดือน (Noto Sans Thai 11)
+- **ไฟล์ที่แก้ไข**: `src/screens/Dashboard.tsx`
+- **โครงสร้างแท่งกราฟ (Bar Chart Architecture)**:
+  - แท่งชาร์ตเรนเดอร์ด้วย Custom React Native `<View>` (ไม่ได้ใช้ react-native-gifted-charts)
+  - สูตรความสูงแท่งชาร์ตเดิม: `barHeightRatio = maxMonthlyAmount > 0 ? Math.max(0.12, item.amount / maxMonthlyAmount) : 0.05`
+  - **รายงาน minHeight**: โค้ดเดิมกำหนด minHeight ratio ไว้ที่ `0.12` (12% ของยอดสูงสุด) สำหรับเดือนที่มีการจ่ายเงิน และ `0.05` (5%) สำหรับเดือนที่ยอดเป็น 0 — **คงสูตรและสัดส่วนเดิมไว้ครบถ้วน 100% ตามข้อกำหนด ไม่มีการแตะต้อง logic**
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **การย้ายตำแหน่งขอบ (Border Placement)**:
+     - ปลดขอบ `borderWidth: 0.5` และ `borderColor: '#E2E8F0'` ออกจากรางพื้นหลัง (`barTrack`)
+     - ย้ายเส้นขอบหนา 2px `colors.ink` ไปอยู่บนตัวแท่งกราฟ (`barFill`) โดยตรง
+  2. **สีและขอบของแท่งกราฟตามสถานะ (Bar Fill States)**:
+     - **แท่งที่ได้รับแล้ว (Past/Received)**: `backgroundColor: colors.ink`, `borderWidth: 2`, `borderColor: colors.ink`
+     - **แท่งเดือนปัจจุบัน (Current Month)**: `backgroundColor: colors.accent`, `borderWidth: 2`, `borderColor: colors.ink`
+     - **แท่งคาดการณ์/รอรับ (Future/Projected)**: `backgroundColor: colors.projected`, `borderWidth: 2`, `borderColor: colors.ink`
+     - **แท่งที่ไม่มีการจ่าย (0 Payout / Inactive)**: `backgroundColor: colors.track`, `borderWidth: 0` (ไม่มีขอบตามข้อกำหนด)
+     - **แท่งที่ถูกเลือก (Selected Month)**: `borderColor: colors.ink`
+  3. **รางพื้นหลัง (Bar Track)**:
+     - ใช้สีโทนคลีน `backgroundColor: colors.track` ปลด `#F8FAFC` และ `#E2E8F0` ออก
+     - รางเดือนปัจจุบัน (`barTrackCurrent`): ใช้สีรองพื้นแบบเบา `#D5E6DC` ตามแบบดีไซน์ HTML
+  4. **ตัวเลขยอดเงินเหนือแท่ง (Top Amount Tooltip)**:
+     - ปรับฟอนต์เป็น `fontFamily: fonts.mono`, ขนาด `fontSize: 11`, สี `colors.ink`
+     - ลบ `fontWeight: '700'` และ `fontWeight: '800'` ออกทั้งหมดตามกฎความเข้ากันได้ของฟอนต์
+     - คง privacy masking `••••` และการย่อหน่วย `k` เดิมไว้ครบถ้วน
+  5. **ป้ายชื่อเดือน (Month Label)**:
+     - ปรับฟอนต์เป็น `fontFamily: fonts.thai`, ขนาด `fontSize: 11`, สี `colors.ink`
+     - เดือนปัจจุบันและเดือนที่ถูกเลือก: ใช้ `fontFamily: fonts.thaiBold` (ไม่มี `fontWeight` แทรก)
+  6. **ป้ายและสัญลักษณ์ "Now" (Current Month Badge & Legend)**:
+     - ตัวกล่อง `nowBadge` และ `nowBadgeLegend`: พื้นหลัง `backgroundColor: colors.ink`, `borderRadius: 4`
+     - ไอคอน `caret-up`: สี `colors.accent`
+     - ข้อความ "Now": `fontFamily: fonts.mono`, `fontSize: 9`, สี `colors.accent`
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+---
+
+## 13. ขั้นตอนต่อไป
+
+พร้อมเข้าสู่ **ขั้นตอนที่ 2F** ตาม [PLAN.md](file:///c:/Users/lenovo/Documents/My%20dividend/docs/calm/PLAN.md):
+- Selected Month Detail Pop-out (`src/screens/Dashboard.tsx`)
+- หัวข้อเดือนและยอดรวม: `<CalmText variant="display" size={22}>`
+- เส้นคั่นรายการสินทรัพย์: `<DashedDivider />`
+- ป้ายประเภทสินทรัพย์และสถานะ: `<Pill>` (Dividend = accent, Interest = outline, Received = ink, Special = dashed)
+- ยอดเงินและอัตราแลกเปลี่ยน: ฟอนต์ mono และ layout เดิม
+
 
 
 

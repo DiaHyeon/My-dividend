@@ -1334,7 +1334,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           <Ionicons
                             name="caret-up"
                             size={8}
-                            color="#059669"
+                            color={colors.accent}
                             style={{ marginBottom: -2 }}
                           />
                           <Text style={styles.nowBadgeText}>Now</Text>
@@ -1362,8 +1362,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       </View>
                       <View style={styles.chartLegendItem}>
                         <View style={styles.nowBadgeLegend}>
-                          <Ionicons name="caret-up" size={8} color={colors.ink} />
-                          <CalmText variant="mono" size={9} color={colors.ink}>Now</CalmText>
+                          <Ionicons name="caret-up" size={8} color={colors.accent} />
+                          <CalmText variant="mono" size={9} color={colors.accent}>Now</CalmText>
                         </View>
                         <CalmText variant="monoRegular" size={11} color={colors.ink}>เดือนปัจจุบัน</CalmText>
                       </View>
@@ -2092,52 +2092,53 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   barTopAmount: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#059669',
+    fontSize: 11,
+    fontFamily: fonts.mono,
+    color: colors.ink,
     marginBottom: 3,
   },
   barTopAmountSelected: {
-    color: '#0F172A',
-    fontWeight: '800',
+    color: colors.ink,
   },
   barTrack: {
     width: 16,
     height: 110,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.track,
     borderRadius: 8,
     justifyContent: 'flex-end',
     overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: '#E2E8F0',
   },
   barTrackCurrent: {
-    borderWidth: 1.5,
-    borderColor: '#059669',
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#D5E6DC',
   },
   barTrackSelected: {
-    borderWidth: 1.5,
-    borderColor: '#0F172A',
+    backgroundColor: colors.track,
   },
   barFill: {
     width: '100%',
     borderRadius: 8,
   },
   barFillPast: {
-    backgroundColor: '#059669',
+    backgroundColor: colors.ink,
+    borderWidth: 2,
+    borderColor: colors.ink,
   },
   barFillCurrent: {
-    backgroundColor: '#10B981',
+    backgroundColor: colors.accent,
+    borderWidth: 2,
+    borderColor: colors.ink,
   },
   barFillFuture: {
-    backgroundColor: '#6EE7B7',
+    backgroundColor: colors.projected,
+    borderWidth: 2,
+    borderColor: colors.ink,
   },
   barFillInactive: {
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.track,
+    borderWidth: 0,
   },
   barFillSelected: {
-    backgroundColor: '#0F172A',
+    borderColor: colors.ink,
   },
   monthLabelWrapper: {
     marginTop: 4,
@@ -2148,32 +2149,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   monthLabelWrapperCurrent: {
-    backgroundColor: '#ECFDF5',
-    borderWidth: 0.5,
-    borderColor: '#A7F3D0',
+    backgroundColor: 'transparent',
   },
   barMonthLabel: {
-    fontSize: 10,
-    color: '#64748B',
-    fontWeight: '500',
+    fontSize: 11,
+    color: colors.ink,
+    fontFamily: fonts.thai,
   },
   barMonthLabelSelected: {
-    color: '#0F172A',
-    fontWeight: '800',
+    color: colors.ink,
+    fontFamily: fonts.thaiBold,
   },
   barMonthLabelCurrent: {
-    color: '#047857',
-    fontWeight: '800',
+    color: colors.ink,
+    fontFamily: fonts.thaiBold,
   },
   nowBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.ink,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
     marginTop: 2,
+    gap: 1,
   },
   nowBadgeText: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: '#059669',
+    fontSize: 9,
+    fontFamily: fonts.mono,
+    color: colors.accent,
     letterSpacing: -0.2,
   },
   nowPlaceholder: {
@@ -2183,12 +2188,10 @@ const styles = StyleSheet.create({
   nowBadgeLegend: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ECFDF5',
+    backgroundColor: colors.ink,
     paddingHorizontal: 4,
     paddingVertical: 1,
     borderRadius: 4,
-    borderWidth: 0.5,
-    borderColor: '#A7F3D0',
     gap: 1,
   },
   chartLegendRow: {
