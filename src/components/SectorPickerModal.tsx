@@ -11,6 +11,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { AssetType } from '../types/database';
 import { getSectorsForType, SectorDefinition } from '../services/sectorService';
+import { colors, borderWidth, radii, fonts } from '../theme/tokens';
+import { DashedDivider } from './ui/DashedDivider';
 
 export interface SectorPickerModalProps {
   visible: boolean;
@@ -51,7 +53,9 @@ export const SectorPickerModal: React.FC<SectorPickerModalProps> = ({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.titleRow}>
-              <Ionicons name="apps-outline" size={18} color="#2563EB" />
+              <View style={styles.iconCircle}>
+                <Ionicons name="apps-outline" size={17} color="#1F7A52" />
+              </View>
               <Text style={styles.title}>{title}</Text>
             </View>
             <TouchableOpacity
@@ -59,9 +63,11 @@ export const SectorPickerModal: React.FC<SectorPickerModalProps> = ({
               onPress={onClose}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="close" size={20} color="#64748B" />
+              <Ionicons name="close" size={18} color={colors.ink} />
             </TouchableOpacity>
           </View>
+
+          <DashedDivider color="#A9CDB9" marginVertical={10} />
 
           {/* Sector Options List */}
           <ScrollView style={styles.listScroll} showsVerticalScrollIndicator={false}>
@@ -78,7 +84,7 @@ export const SectorPickerModal: React.FC<SectorPickerModalProps> = ({
                   activeOpacity={0.7}
                 >
                   <View style={styles.optionLeft}>
-                    <View style={[styles.iconBox, { backgroundColor: `${sec.color}15` }]}>
+                    <View style={[styles.iconBox, { backgroundColor: `${sec.color}18` }]}>
                       <Ionicons name={sec.icon as any} size={17} color={sec.color} />
                     </View>
                     <View style={styles.textCol}>
@@ -89,7 +95,7 @@ export const SectorPickerModal: React.FC<SectorPickerModalProps> = ({
                     </View>
                   </View>
                   {isSelected ? (
-                    <Ionicons name="checkmark-circle" size={20} color="#2563EB" />
+                    <Ionicons name="checkmark-circle" size={22} color="#1F7A52" />
                   ) : (
                     <View style={styles.uncheckCircle} />
                   )}
@@ -106,7 +112,7 @@ export const SectorPickerModal: React.FC<SectorPickerModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: colors.scrim,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 9999,
@@ -122,36 +128,52 @@ const styles = StyleSheet.create({
     width: '90%',
     maxWidth: 360,
     maxHeight: '75%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 15,
-    elevation: 10,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 4,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+  },
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: radii.pill,
+    backgroundColor: '#EAF3EE',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
-    fontSize: 14.5,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   closeBtn: {
-    padding: 4,
+    width: 32,
+    height: 32,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   listScroll: {
     maxHeight: 380,
@@ -160,13 +182,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 9,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    marginBottom: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    marginBottom: 6,
+    borderWidth: borderWidth,
+    borderColor: 'transparent',
+    backgroundColor: colors.surface,
   },
   optionItemSelected: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#EAF3EE',
+    borderColor: colors.ink,
   },
   optionLeft: {
     flexDirection: 'row',
@@ -175,9 +201,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -185,24 +213,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   labelSelected: {
-    color: '#1D4ED8',
-    fontWeight: '700',
+    color: '#1F7A52',
   },
   enLabel: {
-    fontSize: 11,
-    color: '#94A3B8',
+    fontSize: 11.5,
+    fontFamily: fonts.mono,
+    color: colors.muted,
     marginTop: 1,
   },
   uncheckCircle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 20,
+    height: 20,
+    borderRadius: radii.pill,
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderColor: '#A9CDB9',
   },
 });
+
