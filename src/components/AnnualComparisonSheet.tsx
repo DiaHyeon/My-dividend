@@ -104,7 +104,7 @@ export const AnnualComparisonSheet: React.FC<AnnualComparisonSheetProps> = ({
                     label={`${isPositiveGrowth ? '▲ +' : '▼ '}${Math.abs(yoyPercent).toFixed(1)}% YoY`}
                   />
                 ) : (
-                  <Pill kind="outline" size="sm" label="✦ ปีแรกที่มีข้อมูล" />
+                  <Pill kind="outline" size="sm" label="ปีแรกที่มีข้อมูล" />
                 )}
               </View>
             </Card>

@@ -2015,7 +2015,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 8,
-    marginTop: 4,
+    marginTop: 12,
   },
   chartTotalAmount: {
     fontSize: 40,

@@ -514,6 +514,27 @@
 12. **Step 2G-4**: `CategoryBreakdownModal.tsx` (SheetFrame, Donut Chart คงสีตาม Sector เดิม 100%, Quota ภาษีเงินฝาก 20,000 บาท, รายการสินทรัพย์)
 13. **Step 2H**: Bottom Tab Bar & Docked Navigation ใน `App.tsx` (DashedDivider ขอบบน, แท็บ Active เป็น Ink Capsule เงา Mint, แท็บ Inactive สี Ink)
 
+---
+
+## 21. การปรับแต่งความสวยงามเพิ่มเติมตามฟีดแบ็กผู้ใช้ (UI Polish Refinements)
+
+- **ไฟล์ที่แก้ไข**:
+  1. `src/screens/Dashboard.tsx`
+  2. `src/components/HeroNetWorthCard.tsx`
+  3. `src/components/AnnualComparisonSheet.tsx`
+- **รายละเอียดการเปลี่ยนแปลง**:
+  1. **เพิ่มระยะห่างชาร์ตกระแสเงินสดคาดการณ์ (`chartTotalRow`)**:
+     - ขยาย `chartTotalRow.marginTop` จากเดิม `4` เป็น `12`
+     - แก้ไขปัญหาข้อความหัวข้อ "กระแสเงินสดคาดการณ์ 12 เดือนข้างหน้า" อยู่ชิดเบียดกับตัวเลขยอดเงินตัวใหญ่ (`size={40}`) เกินไป เพิ่มพื้นที่หายใจให้ดูโปร่ง โล่ง สบายตา
+  2. **นำสัญลักษณ์ `ⓘ` ออกจากป้าย "ปีแรก" (`HeroNetWorthCard.tsx`)**:
+     - เปลี่ยนป้าย `label` จาก `'✦ ปีแรก ⓘ'` เป็น `'ปีแรก'` ให้ตรงกับแบบดีไซน์ HTML (`01-overview.html` line 35) คลีน มินิมอล ไม่มีไอคอนเครื่องหมายคำถาม/ข้อมูลมารบกวนสายตา
+  3. **ล้างสัญลักษณ์นำหน้าใน `AnnualComparisonSheet.tsx`**:
+     - เปลี่ยนจาก `'✦ ปีแรกที่มีข้อมูล'` เป็น `'ปีแรกที่มีข้อมูล'` ให้สอดคล้องกัน
+- **การทดสอบความถูกต้อง**:
+  - `npx tsc --noEmit`: 0 error ผ่านสมบูรณ์
+  - `npm test`: 83/83 unit, security, performance scenarios ผ่านทั้งหมด 100%
+
+
 
 
 

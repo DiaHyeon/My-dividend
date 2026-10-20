@@ -126,7 +126,7 @@ export const HeroNetWorthCard: React.FC<HeroNetWorthCardProps> = React.memo(({
                 kind="outlineDark"
                 size="sm"
                 onPress={onOpenAnnualComparison}
-                label={hasPriorYearData ? `${isPositiveGrowth ? '▲ +' : '▼ '}${yoyPercent.toFixed(1)}% YoY` : '✦ ปีแรก ⓘ'}
+                label={hasPriorYearData ? `${isPositiveGrowth ? '▲ +' : '▼ '}${yoyPercent.toFixed(1)}% YoY` : 'ปีแรก'}
               />
             )}
           </View>
