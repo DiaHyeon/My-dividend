@@ -14,6 +14,7 @@ import {
   calculateScheduleCashPayout,
 } from '../services/taxService';
 import { getLocalDateString } from '../utils/dateUtils';
+import { colors, borderWidth, radii, fonts } from '../theme/tokens';
 
 export interface CashAssetFormProps {
   accountName: string;
@@ -116,54 +117,61 @@ export const CashAssetForm: React.FC<CashAssetFormProps> = ({
           value={accountName}
           onChangeText={onChangeAccountName}
           placeholder="เช่น Dime! Save (3.0%), Kept, K-eSavings, ฝากประจำ"
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={colors.muted}
         />
       </View>
 
       {/* 2. Cash Segment Selector */}
-      <Text style={styles.label}>ประเภทบัญชีเงินฝาก (Segment)</Text>
-      <View style={styles.sectorChipsContainer}>
-        {getSectorsForType('CASH').map((sec) => (
-          <TouchableOpacity
-            key={sec.id}
-            style={[
-              styles.sectorChip,
-              selectedSector === sec.id && { backgroundColor: sec.color, borderColor: sec.color },
-            ]}
-            onPress={() => onChangeSector(sec.id)}
-          >
-            <Text
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>ประเภทบัญชีเงินฝาก (Segment)</Text>
+        <View style={styles.sectorChipsContainer}>
+          {getSectorsForType('CASH').map((sec) => (
+            <TouchableOpacity
+              key={sec.id}
               style={[
-                styles.sectorChipText,
-                selectedSector === sec.id && styles.sectorChipTextActive,
+                styles.sectorChip,
+                selectedSector === sec.id && styles.sectorChipActive,
               ]}
+              onPress={() => onChangeSector(sec.id)}
+              activeOpacity={0.8}
             >
-              {sec.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Text
+                style={[
+                  styles.sectorChipText,
+                  selectedSector === sec.id && styles.sectorChipTextActive,
+                ]}
+              >
+                {sec.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       {/* 3. Deposit Amount & Interest Rate */}
-      <Text style={styles.label}>จำนวนเงินฝาก (฿ THB) *</Text>
-      <TextInput
-        style={styles.input}
-        value={depositAmount}
-        onChangeText={onChangeDepositAmount}
-        placeholder="ระบุจำนวนเงินฝาก เช่น 50000"
-        placeholderTextColor="#94A3B8"
-        keyboardType="decimal-pad"
-      />
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>จำนวนเงินฝาก (฿ THB) *</Text>
+        <TextInput
+          style={[styles.input, styles.monoInput]}
+          value={depositAmount}
+          onChangeText={onChangeDepositAmount}
+          placeholder="ระบุจำนวนเงินฝาก เช่น 50000"
+          placeholderTextColor={colors.muted}
+          keyboardType="decimal-pad"
+        />
+      </View>
 
-      <Text style={styles.label}>อัตราดอกเบี้ยต่อปี (% p.a.) *</Text>
-      <TextInput
-        style={styles.input}
-        value={interestRate}
-        onChangeText={onChangeInterestRate}
-        placeholder="เช่น 1.5, 2.2, 3.0"
-        placeholderTextColor="#94A3B8"
-        keyboardType="decimal-pad"
-      />
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>อัตราดอกเบี้ยต่อปี (% p.a.) *</Text>
+        <TextInput
+          style={[styles.input, styles.monoInput]}
+          value={interestRate}
+          onChangeText={onChangeInterestRate}
+          placeholder="เช่น 1.5, 2.2, 3.0"
+          placeholderTextColor={colors.muted}
+          keyboardType="decimal-pad"
+        />
+      </View>
 
       {/* 3.1 Deposit Start Date */}
       {onChangeDepositDate && (
@@ -172,125 +180,129 @@ export const CashAssetForm: React.FC<CashAssetFormProps> = ({
             <Text style={styles.label}>วันที่เริ่มฝาก (ปี-เดือน-วัน)</Text>
             <Text style={styles.dateHintText}>คำนวณดอกเบี้ยตามวันจริง</Text>
           </View>
-          <TextInput
-            style={styles.input}
-            value={depositDate}
-            onChangeText={onChangeDepositDate}
-            placeholder="YYYY-MM-DD เช่น 2026-10-15"
-            placeholderTextColor="#94A3B8"
-          />
-        </View>
-      )}
-
-      {/* 4. Payout Frequency */}
-      <Text style={styles.label}>รอบการจ่ายดอกเบี้ย</Text>
-      <View style={styles.frequencyRow}>
-        {[
-          { label: 'ทุกเดือน (Monthly)', value: 'MONTHLY' },
-          { label: 'ทุก 6 เดือน (มิ.ย./ธ.ค.)', value: 'SEMI_ANNUAL' },
-          { label: 'ปีละครั้ง (ธ.ค.)', value: 'ANNUAL' },
-        ].map((freq) => (
-          <TouchableOpacity
-            key={freq.value}
-            style={[
-              styles.frequencyBtn,
-              interestFrequency === freq.value && styles.frequencyBtnActive,
-            ]}
-            onPress={() => onChangeInterestFrequency(freq.value as any)}
-          >
-            <Text
-              style={[
-                styles.frequencyBtnText,
-                interestFrequency === freq.value && styles.frequencyBtnTextActive,
-              ]}
-            >
-              {freq.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* 5. Withholding Tax Rate & 20,000 THB Rule */}
-      <View style={styles.taxHeaderRow}>
-        <Text style={styles.label}>ภาษีดอกเบี้ยหัก ณ ที่จ่าย (%)</Text>
-        <TouchableOpacity
-          style={[styles.autoTaxToggleBtn, isAutoCashTax && styles.autoTaxToggleBtnActive]}
-          onPress={onToggleAutoTax}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name={isAutoCashTax ? 'sparkles' : 'hand-left-outline'}
-            size={12}
-            color={isAutoCashTax ? '#059669' : '#64748B'}
-          />
-          <Text style={[styles.autoTaxToggleText, isAutoCashTax && styles.autoTaxToggleTextActive]}>
-            {isAutoCashTax ? 'คำนวณอัตโนมัติ (เกณฑ์ 20,000฿)' : 'กำหนดเอง'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Smart Tax Rule Explanation Banner */}
-      {parsedDeposit > 0 && parsedInterestRate > 0 && (
-        <View
-          style={[
-            styles.taxAlertBox,
-            cashTaxEval.isExceededLimit ? styles.taxAlertBoxExceeded : styles.taxAlertBoxNormal,
-          ]}
-        >
-          <Ionicons
-            name={cashTaxEval.isExceededLimit ? 'alert-circle' : 'shield-checkmark'}
-            size={18}
-            color={cashTaxEval.isExceededLimit ? '#D97706' : '#059669'}
-            style={{ marginTop: 1 }}
-          />
-          <View style={styles.taxAlertContent}>
-            <Text
-              style={[
-                styles.taxAlertTitle,
-                cashTaxEval.isExceededLimit ? styles.taxAlertTitleExceeded : styles.taxAlertTitleNormal,
-              ]}
-            >
-              {cashTaxEval.isFixedDeposit
-                ? 'เงินฝากประจำ: อัตราปกติหัก 15%'
-                : cashTaxEval.isExceededLimit
-                ? 'ดอกเบี้ยเกินเกณฑ์ 20,000 บาท/ปี (หักภาษี 15%)'
-                : 'ได้รับยกเว้นภาษี (ดอกเบี้ยไม่เกิน 20,000 บาท/ปี)'}
-            </Text>
-            <Text style={styles.taxAlertDetail}>{cashTaxEval.explanation}</Text>
-            {!cashTaxEval.isFixedDeposit && !cashTaxEval.isExceededLimit && (
-              <Text style={styles.taxAlertQuota}>
-                💡 โควตาดอกเบี้ยปลอดภาษีคงเหลือ: ฿
-                {cashTaxEval.remainingLimit.toLocaleString('th-TH', { maximumFractionDigits: 2 })}
-              </Text>
-            )}
+          <View style={styles.dateInputContainer}>
+            <TextInput
+              style={styles.dateInput}
+              value={depositDate}
+              onChangeText={onChangeDepositDate}
+              placeholder="YYYY-MM-DD เช่น 2026-10-15"
+              placeholderTextColor={colors.muted}
+            />
+            <Ionicons name="calendar-outline" size={18} color={colors.ink} />
           </View>
         </View>
       )}
 
-      {/* Tax Override Pills */}
-      <View style={styles.taxPillRow}>
-        {[
-          { label: '0% ยกเว้นภาษี (ไม่เกิน 20,000/ปลอดภาษี)', value: '0' },
-          { label: '15% หัก ณ ที่จ่าย (เกิน 20,000/ฝากประจำ)', value: '15' },
-        ].map((pill) => (
-          <TouchableOpacity
-            key={pill.value}
-            style={[
-              styles.taxPill,
-              taxRatePercent === pill.value && styles.taxPillActive,
-            ]}
-            onPress={() => onChangeTaxRatePercent(pill.value)}
-          >
-            <Text
+      {/* 4. Payout Frequency */}
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>รอบการจ่ายดอกเบี้ย</Text>
+        <View style={styles.frequencyRow}>
+          {[
+            { label: 'ทุกเดือน (Monthly)', value: 'MONTHLY' },
+            { label: 'ทุก 6 เดือน (มิ.ย./ธ.ค.)', value: 'SEMI_ANNUAL' },
+            { label: 'ปีละครั้ง (ธ.ค.)', value: 'ANNUAL' },
+          ].map((freq) => (
+            <TouchableOpacity
+              key={freq.value}
               style={[
-                styles.taxPillText,
-                taxRatePercent === pill.value && styles.taxPillTextActive,
+                styles.frequencyBtn,
+                interestFrequency === freq.value && styles.frequencyBtnActive,
               ]}
+              onPress={() => onChangeInterestFrequency(freq.value as any)}
+              activeOpacity={0.8}
             >
-              {pill.label}
+              <Text
+                style={[
+                  styles.frequencyBtnText,
+                  interestFrequency === freq.value && styles.frequencyBtnTextActive,
+                ]}
+              >
+                {freq.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* 5. Withholding Tax Rate & 20,000 THB Rule */}
+      <View style={styles.taxSectionCard}>
+        <View style={styles.taxHeaderRow}>
+          <Text style={styles.taxSectionTitle}>ภาษีดอกเบี้ยหัก ณ ที่จ่าย (%)</Text>
+          <TouchableOpacity
+            style={[styles.autoTaxToggleBtn, isAutoCashTax && styles.autoTaxToggleBtnActive]}
+            onPress={onToggleAutoTax}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.autoTaxToggleText}>
+              {isAutoCashTax ? '✦ คำนวณอัตโนมัติ (เกณฑ์ 20,000฿)' : '✎ กำหนดเอง'}
             </Text>
           </TouchableOpacity>
-        ))}
+        </View>
+
+        {/* Smart Tax Rule Explanation Banner */}
+        {parsedDeposit > 0 && parsedInterestRate > 0 && (
+          <View
+            style={[
+              styles.taxAlertBox,
+              cashTaxEval.isExceededLimit ? styles.taxAlertBoxExceeded : styles.taxAlertBoxNormal,
+            ]}
+          >
+            <Ionicons
+              name={cashTaxEval.isExceededLimit ? 'alert-circle' : 'shield-checkmark'}
+              size={18}
+              color={cashTaxEval.isExceededLimit ? '#D97706' : '#1F7A52'}
+              style={{ marginTop: 1 }}
+            />
+            <View style={styles.taxAlertContent}>
+              <Text
+                style={[
+                  styles.taxAlertTitle,
+                  cashTaxEval.isExceededLimit ? styles.taxAlertTitleExceeded : styles.taxAlertTitleNormal,
+                ]}
+              >
+                {cashTaxEval.isFixedDeposit
+                  ? 'เงินฝากประจำ: อัตราปกติหัก 15%'
+                  : cashTaxEval.isExceededLimit
+                  ? 'ดอกเบี้ยเกินเกณฑ์ 20,000 บาท/ปี (หักภาษี 15%)'
+                  : 'ได้รับยกเว้นภาษี (ดอกเบี้ยไม่เกิน 20,000 บาท/ปี)'}
+              </Text>
+              <Text style={styles.taxAlertDetail}>{cashTaxEval.explanation}</Text>
+              {!cashTaxEval.isFixedDeposit && !cashTaxEval.isExceededLimit && (
+                <Text style={styles.taxAlertQuota}>
+                  💡 โควตาดอกเบี้ยปลอดภาษีคงเหลือ: ฿
+                  {cashTaxEval.remainingLimit.toLocaleString('th-TH', { maximumFractionDigits: 2 })}
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Tax Override Pills */}
+        <View style={styles.taxPillRow}>
+          {[
+            { label: '0% ยกเว้น', value: '0' },
+            { label: '15% หัก ณ ที่จ่าย', value: '15' },
+          ].map((pill) => (
+            <TouchableOpacity
+              key={pill.value}
+              style={[
+                styles.taxPill,
+                taxRatePercent === pill.value && styles.taxPillActive,
+              ]}
+              onPress={() => onChangeTaxRatePercent(pill.value)}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  styles.taxPillText,
+                  taxRatePercent === pill.value && styles.taxPillTextActive,
+                ]}
+              >
+                {pill.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       {/* 6. Cash Live Preview Card */}
@@ -310,7 +322,7 @@ export const CashAssetForm: React.FC<CashAssetFormProps> = ({
                   currentTaxPct === 0 ? styles.taxStatusBadgeFreeText : styles.taxStatusBadgeTaxedText,
                 ]}
               >
-                {currentTaxPct === 0 ? 'ปลอดภาษี (0%)' : `หักภาษี ณ ที่จ่าย ${currentTaxPct}%`}
+                {currentTaxPct === 0 ? 'ปลอดภาษี (0%)' : `หัก ณ ที่จ่าย ${currentTaxPct}%`}
               </Text>
             </View>
           </View>
@@ -320,7 +332,7 @@ export const CashAssetForm: React.FC<CashAssetFormProps> = ({
             <View style={styles.firstCycleBox}>
               <View style={styles.firstCycleHeaderRow}>
                 <View style={styles.firstCycleTitleGroup}>
-                  <Ionicons name="time" size={15} color="#059669" />
+                  <Ionicons name="time" size={15} color="#1F7A52" />
                   <Text style={styles.firstCycleLabel}>
                     งวดแรกที่จะได้รับจริง ({firstPayout.daysLabel}):
                   </Text>
@@ -377,24 +389,60 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   inputGroup: {
-    marginBottom: 4,
+    marginBottom: 2,
   },
   label: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
     marginBottom: 6,
   },
   input: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 16,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: '#0F172A',
+    minHeight: 48,
+    fontSize: 15,
+    fontFamily: fonts.thai,
+    color: colors.ink,
     marginBottom: 14,
+  },
+  monoInput: {
+    fontFamily: fonts.mono,
+    fontWeight: '700',
+  },
+  dateLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 6,
+  },
+  dateHintText: {
+    fontFamily: fonts.mono,
+    fontWeight: '700',
+    fontSize: 11,
+    color: '#1F7A52',
+  },
+  dateInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    minHeight: 48,
+    marginBottom: 14,
+  },
+  dateInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 15,
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   sectorChipsContainer: {
     flexDirection: 'row',
@@ -403,95 +451,110 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   sectorChip: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginRight: 6,
+    minHeight: 44,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectorChipActive: {
+    backgroundColor: colors.ink,
   },
   sectorChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
+    textAlign: 'center',
   },
   sectorChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: colors.accent,
   },
   frequencyRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
     marginBottom: 14,
   },
   frequencyBtn: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+    minHeight: 56,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 22,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    justifyContent: 'center',
   },
   frequencyBtnActive: {
-    backgroundColor: '#059669',
-    borderColor: '#059669',
+    backgroundColor: colors.ink,
   },
   frequencyBtnText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
     textAlign: 'center',
   },
   frequencyBtnTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: colors.accent,
+  },
+  taxSectionCard: {
+    backgroundColor: '#EAF3EE',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 22,
+    padding: 14,
+    marginBottom: 14,
+    gap: 12,
   },
   taxHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  taxSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   autoTaxToggleBtn: {
-    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: '#F1F5F9',
-    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: radii.pill,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
   },
   autoTaxToggleBtnActive: {
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
+    backgroundColor: colors.accent,
   },
   autoTaxToggleText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  autoTaxToggleTextActive: {
-    color: '#059669',
     fontWeight: '700',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   taxAlertBox: {
     flexDirection: 'row',
     padding: 12,
-    borderRadius: 10,
-    marginBottom: 10,
-    borderWidth: 1,
+    borderRadius: 16,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
   },
   taxAlertBoxNormal: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
+    backgroundColor: colors.surface,
   },
   taxAlertBoxExceeded: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
+    backgroundColor: '#FEF3C7',
   },
   taxAlertContent: {
     flex: 1,
@@ -500,98 +563,110 @@ const styles = StyleSheet.create({
   taxAlertTitle: {
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: fonts.thaiBold,
     marginBottom: 2,
   },
   taxAlertTitleNormal: {
-    color: '#15803D',
+    color: '#1F7A52',
   },
   taxAlertTitleExceeded: {
     color: '#B45309',
   },
   taxAlertDetail: {
     fontSize: 11,
-    color: '#475569',
-    lineHeight: 15,
+    fontFamily: fonts.thai,
+    color: colors.muted,
+    lineHeight: 16,
   },
   taxAlertQuota: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#059669',
+    fontWeight: '700',
+    fontFamily: fonts.mono,
+    color: '#1F7A52',
     marginTop: 4,
   },
   taxPillRow: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 14,
+    gap: 8,
   },
   taxPill: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
+    minHeight: 44,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 22,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   taxPillActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+    backgroundColor: colors.ink,
   },
   taxPillText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
     textAlign: 'center',
   },
   taxPillTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: colors.accent,
   },
   cashPreviewCard: {
-    backgroundColor: '#ECFDF5',
-    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 20,
     padding: 14,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
     marginTop: 4,
     marginBottom: 14,
-    gap: 6,
+    gap: 8,
   },
   cashPreviewHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 6,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#D1FAE5',
+    paddingBottom: 8,
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#A9CDB9',
   },
   cashPreviewHeaderTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#065F46',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   taxStatusBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: radii.pill,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
   },
   taxStatusBadgeFree: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: colors.accent,
   },
   taxStatusBadgeTaxed: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#FDE68A',
   },
   taxStatusBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
+    fontFamily: fonts.mono,
   },
   taxStatusBadgeFreeText: {
-    color: '#15803D',
+    color: colors.ink,
   },
   taxStatusBadgeTaxedText: {
-    color: '#B45309',
+    color: '#92400E',
   },
   cashPreviewRow: {
     flexDirection: 'row',
@@ -599,57 +674,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cashPreviewTotalRow: {
-    paddingTop: 6,
-    marginTop: 2,
-    borderTopWidth: 1,
-    borderTopColor: '#D1FAE5',
+    paddingTop: 8,
+    marginTop: 4,
+    borderTopWidth: 1.5,
+    borderTopColor: '#A9CDB9',
   },
   cashPreviewLabel: {
-    fontSize: 12,
-    color: '#065F46',
+    fontSize: 13,
+    color: colors.muted,
+    fontFamily: fonts.thai,
     fontWeight: '500',
   },
   cashPreviewHighlightLabel: {
-    fontSize: 13,
-    color: '#065F46',
+    fontSize: 14,
+    color: colors.ink,
+    fontFamily: fonts.thaiBold,
     fontWeight: '700',
   },
   cashPreviewMuted: {
-    fontSize: 12,
-    color: '#475569',
+    fontSize: 13,
+    color: colors.ink,
+    fontFamily: fonts.mono,
     fontWeight: '600',
   },
   cashPreviewTax: {
-    fontSize: 12,
-    color: '#DC2626',
-    fontWeight: '600',
+    fontSize: 13,
+    color: colors.lossOnLight,
+    fontFamily: fonts.mono,
+    fontWeight: '700',
   },
   cashPreviewHighlight: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '800',
-    color: '#059669',
+    fontFamily: fonts.mono,
+    color: '#1F7A52',
   },
   cashPreviewSub: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#047857',
-  },
-  dateLabelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  dateHintText: {
-    fontSize: 11,
-    color: '#059669',
-    fontWeight: '600',
+    fontFamily: fonts.mono,
+    color: colors.ink,
   },
   firstCycleBox: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#6EE7B7',
-    borderRadius: 10,
+    backgroundColor: '#EAF3EE',
+    borderWidth: borderWidth,
+    borderColor: colors.ink,
+    borderRadius: 14,
     padding: 10,
     marginBottom: 6,
   },
@@ -662,23 +732,27 @@ const styles = StyleSheet.create({
   firstCycleTitleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
   },
   firstCycleLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#065F46',
+    fontFamily: fonts.thaiBold,
+    color: colors.ink,
   },
   firstCycleAmount: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#059669',
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: fonts.mono,
+    color: '#1F7A52',
   },
   firstCycleHint: {
-    fontSize: 10.5,
-    color: '#059669',
+    fontSize: 11,
+    color: colors.muted,
+    fontFamily: fonts.thai,
     lineHeight: 15,
   },
 });
 
 export default CashAssetForm;
+
