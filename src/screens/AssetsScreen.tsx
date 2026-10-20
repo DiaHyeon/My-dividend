@@ -92,6 +92,17 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | AssetType>(initialCategoryFilter);
   const [sortOption, setSortOption] = useState<SortOption>('VALUE_DESC');
+  const [isSortSheetVisible, setIsSortSheetVisible] = useState<boolean>(false);
+
+  const sortShortLabel = useMemo(() => {
+    switch (sortOption) {
+      case 'VALUE_DESC': return 'มูลค่า';
+      case 'PL_DESC': return 'กำไร';
+      case 'PL_ASC': return 'ขาดทุน';
+      case 'SYMBOL_ASC': return 'A-Z';
+      default: return 'มูลค่า';
+    }
+  }, [sortOption]);
 
   useEffect(() => {
     if (initialView) {
@@ -539,30 +550,44 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Search Bar */}
+      {/* Search Bar & Sort Button Row */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color="#64748B" />
+          <Ionicons name="search" size={18} color={colors.ink} />
           <TextInput
             style={styles.searchInput}
-            placeholder={viewMode === 'HOLDINGS' ? 'ค้นหาชื่อหุ้น, กองทุน หรือบัญชี...' : 'ค้นหาประวัติรายการตามชื่อหุ้น...'}
-            placeholderTextColor="#94A3B8"
+            placeholder={viewMode === 'HOLDINGS' ? 'ค้นหาหุ้น กองทุน บัญชี...' : 'ค้นหาประวัติรายการตามชื่อหุ้น...'}
+            placeholderTextColor={colors.muted}
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCapitalize="characters"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={18} color="#94A3B8" />
+              <Ionicons name="close-circle" size={18} color={colors.muted} />
             </TouchableOpacity>
           )}
         </View>
+
+        {viewMode === 'HOLDINGS' && (
+          <TouchableOpacity
+            style={styles.sortBtn}
+            onPress={() => setIsSortSheetVisible(true)}
+            activeOpacity={0.7}
+            accessibilityLabel={`เรียงลำดับ: ${sortShortLabel}`}
+          >
+            <CalmText variant="mono" size={12} color={colors.accent}>
+              {sortShortLabel}
+            </CalmText>
+            <Ionicons name="chevron-down" size={13} color={colors.accent} />
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#059669" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
         showsVerticalScrollIndicator={false}
       >
         {/* ========================================================================= */}
@@ -580,45 +605,15 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
               ].map((pill) => {
                 const isActive = categoryFilter === pill.key;
                 return (
-                  <TouchableOpacity
+                  <Pill
                     key={pill.key}
-                    style={[styles.filterPill, isActive && styles.filterPillActive]}
+                    kind={isActive ? 'ink' : 'outline'}
+                    size="md"
+                    label={pill.label}
                     onPress={() => setCategoryFilter(pill.key as any)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
-                      {pill.label}
-                    </Text>
-                  </TouchableOpacity>
+                  />
                 );
               })}
-            </View>
-
-            {/* Sort Dropdown Selector Bar */}
-            <View style={styles.sortBarRow}>
-              <Text style={styles.sortBarLabel}>เรียงลำดับ:</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortScroll}>
-                {[
-                  { key: 'VALUE_DESC', label: 'มูลค่าสูงสุด' },
-                  { key: 'PL_DESC', label: 'กำไรสูงสุด' },
-                  { key: 'PL_ASC', label: 'ขาดทุนมากสุด' },
-                  { key: 'SYMBOL_ASC', label: 'A-Z' },
-                ].map((s) => {
-                  const isActive = sortOption === s.key;
-                  return (
-                    <TouchableOpacity
-                      key={s.key}
-                      style={[styles.sortPill, isActive && styles.sortPillActive]}
-                      onPress={() => setSortOption(s.key as SortOption)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.sortPillText, isActive && styles.sortPillTextActive]}>
-                        {s.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
             </View>
 
             {/* Stats Summary Banner */}
@@ -1122,6 +1117,54 @@ export const AssetsScreen: React.FC<AssetsScreenProps> = ({
         </TouchableOpacity>
       </Modal>
 
+      {/* Sort Options Bottom Sheet Modal */}
+      <Modal
+        visible={isSortSheetVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsSortSheetVisible(false)}
+      >
+        <SheetFrame title="เรียงลำดับ" onClose={() => setIsSortSheetVisible(false)}>
+          <View style={styles.sortSheetOptionsList}>
+            {[
+              { key: 'VALUE_DESC', label: 'มูลค่าสูงสุด' },
+              { key: 'PL_DESC', label: 'กำไรสูงสุด' },
+              { key: 'PL_ASC', label: 'ขาดทุนมากสุด' },
+              { key: 'SYMBOL_ASC', label: 'A-Z' },
+            ].map((opt) => {
+              const isSelected = sortOption === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[
+                    styles.sortSheetOptionItem,
+                    isSelected && styles.sortSheetOptionItemSelected,
+                  ]}
+                  onPress={() => {
+                    setSortOption(opt.key as SortOption);
+                    setIsSortSheetVisible(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <CalmText
+                    variant="bodyBold"
+                    size={15}
+                    color={colors.ink}
+                  >
+                    {opt.label}
+                  </CalmText>
+                  {isSelected && (
+                    <View style={styles.sortSheetCheckCircle}>
+                      <Ionicons name="checkmark" size={14} color={colors.accent} />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </SheetFrame>
+      </Modal>
+
       {/* Edit Asset Modal */}
       <EditAssetModal
         visible={isEditModalVisible}
@@ -1256,88 +1299,77 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink,
   },
   searchContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 6,
-  },
-  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    paddingHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 12,
+    gap: 8,
+  },
+  searchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    paddingHorizontal: 14,
+    height: 44,
     gap: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
-    color: '#0F172A',
+    fontFamily: fonts.thai,
+    fontSize: 14,
+    color: colors.ink,
     padding: 0,
+  },
+  sortBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 44,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
   },
   filterPillsRow: {
     flexDirection: 'row',
     gap: 6,
-    marginBottom: 10,
-  },
-  filterPill: {
-    flex: 1,
-    paddingVertical: 7,
-    borderRadius: 9,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterPillActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
-  },
-  filterPillText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  filterPillTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  sortBarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
     marginBottom: 12,
   },
-  sortBarLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
+  sortSheetOptionsList: {
+    paddingVertical: 4,
+    paddingBottom: 16,
   },
-  sortScroll: {
-    gap: 6,
+  sortSheetOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    marginBottom: 6,
+    backgroundColor: 'transparent',
   },
-  sortPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+  sortSheetOptionItemSelected: {
+    borderColor: colors.ink,
+    backgroundColor: '#EAF3EE',
   },
-  sortPillActive: {
-    backgroundColor: '#E0E7FF',
-    borderColor: '#C7D2FE',
-  },
-  sortPillText: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  sortPillTextActive: {
-    color: '#4338CA',
-    fontWeight: '700',
+  sortSheetCheckCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
   },
   statsBanner: {
     flexDirection: 'row',
