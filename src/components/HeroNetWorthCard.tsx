@@ -99,7 +99,14 @@ export const HeroNetWorthCard: React.FC<HeroNetWorthCardProps> = React.memo(({
 
       {/* Value Row: Total Market Value */}
       <View style={styles.heroValueRow}>
-        <CalmText variant="display" size={36} color={colors.surface} numberOfLines={1}>
+        <CalmText
+          variant="display"
+          size={36}
+          color={colors.surface}
+          numberOfLines={1}
+          adjustsFontSizeToFit={true}
+          minimumFontScale={0.7}
+        >
           {formatMoney(totalMarketValue)}
         </CalmText>
       </View>
@@ -107,29 +114,39 @@ export const HeroNetWorthCard: React.FC<HeroNetWorthCardProps> = React.memo(({
       {/* Annual Net Inflow Highlight with Dual Yield Badges */}
       <View style={styles.dividendHighlightBox}>
         <View style={styles.dividendHighlightTop}>
-          <View style={styles.dividendHeaderLeft}>
-            <Ionicons name="cash-outline" size={15} color={colors.accent} />
-            <CalmText variant="monoRegular" size={11} color={colors.projected} numberOfLines={1}>
-              {inflowFilter === 'ALL'
-                ? 'กระแสเงินสดรับคาดการณ์/ปี'
-                : inflowFilter === 'DIVIDENDS'
-                ? 'เงินปันผลสุทธิคาดการณ์/ปี'
-                : 'ดอกเบี้ยเงินฝากสุทธิคาดการณ์/ปี'}
-            </CalmText>
-          </View>
-          <View style={styles.dividendHeaderRight}>
-            <CalmText variant="display" size={16} color={colors.accent} numberOfLines={1}>
+          <View style={styles.dividendHeaderCol}>
+            <View style={styles.dividendHeaderLabelRow}>
+              <Ionicons name="cash-outline" size={13} color={colors.accent} />
+              <CalmText variant="monoRegular" size={10} color={colors.projected} numberOfLines={1}>
+                {inflowFilter === 'ALL'
+                  ? 'กระแสเงินสดรับคาดการณ์/ปี'
+                  : inflowFilter === 'DIVIDENDS'
+                  ? 'เงินปันผลสุทธิคาดการณ์/ปี'
+                  : 'ดอกเบี้ยเงินฝากสุทธิคาดการณ์/ปี'}
+              </CalmText>
+            </View>
+            <CalmText
+              variant="display"
+              size={24}
+              color={colors.accent}
+              numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.75}
+              style={{ marginTop: 2 }}
+            >
               {formatMoney(projectedAnnualNetDividend)}
             </CalmText>
-            {onOpenAnnualComparison && (
+          </View>
+          {onOpenAnnualComparison && (
+            <View style={styles.dividendHeaderPillWrapper}>
               <Pill
                 kind="outlineDark"
                 size="sm"
                 onPress={onOpenAnnualComparison}
                 label={hasPriorYearData ? `${isPositiveGrowth ? '▲ +' : '▼ '}${yoyPercent.toFixed(1)}% YoY` : '✦ ปีแรก'}
               />
-            )}
-          </View>
+            </View>
+          )}
         </View>
 
         {/* Dual Yield & Monthly Avg Subrow */}
@@ -138,7 +155,15 @@ export const HeroNetWorthCard: React.FC<HeroNetWorthCardProps> = React.memo(({
             <CalmText variant="monoRegular" size={10} color={colors.projected} numberOfLines={1}>
               เฉลี่ยต่อเดือน
             </CalmText>
-            <CalmText variant="mono" size={11} color={colors.surface} numberOfLines={1} style={{ marginTop: 1 }}>
+            <CalmText
+              variant="mono"
+              size={11}
+              color={colors.surface}
+              numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.75}
+              style={{ marginTop: 1 }}
+            >
               {isPrivateMode ? '฿••••••' : `~${formatMoney(monthlyAvgInflow, 0)}/ด.`}
             </CalmText>
           </View>
@@ -171,10 +196,18 @@ export const HeroNetWorthCard: React.FC<HeroNetWorthCardProps> = React.memo(({
       {/* Secondary stats row: 3 balanced minimal columns */}
       <View style={styles.heroBottomRow}>
         <View style={styles.heroStatItem}>
-          <CalmText variant="monoRegular" size={11} color={colors.projected}>
+          <CalmText variant="monoRegular" size={10} color={colors.projected} numberOfLines={1}>
             ต้นทุนรวม
           </CalmText>
-          <CalmText variant="mono" size={13} color={colors.surface} numberOfLines={1} style={{ marginTop: 2 }}>
+          <CalmText
+            variant="mono"
+            size={12}
+            color={colors.surface}
+            numberOfLines={1}
+            adjustsFontSizeToFit={true}
+            minimumFontScale={0.75}
+            style={{ marginTop: 2 }}
+          >
             {formatMoney(totalCost)}
           </CalmText>
         </View>
@@ -182,14 +215,22 @@ export const HeroNetWorthCard: React.FC<HeroNetWorthCardProps> = React.memo(({
         <View style={styles.heroDivider} />
 
         <View style={styles.heroStatItem}>
-          <CalmText variant="monoRegular" size={11} color={colors.projected}>
-            ส่วนต่างราคา (P/L)
+          <CalmText variant="monoRegular" size={10} color={colors.projected} numberOfLines={1}>
+            P/L
           </CalmText>
-          <CalmText variant="mono" size={13} color={plStatTrend.color} numberOfLines={1} style={{ marginTop: 2 }}>
+          <CalmText
+            variant="mono"
+            size={12}
+            color={plStatTrend.color}
+            numberOfLines={1}
+            adjustsFontSizeToFit={true}
+            minimumFontScale={0.75}
+            style={{ marginTop: 2 }}
+          >
             {totalUnrealizedPL === 0 ? '' : plStatTrend.glyph + ' '}
             {plStatSign}{formatMoney(totalUnrealizedPL)}
           </CalmText>
-          <CalmText variant="monoRegular" size={10} color={plStatTrend.color} style={{ marginTop: 1 }}>
+          <CalmText variant="monoRegular" size={10} color={plStatTrend.color} numberOfLines={1} style={{ marginTop: 1 }}>
             {plStatSign}{totalUnrealizedPLPercent.toFixed(1)}%
           </CalmText>
         </View>
@@ -198,16 +239,24 @@ export const HeroNetWorthCard: React.FC<HeroNetWorthCardProps> = React.memo(({
 
         <View style={styles.heroStatItem}>
           <View style={styles.statLabelWithIcon}>
-            <CalmText variant="monoRegular" size={11} color={colors.projected}>
+            <CalmText variant="monoRegular" size={10} color={colors.projected} numberOfLines={1}>
               ผลตอบแทนรวม
             </CalmText>
-            <Ionicons name="sparkles" size={10} color={colors.accent} />
+            <Ionicons name="sparkles" size={9} color={colors.accent} />
           </View>
-          <CalmText variant="mono" size={13} color={retTrend.color} numberOfLines={1} style={{ marginTop: 2 }}>
+          <CalmText
+            variant="mono"
+            size={12}
+            color={retTrend.color}
+            numberOfLines={1}
+            adjustsFontSizeToFit={true}
+            minimumFontScale={0.75}
+            style={{ marginTop: 2 }}
+          >
             {effectiveTotalReturn === 0 ? '' : retTrend.glyph + ' '}
             {retSign}{formatMoney(effectiveTotalReturn)}
           </CalmText>
-          <CalmText variant="monoRegular" size={10} color={retTrend.color} style={{ marginTop: 1 }}>
+          <CalmText variant="monoRegular" size={10} color={retTrend.color} numberOfLines={1} style={{ marginTop: 1 }}>
             ({retSign}{effectiveTotalReturnPercent.toFixed(1)}%)
           </CalmText>
         </View>
@@ -251,17 +300,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 8,
+    gap: 8,
   },
-  dividendHeaderLeft: {
+  dividendHeaderCol: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  dividendHeaderLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    flexShrink: 1,
   },
-  dividendHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  dividendHeaderPillWrapper: {
+    flexShrink: 0,
+    alignSelf: 'center',
   },
   dualYieldRow: {
     flexDirection: 'row',

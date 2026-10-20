@@ -1044,7 +1044,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                 {/* Row 2: Left has Market Value. Right has Inflow / Yield */}
                 <View style={styles.categoryValueRow}>
-                  <CalmText variant="display" size={26} color={colors.ink}>
+                  <CalmText
+                    variant="display"
+                    size={26}
+                    color={colors.ink}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.75}
+                    style={{ flexShrink: 0, maxWidth: '58%' }}
+                  >
                     {formatMoney(cat.marketValue)}
                   </CalmText>
                   <View style={styles.categoryInflowRow}>
@@ -1062,9 +1070,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     >
                       {cat.type === 'CASH'
                         ? `ดอกเบี้ย ${formatMoney(annualInflowByCategory.CASH, 0)}/ปี`
-                        : cat.type === 'STOCKS'
-                        ? `ปันผล ${formatMoney(annualInflowByCategory.STOCKS, 0)}/ปี (YoC ${cat.totalCost > 0 ? ((annualInflowByCategory.STOCKS / cat.totalCost) * 100).toFixed(1) : '0.0'}%)`
-                        : `ปันผล ${formatMoney(annualInflowByCategory.FUNDS, 0)}/ปี (Yield ${cat.marketValue > 0 ? ((annualInflowByCategory.FUNDS / cat.marketValue) * 100).toFixed(1) : '0.0'}%)`}
+                        : `ปันผล ${formatMoney(cat.type === 'STOCKS' ? annualInflowByCategory.STOCKS : annualInflowByCategory.FUNDS, 0)}/ปี`}
                     </CalmText>
                   </View>
                 </View>
@@ -2068,6 +2074,7 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     marginTop: 4,
     marginBottom: 8,
+    gap: 8,
   },
   categoryValue: {
     fontSize: 26,
